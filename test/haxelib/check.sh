@@ -41,16 +41,20 @@ contains() {
       failures=$((failures + 1))
    fi
 }
-libpath() {
-   # Empty when haxelib cannot resolve the library
+normpath() {
    local out
-   out=$(haxelib libpath "$1" 2>/dev/null) || return 0
-   out=$(printf '%s\n' "$out" | head -1 | tr '\\' '/' | sed 's#/*$##')
+   out=$(printf '%s\n' "$1" | tr -d '\r' | head -1 | tr '\\' '/' | sed 's#/*$##')
    # Windows paths compare without regard to case
    if command -v cygpath > /dev/null; then
       out=$(printf '%s' "$out" | tr '[:upper:]' '[:lower:]')
    fi
    printf '%s\n' "$out"
+}
+libpath() {
+   # Empty when haxelib cannot resolve the library
+   local out
+   out=$(haxelib libpath "$1" 2>/dev/null) || return 0
+   normpath "$out"
 }
 
 # A package with this checkout's haxelib.json and run.n at the given version
@@ -60,7 +64,7 @@ package() {
    if [ "$name" = libhxcpp ]; then
       sed "s/\"version\": \"[^\"]*\"/\"version\": \"$version\"/" "$ROOT/haxelib.json" > "$dir/haxelib.json"
       cp "$ROOT/run.n" "$dir/"
-      printf -- '-D libhxcpp=%s\n-D hxcpp=%s\n' "$version" "$version" > "$dir/extraParams.hxml"
+      sed "s/,\"[^\"]*\")/,\"$version\")/" "$ROOT/extraParams.hxml" > "$dir/extraParams.hxml"
    else
       printf '{ "name": "%s", "version": "%s", "license": "BSD", "url": "https://example.org", "description": "stand-in", "releasenote": "", "contributors": ["nobody"], "dependencies": {} }\n' "$name" "$version" > "$dir/haxelib.json"
    fi
@@ -84,9 +88,15 @@ first=$(libpath libhxcpp)
 out=$(haxelib run libhxcpp setup 2>&1)
 check "setup points hxcpp at libhxcpp" "$(libpath hxcpp)" "$first"
 contains "setup says how to go back" "$out" "haxelib run libhxcpp off"
-path=$(haxelib path hxcpp 2>&1)
-contains "asking for hxcpp gets -D libhxcpp" "$path" "-D libhxcpp=6.0.0"
-contains "asking for hxcpp gets -D hxcpp" "$path" "-D hxcpp=6.0.0"
+printf 'class Probe {\n\tstatic function run() {\n\t\tvar d = haxe.macro.Context.getDefines();\n\t\tSys.println("hxcpp=" + d.get("hxcpp") + " libhxcpp=" + d.get("libhxcpp"));\n\t}\n}\n' > "$WORK/Probe.hx"
+for lib in hxcpp libhxcpp; do
+   out=$(haxe -cp "$WORK" -lib $lib --macro "Probe.run()" --no-output 2>&1)
+   contains "-lib $lib gets both defines" "$out" "hxcpp=6.0.0 libhxcpp=6.0.0"
+   # hxp, which Lime's tools use, takes the line before "-D <name>" as the path
+   before=$(haxelib path $lib | tr -d '\r' | awk -v d="-D $lib" 'index($0, d) == 1 { print prev } { prev = $0 }' | sort -u)
+   check "-lib $lib: the line before -D $lib is its path" "$(normpath "$before")" "$first"
+   check "-lib $lib: only one line comes before -D $lib" "$(printf '%s\n' "$before" | wc -l | tr -d ' ')" "1"
+done
 
 haxelib install "$(package libhxcpp 6.0.1)" > /dev/null
 second=$(libpath libhxcpp)

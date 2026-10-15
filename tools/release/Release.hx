@@ -95,7 +95,10 @@ class Release
       // Builds that use the library get -D libhxcpp=<version>, so code can tell
       // it is on libhxcpp and compare with version("x.y.z"), and -D hxcpp, so code
       // that checks for hxcpp works the same whether it asked for hxcpp or libhxcpp.
-      File.saveContent("extraParams.hxml", '-D libhxcpp=$version\n-D hxcpp=$version\n');
+      // A macro rather than -D lines: tools such as hxp take the line before a
+      // library's -D line in `haxelib path` output as its path.
+      File.saveContent("extraParams.hxml", [for (name in ["libhxcpp", "hxcpp"])
+         '--macro haxe.macro.Compiler.define("$name","$version")\n'].join(""));
    }
 
    // The first section of Changes.md: a heading line underlined with dashes,
