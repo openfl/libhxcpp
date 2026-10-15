@@ -1148,7 +1148,7 @@ bool _hx_ssl_dgst_verify( Array<unsigned char> buf, Array<unsigned char> sign, D
 	return true;
 }
 
-#if defined(MBEDTLS_THREADING_ALT) && defined(_WIN32)
+#if defined(MBEDTLS_THREADING_ALT) && defined(_WIN32) && !defined(HXCPP_MBEDTLS_PROVIDER)
 // The Windows mutexes, in project/thirdparty/config/mbedtls/threading_alt.c,
 // where they are also installed before main for code that is not hxcpp's.
 // Installing them is idempotent; calling it here keeps that object in links
@@ -1161,7 +1161,7 @@ void _hx_ssl_init() {
     if (_hx_ssl_inited) return;
     _hx_ssl_inited = true;
 
-#if defined(MBEDTLS_THREADING_ALT) && defined(_WIN32)
+#if defined(MBEDTLS_THREADING_ALT) && defined(_WIN32) && !defined(HXCPP_MBEDTLS_PROVIDER)
 	hxcpp_mbedtls_threading_init();
 #endif
 

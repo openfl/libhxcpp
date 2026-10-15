@@ -215,6 +215,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 * Fixed socket polling on 64-bit Windows: fd_set allocations and copies were sized 4 bytes short of the socket array, so select() was handed a corrupted socket, failed on every call, and Poll reported no socket ready
 * Fixed a TLS write to a peer that had gone (one that left mid-handshake, or closed without close_notify) ending the process with SIGPIPE on Linux; it now fails like a plain socket write
 * Fixed formatting a host address on macOS and the BSDs returning "[inet_ntoa error]" when several threads did it at once; it now uses inet_ntop into a buffer of its own
+* Added mbedTLS providers: in a static build, a library that bundles mbedTLS (Lime 8.4.0 does) can set hxcpp_mbedtls_provider to a file describing its copy, and sys.ssl is built on that copy instead of libhxcpp's own, so the app links one mbedTLS. docs/MbedTLSProvider.md describes it
 
 ### Files, processes and the system
 

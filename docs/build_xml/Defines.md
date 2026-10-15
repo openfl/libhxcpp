@@ -38,6 +38,7 @@ Defines affecting how the code is compiled.  These can be on the command line wh
 | *HXCPP_STRICT_CASTS*    | Throw on a failed cast instead of producing null |
 | *HXCPP_PCRE_JIT*        | Use PCRE2's JIT for EReg, 3-5x faster. A match that runs out of JIT stack is retried on the interpreter. Ignored on iOS, tvOS, watchOS and Emscripten |
 | *HXCPP_SSL_NO_TICKETS*  | Build TLS servers without RFC 5077 session tickets |
+| *hxcpp_mbedtls_provider* | Set by a library that bundles mbedTLS, to its provider file: static builds then build sys.ssl on that copy instead of libhxcpp's own (docs/MbedTLSProvider.md) |
 | *HXCPP_TRACY*           | Build with the Tracy profiler. Add HXCPP_TRACY_MEMORY to record allocations, HXCPP_TRACY_INCLUDE_CALLSTACKS for call stacks, HXCPP_TRACY_ON_DEMAND to profile only while a viewer is connected, HXCPP_TRACY_NO_EXIT to wait for the viewer before exiting, and HXCPP_TRACY_TIMER_FALLBACK where the CPU has no invariant TSC (some virtual machines) |
 | *HXCPP_DEBUG_LINK*      | Add symbols to final binary, even in release mode. |
 | *HXCPP_DEBUG_LINK_AND_STRIP* | Build with symbols as HXCPP_DEBUG_LINK does, then strip the final binary (for Android release builds) |

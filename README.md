@@ -70,6 +70,10 @@ Your project needs no changes. A build that uses the library, as `-lib hxcpp` or
 
 Compare versions with `version()`. A comparison with a plain string, such as `(libhxcpp >= "6.0.1")`, compares text and goes wrong once a part of the version reaches two digits. In a release, native code can include `HxcppVersion.h` for `LIBHXCPP_VERSION`.
 
+## Sharing mbedTLS with a library
+
+Haxe's TLS (`sys.ssl`, and `haxe.Http` with https) runs on mbedTLS, which libhxcpp bundles. A library that bundles mbedTLS too, such as Lime, can offer its copy: in static builds (iOS, tvOS, `static_link`) libhxcpp then builds its TLS on the library's mbedTLS instead of its own, so the app carries one copy. The library sets the define `hxcpp_mbedtls_provider` to a small provider file describing its mbedTLS; libhxcpp uses it when the mbedTLS major version is one it supports, and its own copy otherwise. [docs/MbedTLSProvider.md](docs/MbedTLSProvider.md) describes how to offer one.
+
 ## Compatibility
 
 libhxcpp keeps hxcpp's build XML, defines and API, and works with the code Haxe 4.2 and later generates for hxcpp. A few fixes deliberately change behaviour to match the other Haxe targets, for example how `Std.string` formats floats, NaN and Infinity, and TLS connections now require TLS 1.2 or newer. Changes.md describes each one.
