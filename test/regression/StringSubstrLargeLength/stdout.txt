@@ -1,0 +1,3 @@
+whole string clamped: true
+positive start clamped: true
+UTF-16 length clamped: true

@@ -2770,17 +2770,19 @@ String String::substr(int inFirst, Dynamic inLen) const
    int len = inLen == null() ? length : inLen->__ToInt();
    if (inFirst<0) inFirst += length;
    if (inFirst<0) inFirst = 0;
+   if (inFirst>=length)
+      return String::emptyString;
    if (len<0)
    {
       len = length + len - inFirst;
    }
 
-   if (len<=0 || inFirst>=length)
+   if (len<=0)
       return String::emptyString;
 
-   if ((len+inFirst > length) ) len = length - inFirst;
-   if (len==0)
-      return String::emptyString;
+   // Clamped against what is left, not by adding the two: a large len plus
+   //  inFirst overflows an int and skipped the clamp
+   if (len > length - inFirst) len = length - inFirst;
    if (inFirst==0 && len==length)
       return *this;
 
