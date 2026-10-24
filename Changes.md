@@ -229,6 +229,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 
 ### Arrays and Bytes
 
+* Fixed formatting an array in one thread printing `[...]` while another thread was formatting a nested array: the recursion depth that stops at 5 levels was shared by every thread. It is now per thread, as an anonymous object's already was (libhxcpp #277)
 * Out-of-range reads on an untyped array now return null instead of a boxed 0/false from the typed backing store
 * Mixing Int64 and Float values in an untyped array now promotes to object storage instead of silently rounding Int64 values beyond 2^53 through a double
 * Fixed Array<Dynamic>.concat/blit with an empty untyped operand silently corrupting the receiver: it installed byte storage, so a later push(300) stored 44 and push(-1) stored 255

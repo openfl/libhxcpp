@@ -1,0 +1,4 @@
+worker reached the leaf: true
+other thread keeps its array string: true
+worker completed: true
+depth restored after exceptions: true

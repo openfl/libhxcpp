@@ -609,7 +609,9 @@ String ArrayBase::joinArray(Array_obj<String> *inArray, String inSeparator)
 }
 
 
-int _hx_toString_depth = 0;
+// Per thread, as an anonymous object's is: a thread formatting a nested array
+//  must not use up the depth of another formatting its own
+static thread_local int _hx_toString_depth = 0;
 String ArrayBase::joinArray(ArrayBase *inBase, String inSeparator)
 {
    if (_hx_toString_depth >= 5)
