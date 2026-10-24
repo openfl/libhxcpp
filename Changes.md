@@ -230,6 +230,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 
 ### Arrays and Bytes
 
+* Fixed Array<Dynamic>.concat changing its source: it converted the source's storage for the tail's elements, and a typed tail fixed both arrays to its type, so a later push of a String to either lost the value. The result now gets the storage, and the source is left alone. A copy, slice or splice of a typed array seen as Array<Dynamic> is no longer fixed to the source's type either (libhxcpp #293)
 * Fixed a search of an Array<Dynamic> for a value of another type than its elements, such as `indexOf("missing")` on one holding Ints, converting the whole array as if the value were being added: contains, indexOf, lastIndexOf and remove boxed every element, or rewrote Int elements as Float for a Float, even on a miss. A search now compares the elements where they are, with the same results (libhxcpp #281)
 * Fixed formatting an array in one thread printing `[...]` while another thread was formatting a nested array: the recursion depth that stops at 5 levels was shared by every thread. It is now per thread, as an anonymous object's already was (libhxcpp #277)
 * Out-of-range reads on an untyped array now return null instead of a boxed 0/false from the typed backing store

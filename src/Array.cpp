@@ -1471,6 +1471,61 @@ VirtualArray VirtualArray_obj::splice(int inPos, int len)
 
    VirtualArray result = new VirtualArray_obj( dynamic_cast<cpp::ArrayBase_obj *>(cut.mPtr), false);
    result->store = store;
+   if (store==arrayFixed)
+      result->unfix();
+   return result;
+}
+
+// A copy, slice or splice of a typed array seen as dynamic is an independent
+// dynamic array, which must take any value later, so it is not fixed to its
+// source's type. It keeps the elements' storage where a dynamic array has that
+// storage, and is converted to object storage where it does not, as for
+// Float32, Bool or the small integer types.
+void VirtualArray_obj::unfix()
+{
+   ArrayStore own = arrayNull;
+   if (dynamic_cast< Array_obj<bool> * >(base))
+      own = arrayBool;
+   else switch(base->getStoreType())
+   {
+      case arrayInt:
+      case arrayInt64:
+      case arrayString:
+         own = base->getStoreType();
+         break;
+      case arrayFloat:
+         if (base->GetElementSize()==sizeof(Float))
+            own = arrayFloat;
+         break;
+      case arrayObject:
+         if (dynamic_cast< Array_obj<Dynamic> * >(base))
+            own = arrayObject;
+         break;
+      default:
+         break;
+   }
+   if (own!=arrayNull)
+      store = own;
+   else
+      MakeObjectArray();
+}
+
+// concat with a tail that is not empty. The result takes this array's storage
+// widened for the tail's elements, worked out on a second wrapper of this
+// array's elements: converting one makes a new array, so this array keeps its
+// storage. A typed tail does not fix the result to its type either, and the
+// result is a new array, so neither changes the other later.
+VirtualArray VirtualArray_obj::concatTail(VirtualArray inTail)
+{
+   VirtualArray result = new VirtualArray_obj(base, false);
+   result->store = store;
+   if (store==arrayFixed)
+      result->unfix();
+   result->EnsureArrayStorage(inTail->store==arrayFixed ? inTail->base->getStoreType() : inTail->store);
+   if (!result->base)
+      result->MakeObjectArray();
+   result->base = result->base->__concat(inTail);
+   HX_OBJ_WB_GET(result.mPtr, result->base);
    return result;
 }
 

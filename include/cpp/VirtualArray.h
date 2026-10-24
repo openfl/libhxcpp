@@ -484,16 +484,10 @@ public:
       // later int pushes truncate to 8 bits
       if (inTail->__length()<1)
          return copy();
-      EnsureArrayStorage(inTail);
-      if (!base)
-         MakeObjectArray();
-      VirtualArray result = new VirtualArray_obj( base->__concat(inTail), store==hx::arrayFixed );
-      if (store!=hx::arrayFixed)
-         // The constructor infers the store from the element type, which
-         // reports bool storage as object - keep the known store
-         result->store = store;
-      return result;
+      return concatTail(inTail);
    }
+   VirtualArray concatTail(VirtualArray inTail);
+   void unfix();
    VirtualArray copy( )
    {
       checkBase();
@@ -501,7 +495,9 @@ public:
          return new VirtualArray_obj(hx::arrayEmpty);
 
       VirtualArray result = new VirtualArray_obj(base->__copy(), store==hx::arrayFixed);
-      if (store!=hx::arrayFixed)
+      if (store==hx::arrayFixed)
+         result->unfix();
+      else
          result->store = store;
       return result;
    }
@@ -511,7 +507,9 @@ public:
       if (store==hx::arrayEmpty)
          return new VirtualArray_obj(hx::arrayEmpty);
       VirtualArray result = new VirtualArray_obj(base->__slice(inPos,end), store==hx::arrayFixed);
-      if (store!=hx::arrayFixed)
+      if (store==hx::arrayFixed)
+         result->unfix();
+      else
          result->store = store;
       return result;
    }

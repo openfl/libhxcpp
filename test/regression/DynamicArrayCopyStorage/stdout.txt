@@ -1,0 +1,5 @@
+copy result accepts heterogeneous values: true
+slice result accepts heterogeneous values: true
+splice result accepts heterogeneous values: true
+filter result accepts heterogeneous values: true
+map result accepts heterogeneous values: true

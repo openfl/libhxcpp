@@ -1,0 +1,5 @@
+concat values: true
+source remains unchanged: true
+source accepts later string: true
+result accepts later string: true
+concat preserves source element type: true
