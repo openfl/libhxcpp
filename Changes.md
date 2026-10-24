@@ -230,6 +230,7 @@ The first libhxcpp version. It is based on hxcpp 4.3 (the changes listed under 4
 
 ### Arrays and Bytes
 
+* Fixed a search of an Array<Dynamic> for a value of another type than its elements, such as `indexOf("missing")` on one holding Ints, converting the whole array as if the value were being added: contains, indexOf, lastIndexOf and remove boxed every element, or rewrote Int elements as Float for a Float, even on a miss. A search now compares the elements where they are, with the same results (libhxcpp #281)
 * Fixed formatting an array in one thread printing `[...]` while another thread was formatting a nested array: the recursion depth that stops at 5 levels was shared by every thread. It is now per thread, as an anonymous object's already was (libhxcpp #277)
 * Out-of-range reads on an untyped array now return null instead of a boxed 0/false from the typed backing store
 * Mixing Int64 and Float values in an untyped array now promotes to object storage instead of silently rounding Int64 values beyond 2^53 through a double
