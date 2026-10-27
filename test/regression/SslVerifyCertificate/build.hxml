@@ -1,0 +1,6 @@
+-cpp bin
+-m Main
+--resource ca.pem@ca
+--resource other-ca.pem@other-ca
+--resource server.pem@server
+--resource server-key.pem@server-key

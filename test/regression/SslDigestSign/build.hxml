@@ -1,0 +1,6 @@
+-cpp bin
+-m Main
+--resource server-key.pem@server-key
+--resource server-pub.pem@server-pub
+--resource ca-key-encrypted.pem@ca-key-encrypted
+--resource ca-pub.pem@ca-pub

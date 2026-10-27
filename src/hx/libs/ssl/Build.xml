@@ -5,7 +5,10 @@
 <!-- A library that bundles mbedTLS can offer it for static builds
      (docs/MbedTLSProvider.md); sys.ssl is then built on that copy. -->
 <include name="${hxcpp_mbedtls_provider}" if="static_link hxcpp_mbedtls_provider" />
+<!-- SSL.cpp builds on mbedTLS 4, which libhxcpp bundles, and on 3.6, which
+     Lime 8.4 offers -->
 <set name="HXCPP_MBEDTLS_FROM_PROVIDER" value="1" if="static_link HXCPP_MBEDTLS_PROVIDER_3 HXCPP_MBEDTLS_PROVIDER_FLAGS" />
+<set name="HXCPP_MBEDTLS_FROM_PROVIDER" value="1" if="static_link HXCPP_MBEDTLS_PROVIDER_4 HXCPP_MBEDTLS_PROVIDER_FLAGS" />
 
 <include name="${HXCPP}/project/thirdparty/mbedtls-files.xml" unless="HXCPP_MBEDTLS_FROM_PROVIDER" />
 
@@ -28,7 +31,7 @@
 	<files id="mbedtls" unless="HXCPP_MBEDTLS_FROM_PROVIDER" />
 
 	<lib name="advapi32.lib" if="windows" unless="static_link" />
-	<!-- mbedTLS 3 draws its entropy from BCryptGenRandom -->
+	<!-- mbedTLS draws its entropy from BCryptGenRandom -->
 	<lib name="bcrypt.lib" if="windows" unless="static_link" />
 	<lib name="crypt32.lib" if="windows" unless="static_link" />
 	<lib name="ws2_32.lib" if="windows" unless="static_link" />

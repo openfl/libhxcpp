@@ -3,11 +3,16 @@
 <depend name="${HXCPP}/project/thirdparty/mbedtls-flags.xml" dateOnly="true" />
 <!-- Built against these, which nothing else would tell hxcpp: an object
      compiled with an older configuration is compiled again. -->
-<depend name="${HXCPP}/project/thirdparty/config/mbedtls/include/mbedtls_config.h" dateOnly="true" />
+<depend name="${HXCPP}/project/thirdparty/config/mbedtls/include/tf_psa_crypto_config.h" dateOnly="true" />
 <depend name="${HXCPP}/project/thirdparty/config/mbedtls/include/threading_alt.h" dateOnly="true" />
 
-<compilerflag value="-I${HXCPP}/project/thirdparty/mbedtls-3.6.7/include" />
+<!-- mbedTLS 4's public headers: its own, for TLS and X.509, and those of
+     TF-PSA-Crypto, which holds the cryptography, with the builtin driver's
+     that they reach into. -->
+<compilerflag value="-I${HXCPP}/project/thirdparty/mbedtls-4.1.1/include" />
+<compilerflag value="-I${HXCPP}/project/thirdparty/mbedtls-4.1.1/tf-psa-crypto/include" />
+<compilerflag value="-I${HXCPP}/project/thirdparty/mbedtls-4.1.1/tf-psa-crypto/drivers/builtin/include" />
 <compilerflag value="-I${HXCPP}/project/thirdparty/config/mbedtls/include" />
-<compilerflag value="-DMBEDTLS_USER_CONFIG_FILE=&lt;mbedtls_config.h&gt;" />
+<compilerflag value="-DTF_PSA_CRYPTO_USER_CONFIG_FILE=&lt;tf_psa_crypto_config.h&gt;" />
 
 </xml>

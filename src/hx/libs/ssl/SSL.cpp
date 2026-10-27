@@ -32,9 +32,15 @@ typedef size_t socket_int;
 #define SOCKET_ERROR (-1)
 #define NRETRYS	20
 
-#include "mbedtls/error.h"
+// mbedTLS 4, which hxcpp bundles, or 3.6, which a library offering its own
+// copy for a static build may still ship (docs/MbedTLSProvider.md). 4 draws
+// every random number from PSA and has no generator of its own to set up.
+#include "mbedtls/build_info.h"
+#if MBEDTLS_VERSION_MAJOR < 4
 #include "mbedtls/entropy.h"
 #include "mbedtls/ctr_drbg.h"
+#endif
+#include "mbedtls/error.h"
 #include "mbedtls/md.h"
 #include "mbedtls/pk.h"
 #include "mbedtls/oid.h"
@@ -310,8 +316,14 @@ struct sslpkey : public hx::Object
 	String toString() HXCPP_OVERRIDE { return HX_CSTRING("sslpkey"); }
 };
 
+#if MBEDTLS_VERSION_MAJOR < 4
 static mbedtls_entropy_context entropy;
 static mbedtls_ctr_drbg_context ctr_drbg;
+// The generator, for the calls that take one in mbedTLS 3 and not in 4
+#define SSL_RNG , mbedtls_ctr_drbg_random, &ctr_drbg
+#else
+#define SSL_RNG
+#endif
 
 static bool is_ssl_blocking( int r ) {
 	return r == MBEDTLS_ERR_SSL_WANT_READ || r == MBEDTLS_ERR_SSL_WANT_WRITE;
@@ -374,11 +386,17 @@ void _hx_ssl_handshake( Dynamic hssl ) {
 		ssl_error(r);
 }
 
+// Set when the socket itself would block, as against mbedTLS asking to be
+// called again having blocked on nothing: see ssl_read.
+static thread_local bool socket_blocked = false;
+
 int net_read( void *fd, unsigned char *buf, size_t len ){
 	hx::EnterGCFreeZone();
 	int r = recv((SOCKET)(socket_int)fd, (char *)buf, len, 0);
- 	if( r == SOCKET_ERROR && is_block_error() )
+ 	if( r == SOCKET_ERROR && is_block_error() ) {
  		r = MBEDTLS_ERR_SSL_WANT_READ;
+		socket_blocked = true;
+	}
 	hx::ExitGCFreeZone();
 	return r;
 }
@@ -386,10 +404,29 @@ int net_read( void *fd, unsigned char *buf, size_t len ){
 int net_write( void *fd, const unsigned char *buf, size_t len ){
 	hx::EnterGCFreeZone();
 	int r = send((SOCKET)(socket_int)fd, (char *)buf, len, MSG_NOSIGNAL);
-	if( r == SOCKET_ERROR && is_block_error() )
+	if( r == SOCKET_ERROR && is_block_error() ) {
  		r = MBEDTLS_ERR_SSL_WANT_WRITE;
+		socket_blocked = true;
+	}
 	hx::ExitGCFreeZone();
 	return r;
+}
+
+// mbedtls_ssl_read, past the records that carry no data. mbedTLS 4's TLS 1.3
+// client takes in the session tickets a server sends after the handshake,
+// which 3.6 dropped: the read returns WANT_READ as it sets about one, though
+// the socket has not blocked, then RECEIVED_NEW_SESSION_TICKET once it has.
+// A warning alert or a renegotiation refused returns WANT_READ the same way.
+// None of them is the would-block that "Blocking" reports: thrown, it failed
+// the read on a blocking socket, which has data coming.
+static int ssl_read( mbedtls_ssl_context *s, unsigned char *buf, size_t len ){
+	while( true ) {
+		socket_blocked = false;
+		int r = mbedtls_ssl_read( s, buf, len );
+		if( r == MBEDTLS_ERR_SSL_RECEIVED_NEW_SESSION_TICKET || ( is_ssl_blocking(r) && !socket_blocked ) )
+			continue;
+		return r;
+	}
 }
 
 void _hx_ssl_set_socket( Dynamic hssl, Dynamic hsocket ) {
@@ -510,7 +547,7 @@ int _hx_ssl_recv_char( Dynamic hssl ) {
 	// Mirror _hx_ssl_recv - a would-block read is "Blocking", not a fatal
 	// error that the input wrapper turns into a spurious Eof
 	POSIX_LABEL(recv_char_again);
-	int r = mbedtls_ssl_read( ssl->s, &cc, 1 );
+	int r = ssl_read( ssl->s, &cc, 1 );
 	if( is_ssl_blocking(r) ) {
 		HANDLE_EINTR(recv_char_again);
 		hx::Throw(HX_CSTRING("Blocking"));
@@ -533,7 +570,7 @@ int _hx_ssl_recv( Dynamic hssl, Array<unsigned char> buf, int p, int l ) {
 	if( l > (int)sizeof(tmp) )
 		l = (int)sizeof(tmp);
 	POSIX_LABEL(recv_again);
-	dlen = mbedtls_ssl_read( ssl->s, tmp, l );
+	dlen = ssl_read( ssl->s, tmp, l );
 	if ( is_ssl_blocking(dlen) ) {
 		HANDLE_EINTR(recv_again);
 		hx::Throw(HX_CSTRING("Blocking"));
@@ -562,7 +599,7 @@ Array<unsigned char> _hx_ssl_read( Dynamic hssl ) {
 
 	while( true ) {
 		POSIX_LABEL(read_again);
-		int len = mbedtls_ssl_read( ssl->s, buf, sizeof(buf) );
+		int len = ssl_read( ssl->s, buf, sizeof(buf) );
 		if ( is_ssl_blocking(len) ) {
 			HANDLE_EINTR(read_again);
 			hx::Throw(HX_CSTRING("Blocking"));
@@ -705,9 +742,11 @@ Dynamic _hx_ssl_conf_new( bool server ) {
 #if defined(NEKO_WINDOWS) || defined(IPHONE) || defined(APPLETV)
 	mbedtls_ssl_conf_verify(conf->c, verify_callback, NULL);
 #endif
-	// No version floor to set: mbedTLS 3 speaks TLS 1.2 and 1.3 only, and the
-	// preset negotiates 1.3 whenever the peer can
+	// No version floor to set: mbedTLS 3 and 4 speak TLS 1.2 and 1.3 only,
+	// and the preset negotiates 1.3 whenever the peer can
+#if MBEDTLS_VERSION_MAJOR < 4
 	mbedtls_ssl_conf_rng( conf->c, mbedtls_ctr_drbg_random, &ctr_drbg );
+#endif
 #ifndef HXCPP_SSL_NO_TICKETS
 	// Session tickets (RFC 5077), so a client that has been here before
 	// resumes without the handshake's signature and key exchange: 4-7 ms of
@@ -726,7 +765,12 @@ Dynamic _hx_ssl_conf_new( bool server ) {
 		static const uint32_t TICKET_LIFETIME = 3600;
 		mbedtls_ssl_ticket_context *ticket = (mbedtls_ssl_ticket_context *)malloc(sizeof(mbedtls_ssl_ticket_context));
 		mbedtls_ssl_ticket_init( ticket );
-		if( mbedtls_ssl_ticket_setup( ticket, mbedtls_ctr_drbg_random, &ctr_drbg, MBEDTLS_CIPHER_AES_256_GCM, TICKET_LIFETIME ) == 0 )
+#if MBEDTLS_VERSION_MAJOR < 4
+		int r = mbedtls_ssl_ticket_setup( ticket, mbedtls_ctr_drbg_random, &ctr_drbg, MBEDTLS_CIPHER_AES_256_GCM, TICKET_LIFETIME );
+#else
+		int r = mbedtls_ssl_ticket_setup( ticket, PSA_ALG_GCM, PSA_KEY_TYPE_AES, 256, TICKET_LIFETIME );
+#endif
+		if( r == 0 )
 		{
 			conf->shared->ticket = ticket;
 			mbedtls_ssl_conf_session_tickets_cb( conf->c, mbedtls_ssl_ticket_write, mbedtls_ssl_ticket_parse, ticket );
@@ -932,9 +976,43 @@ static String asn1_buf_to_string( mbedtls_asn1_buf *dat ){
 	return String(result,dat->len);
 }
 
+// The short names of a distinguished name's attributes, which getSubject and
+// getIssuer are asked for by: mbedTLS 3's mbedtls_oid_get_attr_short_name's,
+// which mbedTLS 4 keeps to itself.
+static const struct { const char *oid; size_t len; const char *name; } attr_short_names[] = {
+#define ATTR( oid, name ) { oid, sizeof(oid) - 1, name }
+	ATTR( MBEDTLS_OID_AT_CN, "CN" ),
+	ATTR( MBEDTLS_OID_AT_COUNTRY, "C" ),
+	ATTR( MBEDTLS_OID_AT_LOCALITY, "L" ),
+	ATTR( MBEDTLS_OID_AT_STATE, "ST" ),
+	ATTR( MBEDTLS_OID_AT_ORGANIZATION, "O" ),
+	ATTR( MBEDTLS_OID_AT_ORG_UNIT, "OU" ),
+	ATTR( MBEDTLS_OID_PKCS9_EMAIL, "emailAddress" ),
+	ATTR( MBEDTLS_OID_AT_SERIAL_NUMBER, "serialNumber" ),
+	ATTR( MBEDTLS_OID_AT_POSTAL_ADDRESS, "postalAddress" ),
+	ATTR( MBEDTLS_OID_AT_POSTAL_CODE, "postalCode" ),
+	ATTR( MBEDTLS_OID_AT_SUR_NAME, "SN" ),
+	ATTR( MBEDTLS_OID_AT_GIVEN_NAME, "GN" ),
+	ATTR( MBEDTLS_OID_AT_INITIALS, "initials" ),
+	ATTR( MBEDTLS_OID_AT_GENERATION_QUALIFIER, "generationQualifier" ),
+	ATTR( MBEDTLS_OID_AT_TITLE, "title" ),
+	ATTR( MBEDTLS_OID_AT_DN_QUALIFIER, "dnQualifier" ),
+	ATTR( MBEDTLS_OID_AT_PSEUDONYM, "pseudonym" ),
+	ATTR( MBEDTLS_OID_UID, "uid" ),
+	ATTR( MBEDTLS_OID_DOMAIN_COMPONENT, "DC" ),
+	ATTR( MBEDTLS_OID_AT_UNIQUE_IDENTIFIER, "uniqueIdentifier" ),
+#undef ATTR
+};
+
+static const char *attr_short_name( const mbedtls_asn1_buf *oid ){
+	for( size_t i = 0; i < sizeof(attr_short_names) / sizeof(attr_short_names[0]); i++ )
+		if( oid->len == attr_short_names[i].len && memcmp( oid->p, attr_short_names[i].oid, oid->len ) == 0 )
+			return attr_short_names[i].name;
+	return NULL;
+}
+
 String _hx_ssl_cert_get_subject( Dynamic hcert, String objname ){
 	mbedtls_x509_name *obj;
-	int r;
 	const char *oname;
 	sslcert *cert = val_cert(hcert);
 	obj = &cert->c->subject;
@@ -942,8 +1020,8 @@ String _hx_ssl_cert_get_subject( Dynamic hcert, String objname ){
 		hx::Throw( HX_CSTRING("cert_get_subject") );
    hx::strbuf buf;
 	while( obj != NULL ){
-		r = mbedtls_oid_get_attr_short_name( &obj->oid, &oname );
-		if( r == 0 && strcmp( oname, objname.utf8_str(&buf) ) == 0 )
+		oname = attr_short_name( &obj->oid );
+		if( oname && strcmp( oname, objname.utf8_str(&buf) ) == 0 )
 			return asn1_buf_to_string( &obj->val );
 		obj = obj->next;
 	}
@@ -952,7 +1030,6 @@ String _hx_ssl_cert_get_subject( Dynamic hcert, String objname ){
 
 String _hx_ssl_cert_get_issuer( Dynamic hcert, String objname ){
 	mbedtls_x509_name *obj;
-	int r;
 	const char *oname;
 	sslcert *cert = val_cert(hcert);
 	obj = &cert->c->issuer;
@@ -960,8 +1037,8 @@ String _hx_ssl_cert_get_issuer( Dynamic hcert, String objname ){
 		hx::Throw( HX_CSTRING("cert_get_issuer") );
    hx::strbuf buf;
 	while( obj != NULL ){
-		r = mbedtls_oid_get_attr_short_name( &obj->oid, &oname );
-		if( r == 0 && strcmp( oname, objname.utf8_str(&buf) ) == 0 )
+		oname = attr_short_name( &obj->oid );
+		if( oname && strcmp( oname, objname.utf8_str(&buf) ) == 0 )
 			return asn1_buf_to_string( &obj->val );
 		obj = obj->next;
 	}
@@ -1072,7 +1149,7 @@ Dynamic _hx_ssl_key_from_der( Array<unsigned char> buf, bool pub ){
 	if( pub )
 		r = mbedtls_pk_parse_public_key( pk->k, &buf[0], buf->length );
 	else
-		r = mbedtls_pk_parse_key( pk->k, &buf[0], buf->length, NULL, 0, mbedtls_ctr_drbg_random, &ctr_drbg );
+		r = mbedtls_pk_parse_key( pk->k, &buf[0], buf->length, NULL, 0 SSL_RNG );
 	if( r != 0 ){
 		pk->destroy();
 		ssl_error(r);
@@ -1094,11 +1171,11 @@ Dynamic _hx_ssl_key_from_pem( String data, bool pub, String pass ){
 	if( pub ){
 		r = mbedtls_pk_parse_public_key( pk->k, b, data.length+1 );
 	}else if( pass == null() ){
-		r = mbedtls_pk_parse_key( pk->k, b, data.length+1, NULL, 0, mbedtls_ctr_drbg_random, &ctr_drbg );
+		r = mbedtls_pk_parse_key( pk->k, b, data.length+1, NULL, 0 SSL_RNG );
 	}else{
       Array<unsigned char> pbytes(0,0);
       __hxcpp_bytes_of_string(pbytes,pass);
-		r = mbedtls_pk_parse_key( pk->k, b, data.length+1, (const unsigned char *)pbytes->GetBase(), pbytes->length, mbedtls_ctr_drbg_random, &ctr_drbg );
+		r = mbedtls_pk_parse_key( pk->k, b, data.length+1, (const unsigned char *)pbytes->GetBase(), pbytes->length SSL_RNG );
 	}
 	free(b);
 	if( r != 0 ){
@@ -1108,9 +1185,32 @@ Dynamic _hx_ssl_key_from_pem( String data, bool pub, String pass ){
 	return pk;
 }
 
+// A digest by the name sys.ssl.DigestAlgorithm gives it: mbedTLS 3's
+// mbedtls_md_info_from_string's names, which mbedTLS 4 keeps to itself.
+static const mbedtls_md_info_t *md_info_from_name( const char *name ){
+	static const struct { const char *name; mbedtls_md_type_t type; } names[] = {
+		{ "MD5", MBEDTLS_MD_MD5 },
+		{ "RIPEMD160", MBEDTLS_MD_RIPEMD160 },
+		{ "SHA1", MBEDTLS_MD_SHA1 },
+		{ "SHA", MBEDTLS_MD_SHA1 },
+		{ "SHA224", MBEDTLS_MD_SHA224 },
+		{ "SHA256", MBEDTLS_MD_SHA256 },
+		{ "SHA384", MBEDTLS_MD_SHA384 },
+		{ "SHA512", MBEDTLS_MD_SHA512 },
+		{ "SHA3-224", MBEDTLS_MD_SHA3_224 },
+		{ "SHA3-256", MBEDTLS_MD_SHA3_256 },
+		{ "SHA3-384", MBEDTLS_MD_SHA3_384 },
+		{ "SHA3-512", MBEDTLS_MD_SHA3_512 },
+	};
+	for( size_t i = 0; i < sizeof(names) / sizeof(names[0]); i++ )
+		if( strcmp( name, names[i].name ) == 0 )
+			return mbedtls_md_info_from_type( names[i].type );
+	return NULL;
+}
+
 Array<unsigned char> _hx_ssl_dgst_make( Array<unsigned char> buf, String alg ){
    hx::strbuf ubuf;
-	const mbedtls_md_info_t *md = mbedtls_md_info_from_string(alg.utf8_str(&ubuf));
+	const mbedtls_md_info_t *md = md_info_from_name(alg.utf8_str(&ubuf));
 	if( md == NULL )
 		hx::Throw( HX_CSTRING("Invalid hash algorithm") );
 
@@ -1132,7 +1232,7 @@ Array<unsigned char> _hx_ssl_dgst_sign( Array<unsigned char> buf, Dynamic hpkey,
 	sslpkey *pk = val_pkey(hpkey);
 
    hx::strbuf ubuf;
-	const mbedtls_md_info_t *md = mbedtls_md_info_from_string( alg.utf8_str(&ubuf) );
+	const mbedtls_md_info_t *md = md_info_from_name( alg.utf8_str(&ubuf) );
 	if( md == NULL )
 		hx::Throw( HX_CSTRING("Invalid hash algorithm") );
 
@@ -1140,7 +1240,7 @@ Array<unsigned char> _hx_ssl_dgst_sign( Array<unsigned char> buf, Dynamic hpkey,
 		ssl_error(r);
 
 	Array<unsigned char> result = Array_obj<unsigned char>::__new(MBEDTLS_PK_SIGNATURE_MAX_SIZE,MBEDTLS_PK_SIGNATURE_MAX_SIZE);
-	if( (r = mbedtls_pk_sign( pk->k, mbedtls_md_get_type(md), hash, 0, &result[0], MBEDTLS_PK_SIGNATURE_MAX_SIZE, &olen, mbedtls_ctr_drbg_random, &ctr_drbg )) != 0 )
+	if( (r = mbedtls_pk_sign( pk->k, mbedtls_md_get_type(md), hash, 0, &result[0], MBEDTLS_PK_SIGNATURE_MAX_SIZE, &olen SSL_RNG )) != 0 )
 		ssl_error(r);
 
 	result->__SetSize(olen);
@@ -1154,7 +1254,7 @@ bool _hx_ssl_dgst_verify( Array<unsigned char> buf, Array<unsigned char> sign, D
 	sslpkey *pk = val_pkey(hpkey);
 
    hx::strbuf ubuf;
-	md = mbedtls_md_info_from_string( alg.utf8_str(&ubuf) );
+	md = md_info_from_name( alg.utf8_str(&ubuf) );
 	if( md == NULL )
 		hx::Throw( HX_CSTRING("Invalid hash algorithm") );
 
@@ -1184,16 +1284,18 @@ void _hx_ssl_init() {
 	hxcpp_mbedtls_threading_init();
 #endif
 
-	// TLS 1.3 runs its key exchange and key schedule through PSA. mbedTLS 3.6
-	// starts PSA itself at a 1.3 handshake's first step, idempotently; doing
-	// it here, once, after the mutexes PSA's state takes, keeps the start-up
-	// -- seeding PSA's own generator -- off the first handshake, and is what
-	// any other use of PSA would need. TLS 1.2 does not use PSA in this
-	// configuration (MBEDTLS_USE_PSA_CRYPTO is off)
+	// After the mutexes, which PSA's state takes. mbedTLS 4 runs its keys,
+	// its handshakes and its random numbers through PSA, which has to be
+	// started before a configuration or a key is made, and seeds its own
+	// generator as it starts. A failure here leaves PSA unstarted, and the
+	// calls that need it fail and say so. Under mbedTLS 3.6 only TLS 1.3 uses
+	// PSA, and starts it itself at a handshake's first step; doing it here
+	// keeps that off the first handshake.
 	psa_crypto_init();
 
-	// Init RNG
+#if MBEDTLS_VERSION_MAJOR < 4
 	mbedtls_entropy_init( &entropy );
 	mbedtls_ctr_drbg_init( &ctr_drbg );
 	mbedtls_ctr_drbg_seed( &ctr_drbg, mbedtls_entropy_func, &entropy, NULL, 0 );
+#endif
 }

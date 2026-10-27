@@ -62,6 +62,7 @@ SslErrorCodes: sockets
 SslPeerCertificateLifetime: sockets
 SslSniLifetime: sockets
 SslSniName: sockets
+SslVerifyCertificate: sockets
 ThreadEndsAtExit: threads
 ThreadEndsAtExitDebugger: threads
 ThreadEndsWhileCollecting: threads

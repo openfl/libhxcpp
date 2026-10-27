@@ -1,0 +1,7 @@
+verified: HELLO
+subject: CN=localhost O=hxcpp tests
+issuer: CN=hxcpp test CA O=hxcpp tests C=CA
+first alt name: localhost of 2
+valid from 2025 to 2125
+wrong hostname: refused
+untrusted CA: refused

@@ -1,0 +1,15 @@
+MD5: 900150983cd24fb0d6963f7d28e17f72
+SHA1: a9993e364706816aba3e25717850c26c9cd0d89d
+SHA224: 23097d223405d8228642a477bda255b32aadbce4bda0b3f7e36c9da7
+SHA256: ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad
+SHA384: cb00753f45a35e8bb5a03d699ac65007272c32ab0eded1631a8b605a43ff5bed8086072ba1e7cc2358baeca134c825a7
+SHA512: ddaf35a193617abacc417349ae20413112e6fa4e89a97ea20a9eeee64b55d39a2192992a274fc1a836ba3c23a3feebbd454d4423643ce80e2a9ac94fa54ca49f
+RIPEMD160: 8eb208f7e05d987a9b044a8e98c6b087f15a0bfc
+SHA0: Invalid hash algorithm
+RSA SHA256: verifies true, tampered false
+RSA SHA384: verifies true, tampered false
+RSA SHA512: verifies true, tampered false
+P-256 SHA256: verifies true, tampered false
+P-256 SHA384: verifies true, tampered false
+P-256 SHA512: verifies true, tampered false
+wrong password: refused

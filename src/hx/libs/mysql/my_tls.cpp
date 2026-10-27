@@ -18,26 +18,23 @@
 #include <stdlib.h>
 #include "my_proto.h"
 
-#include "mbedtls/ctr_drbg.h"
-#include "mbedtls/entropy.h"
 #include "mbedtls/error.h"
 #include "mbedtls/pk.h"
-#include "mbedtls/rsa.h"
-#include "mbedtls/sha256.h"
 #include "mbedtls/ssl.h"
 #include "mbedtls/x509_crt.h"
+#include "psa/crypto.h"
 
 // In hxcpp's SSL.cpp: sets mbedTLS's mutexes up on Windows, where it is
-// built with MBEDTLS_THREADING_ALT. Called once before this file uses
-// mbedTLS, in case nothing in the program has opened a TLS socket yet.
+// built with MBEDTLS_THREADING_ALT, and starts PSA, which mbedTLS 4 runs all
+// of its cryptography on, random numbers included. Called once before this
+// file uses mbedTLS, in case nothing in the program has opened a TLS socket
+// yet.
 void _hx_ssl_init();
 
 struct _MYSQL_TLS {
 	mbedtls_ssl_context ssl;
 	mbedtls_ssl_config conf;
 	mbedtls_x509_crt ca;
-	mbedtls_entropy_context entropy;
-	mbedtls_ctr_drbg_context drbg;
 };
 
 static void tls_ready() {
@@ -100,19 +97,12 @@ int myp_tls_start( MYSQL *m, const char *host ) {
 	mbedtls_ssl_init(&t->ssl);
 	mbedtls_ssl_config_init(&t->conf);
 	mbedtls_x509_crt_init(&t->ca);
-	mbedtls_entropy_init(&t->entropy);
-	mbedtls_ctr_drbg_init(&t->drbg);
 	m->tls = t;
 
-	if( (r = mbedtls_ctr_drbg_seed(&t->drbg, mbedtls_entropy_func, &t->entropy, (const unsigned char*)"hxcpp-mysql", 11)) != 0 ) {
-		tls_error(m, "TLS setup failed", r);
-		return 0;
-	}
 	if( (r = mbedtls_ssl_config_defaults(&t->conf, MBEDTLS_SSL_IS_CLIENT, MBEDTLS_SSL_TRANSPORT_STREAM, MBEDTLS_SSL_PRESET_DEFAULT)) != 0 ) {
 		tls_error(m, "TLS setup failed", r);
 		return 0;
 	}
-	mbedtls_ssl_conf_rng(&t->conf, mbedtls_ctr_drbg_random, &t->drbg);
 
 	if( verify ) {
 		if( !m->options.ssl_ca || !*m->options.ssl_ca ) {
@@ -147,9 +137,9 @@ int myp_tls_start( MYSQL *m, const char *host ) {
 			return 0;
 		}
 	} else if( m->options.ssl_mode < MYSQL_SSL_VERIFY_IDENTITY ) {
-		// No name to check, which VERIFY_CA does not ask for. mbedTLS 3.6
-		// refuses to verify a chain until told that is intended, which a NULL
-		// name says; VERIFY_IDENTITY with no host is left to fail.
+		// No name to check, which VERIFY_CA does not ask for. mbedTLS, from
+		// 3.6.3, refuses to verify a chain until told that is intended, which
+		// a NULL name says; VERIFY_IDENTITY with no host is left to fail.
 		if( (r = mbedtls_ssl_set_hostname(&t->ssl, NULL)) != 0 ) {
 			tls_error(m, "TLS setup failed", r);
 			return 0;
@@ -196,8 +186,6 @@ void myp_tls_free( MYSQL *m ) {
 	mbedtls_ssl_free(&t->ssl);
 	mbedtls_ssl_config_free(&t->conf);
 	mbedtls_x509_crt_free(&t->ca);
-	mbedtls_ctr_drbg_free(&t->drbg);
-	mbedtls_entropy_free(&t->entropy);
 	free(t);
 	m->tls = NULL;
 }
@@ -209,9 +197,11 @@ void myp_tls_close_notify( MYSQL *m ) {
 
 int myp_tls_recv( MYSQL *m, void *buf, int size ) {
 	int r;
+	// Past a TLS 1.3 session ticket, which mbedTLS 4 takes in where 3.6
+	// dropped it, and which this client never resumes with.
 	do {
 		r = mbedtls_ssl_read(&m->tls->ssl, (unsigned char*)buf, size);
-	} while( r == MBEDTLS_ERR_SSL_WANT_READ || r == MBEDTLS_ERR_SSL_WANT_WRITE );
+	} while( r == MBEDTLS_ERR_SSL_WANT_READ || r == MBEDTLS_ERR_SSL_WANT_WRITE || r == MBEDTLS_ERR_SSL_RECEIVED_NEW_SESSION_TICKET );
 	if( r > 0 )
 		return r;
 	if( r == 0 || r == MBEDTLS_ERR_SSL_PEER_CLOSE_NOTIFY )
@@ -228,42 +218,45 @@ int myp_tls_send( MYSQL *m, const void *buf, int size ) {
 }
 
 void myp_sha256( const unsigned char *data, int length, unsigned char out[32] ) {
-	mbedtls_sha256(data, (size_t)length, out, 0);
+	size_t written;
+	tls_ready();
+	// Cannot fail for a started PSA and a buffer of SHA-256's size
+	psa_hash_compute(PSA_ALG_SHA_256, data, (size_t)length, out, 32, &written);
 }
 
 int myp_rsa_encrypt( MYSQL *m, const char *pem, const unsigned char *in, int length, unsigned char *out, int capacity ) {
 	int r;
 	size_t written = 0;
 	mbedtls_pk_context key;
-	mbedtls_entropy_context entropy;
-	mbedtls_ctr_drbg_context drbg;
+	psa_key_attributes_t attributes = PSA_KEY_ATTRIBUTES_INIT;
+	mbedtls_svc_key_id_t id = MBEDTLS_SVC_KEY_ID_INIT;
+	// RSA_PKCS1_OAEP_PADDING, which the server decrypts with: OAEP over
+	// SHA-1, with MGF1 over SHA-1.
+	const psa_algorithm_t oaep = PSA_ALG_RSA_OAEP(PSA_ALG_SHA_1);
 
 	tls_ready();
 	mbedtls_pk_init(&key);
-	mbedtls_entropy_init(&entropy);
-	mbedtls_ctr_drbg_init(&drbg);
 
 	// A PEM buffer's length counts its terminating NUL.
 	r = mbedtls_pk_parse_public_key(&key, (const unsigned char*)pem, strlen(pem) + 1);
 	if( r != 0 ) {
 		tls_error(m, "Could not read the server's RSA public key", r);
-	} else if( !mbedtls_pk_can_do(&key, MBEDTLS_PK_RSA) ) {
+	} else if( !PSA_KEY_TYPE_IS_RSA(mbedtls_pk_get_key_type(&key)) ) {
 		snprintf(m->last_error, sizeof(m->last_error), "The server's public key is not an RSA key");
 		m->errcode = 2061;
 		r = -1;
-	} else if( (r = mbedtls_ctr_drbg_seed(&drbg, mbedtls_entropy_func, &entropy, (const unsigned char*)"hxcpp-mysql-rsa", 15)) != 0 ) {
-		tls_error(m, "Could not seed the random generator", r);
+	} else if( (r = mbedtls_pk_get_psa_attributes(&key, PSA_KEY_USAGE_ENCRYPT, &attributes)) != 0 ) {
+		tls_error(m, "Could not read the server's RSA public key", r);
 	} else {
-		// RSA_PKCS1_OAEP_PADDING, which the server decrypts with: OAEP over
-		// SHA-1, with MGF1 over SHA-1.
-		mbedtls_rsa_set_padding(mbedtls_pk_rsa(key), MBEDTLS_RSA_PKCS_V21, MBEDTLS_MD_SHA1);
-		r = mbedtls_pk_encrypt(&key, in, (size_t)length, out, &written, (size_t)capacity, mbedtls_ctr_drbg_random, &drbg);
-		if( r != 0 )
+		psa_set_key_algorithm(&attributes, oaep);
+		if( (r = mbedtls_pk_import_into_psa(&key, &attributes, &id)) != 0 )
+			tls_error(m, "Could not read the server's RSA public key", r);
+		else if( (r = psa_asymmetric_encrypt(id, oaep, in, (size_t)length, NULL, 0, out, (size_t)capacity, &written)) != PSA_SUCCESS )
 			tls_error(m, "Could not encrypt the password for the server", r);
 	}
 
-	mbedtls_ctr_drbg_free(&drbg);
-	mbedtls_entropy_free(&entropy);
+	psa_destroy_key(id);
+	psa_reset_key_attributes(&attributes);
 	mbedtls_pk_free(&key);
 	return r == 0 ? (int)written : -1;
 }

@@ -7,7 +7,7 @@ libhxcpp is the runtime for the C++ target of the [Haxe](https://haxe.org/) comp
 
 ## Highlights
 
-- **More than 170 fixes and improvements on top of hxcpp 4.3.** Garbage collector correctness (moving GC heap corruption, `HXCPP_GC_BIG_BLOCKS`, threads that start or end during a collection), memory-safety bugs reachable from plain Haxe code, sockets and TLS (mbedTLS 3.6 LTS, TLS 1.3, session resumption), MySQL 8 and SQLite, string and number formatting that matches the other Haxe targets, and faster maps, strings, sorting and cppia. [Changes.md](Changes.md) lists them all.
+- **More than 170 fixes and improvements on top of hxcpp 4.3.** Garbage collector correctness (moving GC heap corruption, `HXCPP_GC_BIG_BLOCKS`, threads that start or end during a collection), memory-safety bugs reachable from plain Haxe code, sockets and TLS (mbedTLS 4.1 LTS, TLS 1.3, session resumption), MySQL 8 and SQLite, string and number formatting that matches the other Haxe targets, and faster maps, strings, sorting and cppia. [Changes.md](Changes.md) lists them all.
 - **Tested releases.** A release is cut deliberately from a commit CI has tested, and ships with the build tool and the cppia host prebuilt for Windows, macOS and Linux.
 - **Broad CI.** Every change runs the test suites on Windows (32 and 64-bit), macOS (x86_64 and Arm64) and Linux (32 and 64-bit) with Haxe 4.3.7, runs the GC tests with big blocks, compiles the GC under 32 define configurations at both block sizes, and checks installing with haxelib. The same suites run against the Haxe nightly build once a day.
 - **Open development.** Issues and pull requests are welcome.

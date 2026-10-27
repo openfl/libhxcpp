@@ -202,7 +202,7 @@ jobs:
       - name: SSL for iOS and tvOS at the default minimum version
         if: ${{ !cancelled() && runner.os == 'macOS' && inputs.arch == 'Arm64' }}
         run: |
-          flags="-std=c++11 -c -arch arm64 -Iinclude -Iproject/thirdparty/mbedtls-3.6.7/include -Iproject/thirdparty/config/mbedtls/include -DMBEDTLS_USER_CONFIG_FILE=<mbedtls_config.h> -DHXCPP_M64 -DHXCPP_ARM64"
+          flags="-std=c++11 -c -arch arm64 -Iinclude -Iproject/thirdparty/mbedtls-4.1.1/include -Iproject/thirdparty/mbedtls-4.1.1/tf-psa-crypto/include -Iproject/thirdparty/mbedtls-4.1.1/tf-psa-crypto/drivers/builtin/include -Iproject/thirdparty/config/mbedtls/include -DTF_PSA_CRYPTO_USER_CONFIG_FILE=<tf_psa_crypto_config.h> -DHXCPP_M64 -DHXCPP_ARM64"
           xcrun --sdk iphoneos clang++ $flags -miphoneos-version-min=9.0 -DIPHONE=IPHONE -DIPHONEOS=IPHONEOS src/hx/libs/ssl/SSL.cpp -o ssl-ios.o
           xcrun --sdk appletvos clang++ $flags -mtvos-version-min=9.0 -DAPPLETV=APPLETV src/hx/libs/ssl/SSL.cpp -o ssl-tvos.o
 

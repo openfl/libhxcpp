@@ -11,7 +11,7 @@ All of these must hold, otherwise libhxcpp quietly uses its own copy:
 
 - The build is static (`static_link`).
 - The define `hxcpp_mbedtls_provider` is set.
-- The provider's mbedTLS major version is one libhxcpp supports (3).
+- The provider's mbedTLS major version is one libhxcpp supports: 3 (3.6) or 4.
 
 Shared-library builds (desktop, Android) always use libhxcpp's own copy. A library's mbedTLS sits inside its own shared library there, out of the app's reach, and the two copies don't meet.
 
@@ -27,7 +27,7 @@ Shared-library builds (desktop, Android) always use libhxcpp's own copy. A libra
 
    The define holds one path, so an app has at most one provider. Set it only when it isn't set already.
 
-2. **Write the provider file.** libhxcpp includes it at the top level, where `${this_dir}` is the provider file's own directory. It sets the paths the flags file needs and declares the mbedTLS major version:
+2. **Write the provider file.** libhxcpp includes it at the top level, where `${this_dir}` is the provider file's own directory. It sets the paths the flags file needs and declares the mbedTLS major version, `HXCPP_MBEDTLS_PROVIDER_4` for mbedTLS 4 or `HXCPP_MBEDTLS_PROVIDER_3` for 3.6. For a 3.6 copy:
 
    ```xml
    <xml>
@@ -38,7 +38,7 @@ Shared-library builds (desktop, Android) always use libhxcpp's own copy. A libra
    </xml>
    ```
 
-3. **Write the flags file.** libhxcpp includes it inside the group that compiles its TLS code. It holds the flags that compile code against exactly the library's mbedTLS: include paths, the configuration, and anything the configuration pulls in (a symbol prefix header, for example). Inside a files group `${this_dir}` doesn't change, so use the paths the provider file set:
+3. **Write the flags file.** libhxcpp includes it inside the group that compiles its TLS code. It holds the flags that compile code against exactly the library's mbedTLS: include paths, the configuration, and anything the configuration pulls in (a symbol prefix header, for example). mbedTLS 4 has three public include directories, `include`, `tf-psa-crypto/include` and `tf-psa-crypto/drivers/builtin/include`, and its cryptography and threading options are read from `TF_PSA_CRYPTO_USER_CONFIG_FILE` rather than `MBEDTLS_USER_CONFIG_FILE`. Inside a files group `${this_dir}` doesn't change, so use the paths the provider file set. For mbedTLS 3.6:
 
    ```xml
    <xml>
@@ -48,14 +48,14 @@ Shared-library builds (desktop, Android) always use libhxcpp's own copy. A libra
    </xml>
    ```
 
-4. **Link and set up your mbedTLS.** The library's mbedTLS must be in the app's link (in its static library, for example), and the library sets up mbedTLS's threading before anything uses it: with `MBEDTLS_THREADING_ALT`, it calls `mbedtls_threading_set_alt` itself. libhxcpp then skips its own threading setup. libhxcpp still calls `psa_crypto_init()`, which is safe to call more than once.
+4. **Link and set up your mbedTLS.** The library's mbedTLS must be in the app's link (in its static library, for example), and the library sets up mbedTLS's threading before anything uses it: with `MBEDTLS_THREADING_ALT`, it calls `mbedtls_threading_set_alt` itself, which in mbedTLS 4 takes condition variables too. libhxcpp then skips its own threading setup. libhxcpp still calls `psa_crypto_init()`, which is safe to call more than once, and which mbedTLS 4 needs before any of its cryptography.
 
 ### What libhxcpp does with it
 
 - It compiles its TLS code (`SSL.cpp`) with the provider's flags, so it calls the provider's mbedTLS, under whatever names the provider's configuration gives them.
 - It doesn't compile or link its own mbedTLS, and skips its own threading setup.
-- Its TLS code supports mbedTLS 3. A provider declaring another major version is ignored.
+- Its TLS code supports mbedTLS 4, which libhxcpp bundles, and 3.6. A provider declaring another major version is ignored.
 
 ### Example: Lime
 
-Lime bundles mbedTLS 3.6 for curl and renames every `mbedtls_` and `psa_` symbol with a `lime_` prefix, so its copy can't clash with any other. In static builds it sets `hxcpp_mbedtls_provider` to its `templates/mbedtls/provider.xml`, whose flags bring in that prefix header. libhxcpp's TLS code then calls `lime_mbedtls_*` and links into Lime's copy, and the app carries one mbedTLS. With upstream hxcpp, which doesn't read the define, the prefix keeps the two copies apart.
+Lime bundles mbedTLS 3.6 for curl and renames every `mbedtls_` and `psa_` symbol with a `lime_` prefix, so its copy can't clash with any other. In static builds it sets `hxcpp_mbedtls_provider` to its `templates/mbedtls/provider.xml`, which declares mbedTLS 3 and whose flags bring in that prefix header. libhxcpp's TLS code then calls `lime_mbedtls_*` and links into Lime's copy, and the app carries one mbedTLS. With upstream hxcpp, which doesn't read the define, the prefix keeps the two copies apart.
