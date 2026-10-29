@@ -77,10 +77,39 @@ namespace hx
     template<class TReturn, class... TArgs>
     class HXCPP_EXTERN_CLASS_ATTRIBUTES AutoCallable_obj;
 
+#ifdef HXCPP_VISIT_ALLOCS
+    // Counts what a callable visits and keeps the object it found
+    struct CallableHandleVisitor : public VisitContext
+    {
+        hx::Object *object = nullptr;
+        int count = 0;
+
+        void visitObject(hx::Object **ioPtr) override { object = *ioPtr; count++; }
+        void visitAlloc(void **ioPtr) override { count++; }
+    };
+#endif
+
     template<class TReturn, class... TArgs>
     class HXCPP_EXTERN_CLASS_ATTRIBUTES AutoCallable_obj<TReturn(TArgs...)> : public ::hx::Callable_obj<TReturn(TArgs...)>
     {
         Dynamic __Run(const Array<Dynamic>& inArgs) override final;
+
+    public:
+        // Haxe 5 generates a member closure as a struct holding its receiver in
+        //  __this, with no __GetHandle, so weak references lost the closure
+        //  while its receiver lived. A callable that visits one object hands
+        //  that object back, as the closures of CreateMemberFunctionVar do.
+        //  Local functions return 0 through HX_LOCAL_FUNC_NO_HANDLE.
+        void* __GetHandle() const override
+        {
+#ifdef HXCPP_VISIT_ALLOCS
+            CallableHandleVisitor visitor;
+            const_cast<AutoCallable_obj*>(this)->__Visit(&visitor);
+            if (visitor.count == 1)
+                return visitor.object;
+#endif
+            return 0;
+        }
     };
 
     // ::hx::ObjectPtr overloads
