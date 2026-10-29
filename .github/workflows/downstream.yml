@@ -43,8 +43,8 @@ jobs:
       - name: libraries
         shell: bash
         run: |
-          haxelib install emitter 2.0.0 --always
-          haxelib install utest 1.13.2 --always
+          bash test/downstream/haxelib-install.sh emitter 2.0.0
+          bash test/downstream/haxelib-install.sh utest 1.13.2
           haxelib set utest 1.13.2 --always
           haxelib dev crossbyte "$PWD/crossbyte"
 
@@ -86,7 +86,7 @@ jobs:
         shell: bash
         run: |
           for lib in lime openfl lime-samples openfl-samples actuate flixel feathersui haxeui-core haxeui-openfl; do
-            haxelib install $lib --always > /dev/null || exit 1
+            bash test/downstream/haxelib-install.sh $lib || exit 1
           done
           haxelib list
 
