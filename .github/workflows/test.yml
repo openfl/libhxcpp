@@ -477,16 +477,24 @@ jobs:
         run: |
           haxe -D $HXCPP_ARCH_FLAG build.hxml -cpp export/cpp
           export/cpp/Main
+      # Haxe 5 moved eventLoop under cross/ and runs every target's misc tests
+      # from tests/misc (HaxeFoundation/haxe#12759); Haxe 4 has the old layout
       - name: haxe event loop
         if: ${{ !cancelled() && steps.haxe_tests.outcome == 'success' }}
-        working-directory: haxe/tests/misc/eventLoop
+        working-directory: haxe/tests/misc
         run: |
+          if [ -d cross/eventLoop ]; then cd cross/eventLoop; else cd eventLoop; fi
           haxe -D $HXCPP_ARCH_FLAG build-cpp.hxml
           cpp/Main
       - name: haxe misc
         if: ${{ !cancelled() && steps.haxe_tests.outcome == 'success' }}
-        working-directory: haxe/tests/misc/cpp
-        run: haxe run.hxml
+        working-directory: haxe/tests/misc
+        run: |
+          if [ -f cpp/run.hxml ]; then
+            cd cpp && haxe run.hxml
+          else
+            haxe run-base.hxml --run Main cpp
+          fi
       - name: haxe unit under cppia
         if: ${{ !cancelled() && steps.haxe_tests.outcome == 'success' }}
         working-directory: haxe/tests/unit

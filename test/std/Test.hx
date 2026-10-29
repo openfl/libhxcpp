@@ -305,6 +305,8 @@ class Test extends utest.Test
       {
          case TInt: "Int " + value;
          case TClass(c) if (Type.getClassName(c) == "cpp::Int64"): "Int64 " + value;
+         // Haxe 5 gives Int64s a ValueType of their own, which Haxe 4 does not have
+         case other if (Std.string(other) == "TInt64"): "Int64 " + value;
          case other: Std.string(other) + " " + value;
       }
    }

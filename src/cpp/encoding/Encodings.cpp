@@ -392,6 +392,13 @@ String cpp::encoding::Utf8::decode(const cpp::marshal::View<uint8_t>& buffer)
 
     return String(exact, chars);
 #else
+    // The bytes are kept as they are, but malformed input still throws, as
+    // it does with smart strings
+    for (int64_t i = 0; i < buffer.length;)
+    {
+        i += getByteCount(codepoint(buffer.slice(i)));
+    }
+
     // +1 for the terminator - the allocation is not zeroed and hxcpp
     // strings are assumed NUL-terminated by native consumers
     auto backing = View<char>(hx::InternalNew(buffer.length + 1, false), buffer.length + 1);
