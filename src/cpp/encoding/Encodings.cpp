@@ -116,6 +116,32 @@ namespace
         }
         return units;
     }
+
+#if defined(HX_SMART_STRINGS)
+    // The code point at units[i] of a String, advancing i past it. A String
+    // may hold a lone surrogate, as substr leaves one when it splits a pair,
+    // and it becomes U+FFFD, as Bytes.ofString and utf8_str() give with Haxe 4
+    // and as the other targets give. Utf16::codepoint, which reads UTF-16
+    // bytes rather than a String, still throws
+    char32_t stringCodepoint(const char16_t* units, int64_t length, int64_t& i)
+    {
+        auto first = static_cast<char32_t>(units[i++]);
+
+        if (first < 0xD800 || first >= 0xE000)
+        {
+            return first;
+        }
+
+        if (first < 0xDC00 && i < length && units[i] >= 0xDC00 && units[i] < 0xE000)
+        {
+            auto second = static_cast<char32_t>(units[i++]);
+
+            return (((first - 0xD800) << 10) | (second - 0xDC00)) + 0x10000;
+        }
+
+        return 0xFFFD;
+    }
+#endif
 }
 
 int cpp::encoding::Utf8::getByteCount(const null&)
@@ -157,18 +183,13 @@ int64_t cpp::encoding::Utf8::getByteCount(const String& string)
     }
 
 #if defined(HX_SMART_STRINGS)
-    auto source = View<char16_t>(string.raw_wptr(), string.length).reinterpret<uint8_t>();
-    auto length = source.length;
-    auto bytes  = int64_t{ 0 };
-    auto i      = int64_t{ 0 };
+    auto units = string.raw_wptr();
+    auto bytes = int64_t{ 0 };
+    auto i     = int64_t{ 0 };
 
-    while (i < source.length)
+    while (i < string.length)
     {
-        auto slice = source.slice(i);
-        auto p     = Utf16::codepoint(slice);
-
-        i     += Utf16::getByteCount(p);
-        bytes += getByteCount(p);
+        bytes += getByteCount(stringCodepoint(units, string.length, i));
     }
 
     return bytes;
@@ -236,17 +257,13 @@ int64_t cpp::encoding::Utf8::encode(const String& string, const cpp::marshal::Vi
         hx::Throw(HX_CSTRING("Buffer too small"));
     }
 
-    auto initialPtr = buffer.ptr.ptr;
-    auto source     = View<char16_t>(string.raw_wptr(), string.length).reinterpret<uint8_t>();
-    auto i          = int64_t{ 0 };
-    auto k          = int64_t{ 0 };
+    auto units = string.raw_wptr();
+    auto i     = int64_t{ 0 };
+    auto k     = int64_t{ 0 };
 
-    while (i < source.length)
+    while (i < string.length)
     {
-        auto p = Utf16::codepoint(source.slice(i));
-
-        i += Utf16::getByteCount(p);
-        k += encode(p, buffer.slice(k));
+        k += encode(stringCodepoint(units, string.length, i), buffer.slice(k));
     }
 
     return k;
@@ -284,17 +301,13 @@ Array<uint8_t> cpp::encoding::Utf8::encode(const String& string)
     Array<uint8_t> out(string.length * 3, 0);
     View<uint8_t> buffer(out->Pointer(), out->length);
 
-    auto initialPtr = buffer.ptr.ptr;
-    auto source     = View<char16_t>(string.raw_wptr(), string.length).reinterpret<uint8_t>();
-    auto i          = int64_t{ 0 };
-    auto k          = int64_t{ 0 };
+    auto units = string.raw_wptr();
+    auto i     = int64_t{ 0 };
+    auto k     = int64_t{ 0 };
 
-    while (i < source.length)
+    while (i < string.length)
     {
-        auto p = Utf16::codepoint(source.slice(i));
-
-        i += Utf16::getByteCount(p);
-        k += encode(p, buffer.slice(k));
+        k += encode(stringCodepoint(units, string.length, i), buffer.slice(k));
     }
 
     out->resize(k);
@@ -393,10 +406,19 @@ String cpp::encoding::Utf8::decode(const cpp::marshal::View<uint8_t>& buffer)
     return String(exact, chars);
 #else
     // The bytes are kept as they are, but malformed input still throws, as
-    // it does with smart strings
+    // it does with smart strings. codepoint takes an encoded surrogate
+    // (ED A0 80 to ED BF BF), which Utf16::encode rejects there, so it is
+    // rejected here too
     for (int64_t i = 0; i < buffer.length;)
     {
-        i += getByteCount(codepoint(buffer.slice(i)));
+        auto p = codepoint(buffer.slice(i));
+
+        if (0xD800 <= p && p < 0xE000)
+        {
+            hx::Throw(HX_CSTRING("Failed to read codepoint"));
+        }
+
+        i += getByteCount(p);
     }
 
     // +1 for the terminator - the allocation is not zeroed and hxcpp
