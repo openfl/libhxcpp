@@ -396,6 +396,20 @@ public:
 
    void RemoveElement(int inIndex);
 
+   // Storage a removal never gives back: what a busy queue or stack
+   // usually holds, little enough to keep while it is empty
+   static const int shrinkKeepSlots = 16384;
+
+   // After pop, shift, remove or splice: a large array left under a quarter
+   // full gives back half its storage or more, so a queue or stack that
+   // drains after a burst does not hold what the burst grew it to
+   inline void ShrinkAfterRemove()
+   {
+      if (mAlloc>shrinkKeepSlots && length<(mAlloc>>2))
+         ShrinkStorage();
+   }
+   void ShrinkStorage();
+
 
    void Insert(int inPos);
 
@@ -854,6 +868,7 @@ public:
       if (!length) return null();
       ELEM_ result = __get((int)length-1);
       resize((int)length-1);
+      ShrinkAfterRemove();
       return result;
    }
 
