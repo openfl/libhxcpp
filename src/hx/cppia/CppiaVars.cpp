@@ -492,20 +492,18 @@ void CppiaStackVar::visitClosure(char *inBase, hx::VisitContext *__inCtx)
 
 void CppiaStackVar::link(CppiaModule &inModule, bool hasDefault)
 {
+   // A local lives in a function's frame. The compiler moves a var's initial
+   // value that declares one into the class's init function, so only a
+   // malformed file declares one outside a function, where running it would
+   // write before the frame
+   if (!inModule.layout)
+      throw "Local variable outside a function";
    expressionType = inModule.types[typeId]->expressionType;
    argType = hasDefault ? ( expressionType==etString ? etString : etObject) : expressionType;
    storeType = typeId==0 ? fsObject : fieldStorageFromType(inModule.types[typeId]);
-   if (inModule.layout)
-   {
-      inModule.layout->varMap[id] = this;
-      stackPos = inModule.layout->size;
-      inModule.layout->size += sTypeSize[argType];
-   }
-   else
-   {
-      stackPos = -1;
-      storeType = fsUnknown;
-   }
+   inModule.layout->varMap[id] = this;
+   stackPos = inModule.layout->size;
+   inModule.layout->size += sTypeSize[argType];
    type = inModule.types[typeId];
    defaultStackPos =stackPos;
    module = &inModule;

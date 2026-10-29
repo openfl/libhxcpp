@@ -1,0 +1,7 @@
+--main Script
+-cppia bin/script.cppia
+--next
+--main Main
+-cpp bin
+-D scriptable
+--dce no
