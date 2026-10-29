@@ -7,7 +7,26 @@
 //  provides generic access to its pointer.
 // It uses dynamic_cast to provide strongly-typed access to the real class.
 
-namespace hx { class Interface; }
+#include <type_traits>
+
+namespace hx
+{
+   class Interface;
+
+   template<typename... TValues> struct AllOf : std::true_type { };
+   template<typename TFirst, typename... TRest>
+   struct AllOf<TFirst, TRest...> : std::integral_constant<bool, TFirst::value && AllOf<TRest...>::value> { };
+
+   // A plain function whose arguments come from Dynamic and whose result goes
+   // back to one, so that it can be called as a Haxe function value
+   template<typename TReturn, typename... TArgs>
+   struct IsFunctionValue : std::integral_constant<bool,
+      (std::is_void<TReturn>::value || std::is_convertible<TReturn, ::Dynamic>::value) &&
+      AllOf<std::is_convertible<const ::Dynamic &, TArgs>...>::value> { };
+
+   template<typename TReturn, typename... TArgs>
+   hx::Object *NewStaticFunction(TReturn (*inFunction)(TArgs...));
+}
 
 
 
@@ -49,6 +68,15 @@ public:
    Dynamic(const id inObjc);
 #endif
 #endif
+
+   // An extern function used as a value, such as
+   // cpp.NativeProcess.process_stdout_read, for which the generator names
+   // the C++ function itself. It became Dynamic through bool, a true that
+   // returned null when called at API level 430 and threw Null Function
+   // Pointer at 500
+   template<typename TReturn, typename... TArgs>
+   Dynamic(TReturn (*inFunction)(TArgs...), typename std::enable_if<hx::IsFunctionValue<TReturn, TArgs...>::value, int>::type = 0)
+      : super(hx::NewStaticFunction(inFunction)) { }
 
    template<typename T,typename S>
    explicit Dynamic(const cpp::Struct<T,S> &inRHS) { *this = inRHS; }
