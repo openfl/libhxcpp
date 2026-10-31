@@ -322,6 +322,41 @@ public:
 
 
 
+template<typename RET, RET (*FUNC)()>
+class ObjectBuiltin0 : public CppiaDynamicExpr
+{
+public:
+   Expressions args;
+
+   ObjectBuiltin0(CppiaExpr *inSrc, Expressions &inArgs) : CppiaDynamicExpr(inSrc), args(inArgs) { }
+
+   const char *getName() HXCPP_OVERRIDE { return "ObjectBuiltin0"; }
+   ExprType getType() HXCPP_OVERRIDE { return etObject; }
+
+   hx::Object *runObject(CppiaCtx *ctx) HXCPP_OVERRIDE
+   {
+      return Dynamic(FUNC()).mPtr;
+   }
+   #ifdef CPPIA_JIT
+   static hx::Object * SLJIT_CALL run()
+   {
+      TRY_NATIVE
+      return Dynamic(FUNC()).mPtr;
+      CATCH_NATIVE
+      return 0;
+   }
+
+   void genCode(CppiaCompiler *compiler, const JitVal &inDest,ExprType destType) HXCPP_OVERRIDE
+   {
+      compiler->callNative( (void *)run );
+      compiler->checkException();
+      compiler->convertReturnReg(etObject, inDest, destType);
+   }
+   #endif
+};
+
+
+
 template<typename ARG0, typename RET, RET (*FUNC)(ARG0)>
 class ObjectBuiltin1 : public CppiaDynamicExpr
 {
@@ -381,6 +416,11 @@ CppiaExpr *createGlobalBuiltin(CppiaExpr *src, String function, Expressions &ioE
    {
       if (ioExpressions.size()==0)
          return new FloatBuiltin0<double,__time_stamp>(src,ioExpressions);
+   }
+   if (function==HX_CSTRING("__time_stamp_ms") )
+   {
+      if (ioExpressions.size()==0)
+         return new ObjectBuiltin0<cpp::Int64,__time_stamp_ms>(src,ioExpressions);
    }
    if (function==HX_CSTRING("__hxcpp_thread_create") )
    {
