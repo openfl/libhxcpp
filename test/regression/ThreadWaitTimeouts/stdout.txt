@@ -2,5 +2,6 @@ semaphore negative ok
 semaphore nan ok
 semaphore huge ok
 semaphore submillisecond ok
+lock no timeout ok
 lock huge ok
 lock submillisecond ok

@@ -42,7 +42,9 @@ class Main {
 		var empty = new Semaphore(0);
 		var full = new Semaphore(2);
 
-		check("semaphore negative", attempt(() -> !empty.tryAcquire(-0.5) && full.tryAcquire(-0.5)));
+		// A negative timeout waits with no limit, which Haxe 5's Lock.wait() relies on
+		releaseLater(() -> empty.release());
+		check("semaphore negative", attempt(() -> empty.tryAcquire(-0.5) && full.tryAcquire(-0.5)));
 		check("semaphore nan", attempt(() -> !empty.tryAcquire(Math.NaN) && full.tryAcquire(Math.NaN)));
 
 		var huge = true;
@@ -57,6 +59,9 @@ class Main {
 		check("semaphore submillisecond", !acquired && Timer.stamp() - start >= 0.0005);
 
 		var lock = new Lock();
+		releaseLater(() -> lock.release());
+		check("lock no timeout", lock.wait());
+
 		releaseLater(() -> lock.release());
 		check("lock huge", lock.wait(3e9));
 

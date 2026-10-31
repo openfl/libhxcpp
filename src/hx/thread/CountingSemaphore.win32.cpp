@@ -60,6 +60,14 @@ void hx::thread::CountingSemaphore_obj::release()
 
 bool hx::thread::CountingSemaphore_obj::tryAcquire(Null<double> timeout)
 {
+	// A negative timeout waits with no limit, as __hxcpp_lock_wait does: Haxe 5's
+	// Lock.wait() passes -1 when it is given no timeout. NaN still returns at once.
+	if (timeout.Default(0) < 0)
+	{
+		acquire();
+		return true;
+	}
+
 	if (hx::gPauseForCollect)
 		__hxcpp_gc_safe_point();
 	// Zero-timeout poll cannot block - no free zone needed.  Also try a
