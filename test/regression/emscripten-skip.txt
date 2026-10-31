@@ -51,6 +51,7 @@ GenerationalObjectIdentity: threads (std::thread, which needs a pthreads build)
 GenerationalTraceCounts: threads (std::thread, which needs a pthreads build)
 GenerationalWeakRefLifecycle: threads (std::thread, which needs a pthreads build)
 GenerationalZombieLifecycle: threads (std::thread, which needs a pthreads build)
+HaxeAtomics: threads
 IncrementalGcSlices: threads (std::thread, which needs a pthreads build)
 Int64DivisionBoundary: processes (runs itself)
 IntBoxesAcrossThreads: threads

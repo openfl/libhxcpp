@@ -21,6 +21,7 @@ class Native
 
 			#if (haxe_ver>=5 && !haxe_5_preview_1)
             new tests.TestScratch(),
+            new tests.TestAtomicObject(),
 
             new tests.marshalling.classes.TestLocalValueType(),
             new tests.marshalling.classes.TestClassValueType(),
