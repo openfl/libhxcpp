@@ -26,6 +26,10 @@
             <depend name="${this_dir}/native/point.hpp"/>
         </file>
 
+        <file name="${this_dir}/native/opaque.cpp">
+            <depend name="${this_dir}/native/opaque.hpp"/>
+        </file>
+
         <file name="${this_dir}/native/Managed.cpp">
             <depend name="${this_dir}/native/Managed.hpp"/>
         </file>

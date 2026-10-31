@@ -42,6 +42,7 @@ class Native
             new tests.marshalling.pointers.TestPointerCollections(),
             new tests.marshalling.pointers.TestAbstractPointer(),
             new tests.marshalling.pointers.TestPointerInterop(),
+            new tests.marshalling.pointers.TestOpaquePointers(),
             new tests.marshalling.managed.TestLocalNonStandardManagedClass(),
             new tests.marshalling.managed.TestLocalStandardManagedClass(),
             new tests.marshalling.managed.TestClassNonStandardManagedClass(),
