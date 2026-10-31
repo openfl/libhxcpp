@@ -976,8 +976,9 @@ inline T &runValue(T& outValue, CppiaCtx *ctx, CppiaExpr *expr)
 template<typename... TArgs>
 inline hx::Callable<void(TArgs...)>& runValue(hx::Callable<void(TArgs...)>& outValue, CppiaCtx* ctx, CppiaExpr* expr)
 {
-   expr->runVoid(ctx);
-   return outValue = hx::Callable<void(TArgs...)>();
+   // Wraps the function the expression gives; a null Callable here left
+   // __hxcpp_thread_create without a function to run
+   return outValue = hx::Callable<void(TArgs...)>(Dynamic(expr->runObject(ctx)));
 }
 #endif
 

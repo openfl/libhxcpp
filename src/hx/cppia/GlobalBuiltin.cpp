@@ -14,6 +14,60 @@ template<> inline Array<unsigned char> &runValue(Array<unsigned char> &outValue,
    return outValue;
 }
 
+#ifdef CPPIA_JIT
+// How a builtin's argument reaches its native call under the JIT: objects as
+// pointers, ints by value and floats by the address of a temp
+template<typename T>
+struct BuiltinArg
+{
+   typedef hx::Object *Native;
+   static const JitType jitType = jtPointer;
+   static const ExprType exprType = etObject;
+   static T get(hx::Object *inValue) { return Dynamic(inValue); }
+};
+
+template<>
+struct BuiltinArg<int>
+{
+   typedef int Native;
+   static const JitType jitType = jtInt;
+   static const ExprType exprType = etInt;
+   static int get(int inValue) { return inValue; }
+};
+
+template<>
+struct BuiltinArg<double>
+{
+   typedef double *Native;
+   static const JitType jitType = jtFloat;
+   static const ExprType exprType = etFloat;
+   static double get(double *inValue) { return JitLoad(inValue); }
+};
+
+template<>
+struct BuiltinArg<float>
+{
+   typedef double *Native;
+   static const JitType jitType = jtFloat;
+   static const ExprType exprType = etFloat;
+   static float get(double *inValue) { return JitLoad(inValue); }
+};
+
+template<>
+struct BuiltinArg< Array<unsigned char> >
+{
+   typedef hx::Object *Native;
+   static const JitType jitType = jtPointer;
+   static const ExprType exprType = etObject;
+   static Array<unsigned char> get(hx::Object *inValue)
+   {
+      Array<unsigned char> result;
+      result.mPtr = (Array_obj<unsigned char>*)inValue;
+      return result;
+   }
+};
+#endif
+
 
 template<typename ARG0, int (*FUNC)(ARG0 arg0)>
 class IntBuiltin1 : public CppiaExpr
@@ -38,6 +92,26 @@ public:
       BCR_CHECK;
       return FUNC(val0);
    }
+
+   #ifdef CPPIA_JIT
+   static int SLJIT_CALL run(typename BuiltinArg<ARG0>::Native inArg0)
+   {
+      TRY_NATIVE
+      return FUNC(BuiltinArg<ARG0>::get(inArg0));
+      CATCH_NATIVE
+      return 0;
+   }
+
+   void genCode(CppiaCompiler *compiler, const JitVal &inDest,ExprType destType) HXCPP_OVERRIDE
+   {
+      JitTemp val0(compiler, BuiltinArg<ARG0>::jitType);
+      args[0]->genCode(compiler, val0, BuiltinArg<ARG0>::exprType);
+
+      compiler->callNative( (void *)run, val0 );
+      compiler->checkException();
+      compiler->convertReturnReg(etInt, inDest, destType);
+   }
+   #endif
 };
 
 
@@ -67,6 +141,29 @@ public:
       BCR_CHECK;
       return FUNC(val0,val1);
    }
+
+   #ifdef CPPIA_JIT
+   static int SLJIT_CALL run(typename BuiltinArg<ARG0>::Native inArg0, typename BuiltinArg<ARG1>::Native inArg1)
+   {
+      TRY_NATIVE
+      return FUNC(BuiltinArg<ARG0>::get(inArg0), BuiltinArg<ARG1>::get(inArg1));
+      CATCH_NATIVE
+      return 0;
+   }
+
+   void genCode(CppiaCompiler *compiler, const JitVal &inDest,ExprType destType) HXCPP_OVERRIDE
+   {
+      JitTemp val0(compiler, BuiltinArg<ARG0>::jitType);
+      args[0]->genCode(compiler, val0, BuiltinArg<ARG0>::exprType);
+
+      JitTemp val1(compiler, BuiltinArg<ARG1>::jitType);
+      args[1]->genCode(compiler, val1, BuiltinArg<ARG1>::exprType);
+
+      compiler->callNative( (void *)run, val0, val1 );
+      compiler->checkException();
+      compiler->convertReturnReg(etInt, inDest, destType);
+   }
+   #endif
 };
 
 
@@ -122,6 +219,27 @@ public:
       BCR_VCHECK;
       FUNC(val0,val1);
    }
+
+   #ifdef CPPIA_JIT
+   static void SLJIT_CALL run(typename BuiltinArg<ARG0>::Native inArg0, typename BuiltinArg<ARG1>::Native inArg1)
+   {
+      TRY_NATIVE
+      FUNC(BuiltinArg<ARG0>::get(inArg0), BuiltinArg<ARG1>::get(inArg1));
+      CATCH_NATIVE
+   }
+
+   void genCode(CppiaCompiler *compiler, const JitVal &inDest,ExprType destType) HXCPP_OVERRIDE
+   {
+      JitTemp val0(compiler, BuiltinArg<ARG0>::jitType);
+      args[0]->genCode(compiler, val0, BuiltinArg<ARG0>::exprType);
+
+      JitTemp val1(compiler, BuiltinArg<ARG1>::jitType);
+      args[1]->genCode(compiler, val1, BuiltinArg<ARG1>::exprType);
+
+      compiler->callNative( (void *)run, val0, val1 );
+      compiler->checkException();
+   }
+   #endif
 };
 
 
@@ -155,28 +273,30 @@ public:
    }
 
    #ifdef CPPIA_JIT
-   static void SLJIT_CALL setFloat(Array_obj<unsigned char> *inBuffer, int inAddr, double *inValue)
+   // Calls FUNC itself: the int setters share this class, and choosing a float
+   // setter by the size of ARG2 stored their values as floats
+   static void SLJIT_CALL run(typename BuiltinArg<ARG0>::Native inArg0, typename BuiltinArg<ARG1>::Native inArg1, typename BuiltinArg<ARG2>::Native inArg2)
    {
-      if (sizeof(ARG2)==sizeof(float))
-         __hxcpp_memory_set_float(inBuffer,inAddr,JitLoad(inValue));
-      else
-         __hxcpp_memory_set_double(inBuffer,inAddr,JitLoad(inValue));
+      TRY_NATIVE
+      FUNC(BuiltinArg<ARG0>::get(inArg0), BuiltinArg<ARG1>::get(inArg1), BuiltinArg<ARG2>::get(inArg2));
+      CATCH_NATIVE
    }
 
    void genCode(CppiaCompiler *compiler, const JitVal &inDest,ExprType destType) HXCPP_OVERRIDE
    {
-      JitTemp obj(compiler,jtPointer);
-      args[0]->genCode(compiler, obj, etObject);
+      JitTemp val0(compiler, BuiltinArg<ARG0>::jitType);
+      args[0]->genCode(compiler, val0, BuiltinArg<ARG0>::exprType);
 
-      JitTemp addr(compiler,jtInt);
-      args[1]->genCode(compiler, addr, etInt);
+      JitTemp val1(compiler, BuiltinArg<ARG1>::jitType);
+      args[1]->genCode(compiler, val1, BuiltinArg<ARG1>::exprType);
 
-      JitTemp val(compiler,jtFloat);
-      args[2]->genCode(compiler, val, etFloat);
+      JitTemp val2(compiler, BuiltinArg<ARG2>::jitType);
+      args[2]->genCode(compiler, val2, BuiltinArg<ARG2>::exprType);
 
-      compiler->callNative( (void *)setFloat, obj, addr, val );
+      compiler->callNative( (void *)run, val0, val1, val2 );
+      compiler->checkException();
    }
-  #endif
+   #endif
 
 };
 
@@ -244,6 +364,26 @@ public:
       BCR_CHECK;
       return  FUNC(val0);
    }
+
+   #ifdef CPPIA_JIT
+   static void SLJIT_CALL run(typename BuiltinArg<ARG0>::Native inArg0, double *outResult)
+   {
+      TRY_NATIVE
+      JitStore(outResult, (double)FUNC(BuiltinArg<ARG0>::get(inArg0)));
+      CATCH_NATIVE
+   }
+
+   void genCode(CppiaCompiler *compiler, const JitVal &inDest,ExprType destType) HXCPP_OVERRIDE
+   {
+      JitTemp val0(compiler, BuiltinArg<ARG0>::jitType);
+      args[0]->genCode(compiler, val0, BuiltinArg<ARG0>::exprType);
+
+      JitTemp result(compiler, jtFloat);
+      compiler->callNative( (void *)run, val0, result );
+      compiler->checkException();
+      compiler->convert(result, etFloat, inDest, destType);
+   }
+   #endif
 };
 
 
@@ -273,6 +413,29 @@ public:
       BCR_CHECK;
       return  FUNC(val0,val1);
    }
+
+   #ifdef CPPIA_JIT
+   static void SLJIT_CALL run(typename BuiltinArg<ARG0>::Native inArg0, typename BuiltinArg<ARG1>::Native inArg1, double *outResult)
+   {
+      TRY_NATIVE
+      JitStore(outResult, (double)FUNC(BuiltinArg<ARG0>::get(inArg0), BuiltinArg<ARG1>::get(inArg1)));
+      CATCH_NATIVE
+   }
+
+   void genCode(CppiaCompiler *compiler, const JitVal &inDest,ExprType destType) HXCPP_OVERRIDE
+   {
+      JitTemp val0(compiler, BuiltinArg<ARG0>::jitType);
+      args[0]->genCode(compiler, val0, BuiltinArg<ARG0>::exprType);
+
+      JitTemp val1(compiler, BuiltinArg<ARG1>::jitType);
+      args[1]->genCode(compiler, val1, BuiltinArg<ARG1>::exprType);
+
+      JitTemp result(compiler, jtFloat);
+      compiler->callNative( (void *)run, val0, val1, result );
+      compiler->checkException();
+      compiler->convert(result, etFloat, inDest, destType);
+   }
+   #endif
 };
 
 
@@ -375,6 +538,26 @@ public:
       BCR_CHECK;
       return  FUNC(val0).mPtr;
    }
+
+   #ifdef CPPIA_JIT
+   static hx::Object * SLJIT_CALL run(typename BuiltinArg<ARG0>::Native inArg0)
+   {
+      TRY_NATIVE
+      return FUNC(BuiltinArg<ARG0>::get(inArg0)).mPtr;
+      CATCH_NATIVE
+      return 0;
+   }
+
+   void genCode(CppiaCompiler *compiler, const JitVal &inDest,ExprType destType) HXCPP_OVERRIDE
+   {
+      JitTemp val0(compiler, BuiltinArg<ARG0>::jitType);
+      args[0]->genCode(compiler, val0, BuiltinArg<ARG0>::exprType);
+
+      compiler->callNative( (void *)run, val0 );
+      compiler->checkException();
+      compiler->convertReturnReg(etObject, inDest, destType);
+   }
+   #endif
 };
 
 
