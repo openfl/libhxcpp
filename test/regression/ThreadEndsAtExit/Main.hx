@@ -1,21 +1,18 @@
 import sys.thread.Thread;
 
-// Threads that end while the process exits. After main returns, the C runtime
-// runs the static destructors and then ends the process, and a thread that
-// ends in between removes its root from the collector's root set as it goes.
-// That set was a static itself, destroyed by then: the first thread to end
-// faulted in the erase while holding the root lock, and the second waited on
-// that lock for ever -- on Windows inside the loader lock, so the process's
-// exit waited for it too and never finished. With stack traces or the
-// debugger, an ending thread also leaves the stack map and the debugger's
-// lists, which were statics too, and the fault ended the process;
-// ThreadEndsAtExitDebugger builds this program that way.
+// Threads let go after the static destructors, as the process exits. A thread
+// that ended then used to run into the runtime's statics after their
+// destructors: the root set, and with stack traces or the debugger the stack
+// map and the debugger's lists (ThreadEndsAtExitDebugger builds this program
+// that way). On Windows the fault came inside the loader lock, so the exit
+// never finished. Since #423 the exit parks every other thread that runs Haxe
+// code, so a thread let go then leaves its GC-free zone into that park and
+// runs no further, and the process still ends cleanly.
 //
-// Rather than wait for the timing to line up, the threads are let go from a
-// function the C runtime calls after the static destructors (a .CRT$XPU entry
-// with MSVC, a destructor attribute elsewhere), one at a time. On Windows it
-// waits for each thread to be gone, and ends the process with code 3 if one
-// is still there after five seconds. Elsewhere it gives each a moment.
+// The threads are let go from a function the C runtime calls after the static
+// destructors (a .CRT$XPU entry with MSVC, a destructor attribute elsewhere),
+// and each marks when it gets past the zone. A moment later the function
+// reports how many did.
 @:cppFileCode('
 #include <stdio.h>
 #ifdef HX_WINDOWS
@@ -29,79 +26,67 @@ namespace
 	const int WORKERS = 2;
 	volatile int sRegistered = 0;
 	volatile int sGo[WORKERS] = { 0, 0 };
-	#ifdef HX_WINDOWS
-	HANDLE sThreads[WORKERS] = { 0, 0 };
-	#endif
+	volatile int sRan[WORKERS] = { 0, 0 };
 
-	void registerWorker(int inIndex)
+	// The flags are set by one thread and polled by another, so they are read
+	// and written atomically
+	void setFlag(volatile int *ioFlag)
 	{
 		#ifdef HX_WINDOWS
-		DuplicateHandle(GetCurrentProcess(), GetCurrentThread(), GetCurrentProcess(),
-			&sThreads[inIndex], SYNCHRONIZE, FALSE, 0);
+		InterlockedExchange((volatile LONG *)ioFlag, 1);
+		#else
+		__sync_lock_test_and_set(ioFlag, 1);
+		__sync_synchronize();
+		#endif
+	}
+
+	int readFlag(volatile int *inFlag)
+	{
+		#ifdef HX_WINDOWS
+		return InterlockedCompareExchange((volatile LONG *)inFlag, 0, 0);
+		#else
+		return __sync_fetch_and_add(inFlag, 0);
+		#endif
+	}
+
+	void registerWorker()
+	{
+		#ifdef HX_WINDOWS
 		InterlockedIncrement((volatile LONG *)&sRegistered);
 		#else
 		__sync_fetch_and_add(&sRegistered, 1);
 		#endif
 	}
 
-	int registeredWorkers()
-	{
-		#ifdef HX_WINDOWS
-		return InterlockedCompareExchange((volatile LONG *)&sRegistered, 0, 0);
-		#else
-		return __sync_fetch_and_add(&sRegistered, 0);
-		#endif
-	}
+	int registeredWorkers() { return readFlag(&sRegistered); }
 
-	// sGo is set by one thread and polled by another, so it is read and
-	// written atomically
-	int goSignal(int inIndex)
+	void pause(int inMs)
 	{
 		#ifdef HX_WINDOWS
-		return InterlockedCompareExchange((volatile LONG *)&sGo[inIndex], 0, 0);
+		Sleep(inMs);
 		#else
-		return __sync_fetch_and_add(&sGo[inIndex], 0);
+		usleep(inMs * 1000);
 		#endif
 	}
 
 	void waitToEnd(int inIndex)
 	{
-		while (!goSignal(inIndex))
-		{
-			#ifdef HX_WINDOWS
-			Sleep(1);
-			#else
-			usleep(1000);
-			#endif
-		}
+		while (!readFlag(&sGo[inIndex]))
+			pause(1);
 	}
+
+	void ranOn(int inIndex) { setFlag(&sRan[inIndex]); }
 
 	void endThreadsLate()
 	{
-		int ended = 0;
 		for (int i = 0; i < WORKERS; i++)
-		{
-			#ifdef HX_WINDOWS
-			InterlockedExchange((volatile LONG *)&sGo[i], 1);
-			#else
-			__sync_lock_test_and_set(&sGo[i], 1);
-			__sync_synchronize();
-			#endif
-			#ifdef HX_WINDOWS
-			if (WaitForSingleObject(sThreads[i], 5000) == WAIT_OBJECT_0)
-				ended++;
-			#else
-			usleep(200000);
-			ended++;
-			#endif
-		}
-		printf("%d of %d threads ended after the static destructors\\n", ended, WORKERS);
+			setFlag(&sGo[i]);
+		pause(200);
+		int ran = 0;
+		for (int i = 0; i < WORKERS; i++)
+			ran += readFlag(&sRan[i]);
+		printf("%d of %d threads ran on after the static destructors\\n", ran, WORKERS);
 		fflush(stdout);
-		#ifdef HX_WINDOWS
-		// Not ExitProcess, which waits for the loader lock a stuck thread holds
-		if (ended < WORKERS)
-			TerminateProcess(GetCurrentProcess(), 3);
-		#endif
 	}
 
 	#ifdef _MSC_VER
@@ -122,10 +107,11 @@ class Main {
 	static function main() {
 		for (i in 0...WORKERS) {
 			Thread.create(() -> {
-				untyped __cpp__("registerWorker({0})", i);
+				untyped __cpp__("registerWorker()");
 				cpp.vm.Gc.enterGCFreeZone();
 				untyped __cpp__("waitToEnd({0})", i);
 				cpp.vm.Gc.exitGCFreeZone();
+				untyped __cpp__("ranOn({0})", i);
 			});
 		}
 		var registered:Int = 0;

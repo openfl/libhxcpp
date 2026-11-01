@@ -523,7 +523,12 @@ static void MarkLocalAlloc(LocalAllocator *inAlloc,hx::MarkContext *__inCtx);
 static void VisitLocalAlloc(LocalAllocator *inAlloc,hx::VisitContext *__inCtx);
 #endif
 static void WaitForSafe(LocalAllocator *inAlloc);
+static void WaitForSafeUntil(LocalAllocator *inAlloc, double inSeconds);
 static void ReleaseFromSafe(LocalAllocator *inAlloc);
+// Set by ParkThreadsForExit once the process has started to exit, after which
+//  only the exiting thread runs Haxe code
+static std::atomic<bool> sgParkedForExit{false};
+static LocalAllocator *sgExitAlloc = 0;
 static void ClearPooledAlloc(LocalAllocator *inAlloc);
 #ifdef HXCPP_GC_INCREMENTAL
 static void RestoreIncrementalAlloc(LocalAllocator *inAlloc);
@@ -6034,8 +6039,54 @@ public:
    }
    #endif
 
+   #ifndef HXCPP_SINGLE_THREADED_APP
+   // Called once as the process exits, from the atexit handler Boot registers.
+   //  Library finalizers run after atexit handlers, and a thread still running
+   //  Haxe code could reach one that has been torn down: with musl, libgcc frees
+   //  the table its unwinder looks frames up in, and a thread that throws after
+   //  that crashes (#423). So every other thread that runs Haxe code is parked
+   //  for good, at its next safe point or as it leaves a GC-free zone. The state
+   //  lock stays held and collections stop, since a parked thread never answers
+   //  one, and the exiting thread allocates as before.
+   void ParkThreadsForExit()
+   {
+      LocalAllocator *self = (LocalAllocator *)(hx::ImmixAllocator *)hx::tlsStackContext;
+      // Waits out a collection in progress from a GC-free zone, as Collect does
+      bool entered = self && hx::TryGCFreeZone();
+      gThreadStateChangeLock->lock();
+      if (entered)
+         hx::ExitGCFreeZoneLocked();
+      sgInternalEnable = false;
+
+      // A thread waiting on the lock to collect may have set it already
+      unsigned int expected{ 0 };
+      hx::gPauseForCollect.compare_exchange_strong(expected, std::numeric_limits<unsigned int>::max());
+      std::atomic_thread_fence(std::memory_order_seq_cst);
+
+      // A thread in a loop that never allocates reaches no safe point, so the
+      //  wait has a limit and such a thread is left running
+      auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(100);
+      for(int i=0;i<mLocalAllocs.size();i++)
+         if (mLocalAllocs[i]!=self)
+         {
+            std::chrono::duration<double> left = deadline - std::chrono::steady_clock::now();
+            WaitForSafeUntil(mLocalAllocs[i], left.count());
+         }
+
+      sgExitAlloc = self;
+      sgParkedForExit.store(true);
+      hx::gPauseForCollect = 0;
+   }
+   #endif
+
    void Collect(bool inMajor, bool inForceCompact, bool inLocked,bool inFreeIsFragged)
    {
+      #ifndef HXCPP_SINGLE_THREADED_APP
+      // A thread parked for exit never reaches a safe point again
+      if (sgParkedForExit.load(std::memory_order_relaxed))
+         return;
+      #endif
+
       #ifdef HXCPP_GC_INCREMENTAL
       double incrementalStarted = hx::IncrementalNow();
       #endif
@@ -7864,6 +7915,13 @@ public:
          mReadySignalled = false;
          mGCFreeZone = false;
       }
+      // The process is exiting (ParkThreadsForExit) and only the exiting thread
+      //  runs on: this one stays in the zone, on the state lock that is held for good
+      if (sgParkedForExit.load(std::memory_order_acquire) && this!=sgExitAlloc)
+      {
+         mGCFreeZone = true;
+         gThreadStateChangeLock->lock();
+      }
       #endif
    }
         // For when we already hold the lock
@@ -7914,6 +7972,30 @@ public:
          // Signalled by PauseForCollect, which now waits for mCollectDone, or by
          //  the thread entering a GC-free zone, which does not
          mReleaseWhenDone = mPausedForCollect;
+      }
+      #endif
+   }
+
+   // WaitForSafe with a limit, for ParkThreadsForExit: a thread in a loop that
+   //  never allocates reaches no safe point. A thread that does stays waiting in
+   //  PauseForCollect, as nothing releases it.
+   #if defined(__has_feature)
+     #if __has_feature(thread_sanitizer)
+      __attribute__((no_sanitize("thread")))
+     #endif
+   #endif
+   void WaitForSafeUntil(double inSeconds)
+   {
+      #ifndef HXCPP_SINGLE_THREADED_APP
+      if (!mGCFreeZone)
+      {
+         mMoreHoles = false;
+         #ifdef HXCPP_GC_NURSERY
+         spaceOversize = 0;
+         #else
+         spaceEnd = 0;
+         #endif
+         mReadyForCollect.WaitSeconds(inSeconds > 0 ? inSeconds : 0);
       }
       #endif
    }
@@ -8295,6 +8377,11 @@ void WaitForSafe(LocalAllocator *inAlloc)
    inAlloc->WaitForSafe();
 }
 
+void WaitForSafeUntil(LocalAllocator *inAlloc, double inSeconds)
+{
+   inAlloc->WaitForSafeUntil(inSeconds);
+}
+
 void ReleaseFromSafe(LocalAllocator *inAlloc)
 {
    inAlloc->ReleaseFromSafe();
@@ -8333,6 +8420,15 @@ namespace hx
 void GCForEachStackContext(void (*inFunc)(StackContext *, void *), void *inData)
 {
    sGlobalAlloc->ForEachStackContext(inFunc, inData);
+}
+
+// Boot registers this with atexit (see GlobalAllocator::ParkThreadsForExit)
+void ParkThreadsForExit()
+{
+   #ifndef HXCPP_SINGLE_THREADED_APP
+   if (sGlobalAlloc)
+      sGlobalAlloc->ParkThreadsForExit();
+   #endif
 }
 }
 
