@@ -776,7 +776,8 @@ public:
       Array_obj<ELEM_> *array = static_cast<Array_obj<ELEM_> *>(inOwner);
       size_t length = array->length;
       if (ioCursor >= length) return true;
-      size_t count = std::min(size_t{256},length-ioCursor);
+      // Parenthesized: <windows.h> included before <hxcpp.h> defines a min macro
+      size_t count = (std::min)(size_t{256},length-ioCursor);
       ELEM_ *ptr = reinterpret_cast<ELEM_ *>(array->mBase) + ioCursor;
       HX_MARK_MEMBER_ARRAY(ptr,count);
       ioCursor += count;
