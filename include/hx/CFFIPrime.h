@@ -166,6 +166,14 @@ struct HxString
 };
 
 #include "CFFI.h"
+
+// CFFI.h included before this header declared its API without HXCPP_PRIME,
+// so without the string functions that ToValue and ValueToHxString use.
+#if !defined(HX_CFFI_PRIME_DECLARED) && !defined(IGNORE_CFFI_API_H)
+#define HX_CFFI_PRIME_ONLY
+#include "CFFIAPI.h"
+#undef HX_CFFI_PRIME_ONLY
+#endif
 #endif
 
 #ifndef HXCPP_JS_PRIME

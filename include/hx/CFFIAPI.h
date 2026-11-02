@@ -2,8 +2,12 @@
  This bit of Macro magic is used to define extern function pointers
   in ndlls, define stub implementations that link back to the hxcpp dll
   and glue up the implementation in the hxcpp runtime.
+
+ HX_CFFI_PRIME_ONLY declares the Prime string functions alone, for
+  CFFIPrime.h when CFFI.h was included before it, without them.
 */
 
+#ifndef HX_CFFI_PRIME_ONLY
 DEFFUNC_1(void,val_throw,value)
 DEFFUNC_0(void,hx_error)
 DEFFUNC_3(void,hx_fail,const char *,const char *,int)
@@ -47,8 +51,10 @@ DEFFUNC_1(const char *,val_string,value)
 DEFFUNC_1(wchar_t *,val_dup_wstring,value)
 DEFFUNC_1(char *,val_dup_string,value)
 DEFFUNC_2(char *,alloc_string_data,const char *,int)
+#endif
 
 #ifdef HXCPP_PRIME
+#define HX_CFFI_PRIME_DECLARED
 DEFFUNC_2(HxString,alloc_hxs_wchar,const wchar_t *,int)
 DEFFUNC_2(HxString,alloc_hxs_utf16,const char16_t *,int)
 DEFFUNC_2(HxString,alloc_hxs_utf8,const char *,int)
@@ -60,6 +66,7 @@ DEFFUNC_2(const char16_t *,hxs_utf16,const HxString &,hx::IStringAlloc *)
 DEFFUNC_1(hx::StringEncoding,hxs_encoding,const HxString &)
 #endif
 
+#ifndef HX_CFFI_PRIME_ONLY
 
 // Array access - generic
 DEFFUNC_1(value,alloc_array,int)
@@ -185,5 +192,6 @@ DEFFUNC_0(bool, gc_try_unblocking)
 
 // Used for finding functions in static libraries
 DEFFUNC_2(int, hx_register_prim, const char *, void*)
+#endif
 
 
