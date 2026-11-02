@@ -554,6 +554,26 @@ class BuildTool
                pchStamp = FileSystem.stat(obj).mtime.getTime();
                groupObjs.push(obj);
 
+               // A link with link-time code generation checks that every
+               // object was compiled against this very PCH, and refuses one
+               // compiled against an earlier build of it, even an identical
+               // one (C1382). So a rebuilt PCH takes the rest of the group
+               // with it.
+               if (mCompiler.mPCHRebuilt && pchCheckedAtLink())
+               {
+                  var i = 0;
+                  for(file in group.mFiles)
+                  {
+                     if (!inList[i])
+                     {
+                        to_be_compiled.push(file);
+                        inList[i] = true;
+                     }
+                     i++;
+                  }
+                  someCompiled = to_be_compiled.length > 0;
+               }
+
                /*
                for(i in 0...group.mFiles.length)
                {
@@ -1641,6 +1661,14 @@ class BuildTool
    public static function isMsvcLlvm()
    {
 		return isMsvc() && instance.mDefines.exists("HXCPP_MSVC_LLVM");
+   }
+
+   // MSVC's own compiler with -GL, which HXCPP_OPTIMIZE_LINK and its
+   // incremental form turn on outside debug builds
+   function pchCheckedAtLink()
+   {
+      return mCompiler.needsPchObj() && !isMsvcLlvm() && !mDefines.exists("debug")
+         && (mDefines.exists("HXCPP_OPTIMIZE_LINK") || mDefines.exists("HXCPP_LTCG_INCREMENTAL"));
    }
 
    public static function isMingw()

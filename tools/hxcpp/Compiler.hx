@@ -60,6 +60,8 @@ class Compiler
    public var mPCHUse:String;
    public var mPCHFilename:String;
    public var mPCH:String;
+   // Whether the last precompile built the header rather than reusing it
+   public var mPCHRebuilt:Bool = false;
 
    public var mRcExe:String;
    public var mRcExt:String;
@@ -634,6 +636,7 @@ class Compiler
 
       // Like objs/hxcpp.pch or objs/wx.gch
       var pch_name = dir + "/" + file + mPCHExt;
+      mPCHRebuilt = false;
       if (inGroup.isCached() || inReuseIfPossible)
       {
           // No obj needed for gcc
@@ -641,6 +644,7 @@ class Compiler
           if (FileSystem.exists(pch_name) && (obj==null || FileSystem.exists(obj)) )
              return obj;
       }
+      mPCHRebuilt = true;
 
       args = args.concat( mPCHFlags );
 
