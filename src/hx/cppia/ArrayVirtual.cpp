@@ -171,6 +171,7 @@ struct ArrayBuiltinAny : public ArrayBuiltinBase
       {
          ArrayAnyImpl *thisVal = (ArrayAnyImpl *)thisExpr->runObject(ctx);
          BCR_CHECK;
+         CPPIA_CHECK(thisVal);
          hx::Object * val = args[0]->runObject(ctx);
          BCR_CHECK;
          return thisVal->CALL(push)(Dynamic(val));
@@ -179,6 +180,7 @@ struct ArrayBuiltinAny : public ArrayBuiltinBase
       {
          ArrayAnyImpl *thisVal = (ArrayAnyImpl *)thisExpr->runObject(ctx);
          BCR_CHECK;
+         CPPIA_CHECK(thisVal);
          hx::Object * val = args[0]->runObject(ctx);
          BCR_CHECK;
          return thisVal->CALL(contains)(val);
@@ -187,6 +189,7 @@ struct ArrayBuiltinAny : public ArrayBuiltinBase
       {
          ArrayAnyImpl *thisVal = (ArrayAnyImpl *)thisExpr->runObject(ctx);
          BCR_CHECK;
+         CPPIA_CHECK(thisVal);
          hx::Object * val = args[0]->runObject(ctx);
          BCR_CHECK;
          return thisVal->CALL(remove)(val);
@@ -195,6 +198,7 @@ struct ArrayBuiltinAny : public ArrayBuiltinBase
       {
          ArrayAnyImpl *thisVal = (ArrayAnyImpl *)thisExpr->runObject(ctx);
          BCR_CHECK;
+         CPPIA_CHECK(thisVal);
          Dynamic a0 = args[0]->runObject(ctx);
          BCR_CHECK;
          hx::Object *a1 = args[1]->runObject(ctx);
@@ -205,6 +209,7 @@ struct ArrayBuiltinAny : public ArrayBuiltinBase
       {
          ArrayAnyImpl *thisVal = (ArrayAnyImpl *)thisExpr->runObject(ctx);
          BCR_CHECK;
+         CPPIA_CHECK(thisVal);
          Dynamic a0 = args[0]->runObject(ctx);
          BCR_CHECK;
          hx::Object *a1 = args[1]->runObject(ctx);
@@ -227,6 +232,7 @@ struct ArrayBuiltinAny : public ArrayBuiltinBase
       {
          ArrayAnyImpl *thisVal = (ArrayAnyImpl *)thisExpr->runObject(ctx);
          BCR_CHECK;
+         CPPIA_CHECK(thisVal);
          Dynamic a0 = args[0]->runObject(ctx);
          BCR_CHECK;
          return thisVal->CALL(join)( a0 );
@@ -236,6 +242,7 @@ struct ArrayBuiltinAny : public ArrayBuiltinBase
       {
          ArrayAnyImpl *thisVal = (ArrayAnyImpl *)thisExpr->runObject(ctx);
          BCR_CHECK;
+         CPPIA_CHECK(thisVal);
          return thisVal->toString();
       }
 
@@ -410,6 +417,7 @@ struct ArrayBuiltinAny : public ArrayBuiltinBase
       {
          ArrayAnyImpl *thisVal = (ArrayAnyImpl *)thisExpr->runObject(ctx);
          BCR_VCHECK;
+         CPPIA_CHECK(thisVal);
          Dynamic a0 = args[0]->runObject(ctx);
          BCR_VCHECK;
 
@@ -420,6 +428,7 @@ struct ArrayBuiltinAny : public ArrayBuiltinBase
       {
          ArrayAnyImpl *thisVal = (ArrayAnyImpl *)thisExpr->runObject(ctx);
          BCR_VCHECK;
+         CPPIA_CHECK(thisVal);
          Dynamic pos = args[0]->runObject(ctx);
          BCR_VCHECK;
          Dynamic val = args[1]->runObject(ctx);
@@ -431,6 +440,7 @@ struct ArrayBuiltinAny : public ArrayBuiltinBase
       {
          ArrayAnyImpl *thisVal = (ArrayAnyImpl *)thisExpr->runObject(ctx);
          BCR_VCHECK;
+         CPPIA_CHECK(thisVal);
          Dynamic val = args[0]->runObject(ctx);
          BCR_VCHECK;
          thisVal->CALL(unshift)(val);
@@ -440,6 +450,7 @@ struct ArrayBuiltinAny : public ArrayBuiltinBase
       {
          ArrayAnyImpl *thisVal = (ArrayAnyImpl *)thisExpr->runObject(ctx);
          BCR_VCHECK;
+         CPPIA_CHECK(thisVal);
          int size = args[0]->runInt(ctx);
          BCR_VCHECK;
          thisVal->__SetSizeExact(size);
@@ -449,6 +460,7 @@ struct ArrayBuiltinAny : public ArrayBuiltinBase
       {
          ArrayAnyImpl *thisVal = (ArrayAnyImpl *)thisExpr->runObject(ctx);
          BCR_VCHECK;
+         CPPIA_CHECK(thisVal);
          int destElem = args[0]->runInt(ctx);
          BCR_VCHECK;
          Dynamic srcArray = args[1]->runObject(ctx);
@@ -626,7 +638,10 @@ struct ArrayBuiltinAny : public ArrayBuiltinBase
    {
       JitTemp thisVal(compiler,etObject);
       if (FUNC!=afBlit)
+      {
          thisExpr->genCode(compiler,thisVal,etObject);
+         genNullReferenceExceptionCheck(compiler, thisVal);
+      }
 
       switch(FUNC)
       {
@@ -763,6 +778,7 @@ struct ArrayBuiltinAny : public ArrayBuiltinBase
                // this, inDestElement, inSourceArray, inSourceElement, inElementCount
                JitMultiArgs fargs(compiler, 5);
                thisExpr->genCode(compiler, fargs.arg(0,jtPointer), etObject);
+               genNullReferenceExceptionCheck(compiler, fargs.arg(0,jtPointer));
                args[0]->genCode(compiler, fargs.arg(1,jtInt), etInt);
                args[1]->genCode(compiler, fargs.arg(2,jtPointer), etObject);
                args[2]->genCode(compiler, fargs.arg(3,jtInt), etInt);

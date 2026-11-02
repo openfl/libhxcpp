@@ -1,0 +1,26 @@
+interpreted
+push: Null Object Reference
+contains: Null Object Reference
+remove: Null Object Reference
+indexOf: Null Object Reference
+lastIndexOf: Null Object Reference
+join: Null Object Reference
+toString: Null Object Reference
+sort: Null Object Reference
+insert: Null Object Reference
+unshift: Null Object Reference
+pop: Null Object Reference
+read: Null Object Reference
+jit
+push: Null Object Reference
+contains: Null Object Reference
+remove: Null Object Reference
+indexOf: Null Object Reference
+lastIndexOf: Null Object Reference
+join: Null Object Reference
+toString: Null Object Reference
+sort: Null Object Reference
+insert: Null Object Reference
+unshift: Null Object Reference
+pop: Null Object Reference
+read: Null Object Reference
