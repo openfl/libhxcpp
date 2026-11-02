@@ -68,6 +68,7 @@
   <flag value="-shared"/>
   <flag value="-fpic"/>
   <flag value="-fPIC"/>
+  <flag value="-flto" if="HXCPP_OPTIMIZE_LINK" unless="debug"/>
   <flag value="-m32" unless="noM32"/>
   <flag value="-m64" if="HXCPP_M64" unless="noM64" />
   <flag value="-Xlinker"/>
@@ -84,6 +85,7 @@
   <fromfile value="" if="GCC_OLD" />
   <flag value="-debug" if="HXCPP_DEBUG_LINK" />
   <flag value="-rdynamic"/>
+  <flag value="-flto" if="HXCPP_OPTIMIZE_LINK" unless="debug"/>
   <flag value="-fsanitize=${HXCPP_SANITIZE}" if="HXCPP_SANITIZE"/>
   <flag value="-m32" unless="noM32"/>
   <flag value="-m64" if="HXCPP_M64" unless="noM64" />
