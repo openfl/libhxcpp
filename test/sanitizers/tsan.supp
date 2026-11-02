@@ -27,7 +27,9 @@ race_top:GlobalAllocator::finishThreadJob
 
 # GC: WaitForSafe, inlined into Collect, clears a running thread's allocation
 # limits without a lock so that its next allocation fails and it parks.
+# ParkThreadsForExit does the same at exit with WaitForSafeUntil.
 race_top:GlobalAllocator::Collect
+race_top:GlobalAllocator::ParkThreadsForExit
 
 # GC: parallel marking. Mark threads set the same mark bytes, which only ever
 # go one way, and hand chunks of work between them.
