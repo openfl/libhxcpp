@@ -722,7 +722,7 @@ typedef hx::QuickVec<hx::Object *> ObjectStack;
 static std::mutex &sThreadPoolLock = *new std::mutex();
 
 // For threaded marking/block reclaiming
-static unsigned int sRunningThreads = 0;
+static std::atomic<unsigned int> sRunningThreads{0};
 static unsigned int sAllThreads = 0;
 static bool sLazyThreads = false;
 static bool sThreadPoolInit = false;
@@ -747,6 +747,9 @@ static bool sgThreadPoolAbort = false;
 // Pthreads enters the sleep state while holding a mutex, so it no cost to update
 //  the sleeping state and thereby avoid over-signalling the condition
 bool                         sThreadSleeping[MAX_GC_THREADS];
+// Set under sThreadPoolLock when a woken worker leaves its wait. Until then it
+//  has taken no work, so an incremental slice can withdraw the wake
+static bool                  sWorkerStarted[MAX_GC_THREADS];
 std::condition_variable_any* sThreadWake[MAX_GC_THREADS];
 bool                         sThreadJobDoneSleeping = false;
 std::condition_variable_any* sThreadJobDone;
@@ -761,6 +764,7 @@ static inline void SignalThreadPool(std::condition_variable_any* ioSignal, bool 
 static void wakeThreadLocked(int inThreadId)
 {
    sRunningThreads |= (1<<inThreadId);
+   sWorkerStarted[inThreadId] = false;
    sLazyThreads = sRunningThreads != sAllThreads;
    SignalThreadPool(sThreadWake[inThreadId],sThreadSleeping[inThreadId]);
 }
@@ -1871,6 +1875,18 @@ struct GlobalChunks
       if (sAllThreads)
       {
          MarkChunk *result =  popJobLocked(inChunk);
+         #ifdef HXCPP_GC_INCREMENTAL
+         // The collecting thread, marking beside the workers in a slice. It is
+         //  not one of them, so it has nothing to complete. It stays while they
+         //  can still hand it work, which a zeroing job left running will not.
+         if (inThreadId<0)
+         {
+            for(int spinCount = 0; !result && spinCount<10000 && sgThreadPoolJob==tpjMark && sRunningThreads; spinCount++)
+               if (processList)
+                  result = popJobLocked(0);
+            return result;
+         }
+         #endif
          if (!result)
          {
             for(int spinCount = 0; spinCount<10000; spinCount++)
@@ -1970,7 +1986,10 @@ struct GlobalChunks
       MarkChunk *result = popJobLocked(0);
       if (result)
       {
-         if (result->count==MarkChunk::OBJ_ARRAY_JOB)
+         // A chunk left by the last slice stays a job, for any marker
+         if (result->count==MarkChunk::RANGE_CHUNK_JOB)
+            pushJob(result,false);
+         else if (result->count==MarkChunk::OBJ_ARRAY_JOB)
          {
             GCLOG("Popped array job?\n");
             pushJob(result,false);
@@ -2290,6 +2309,18 @@ public:
                 MarkObjectArray(elems, n, this);
                 continue;
              }
+             #ifdef HXCPP_GC_INCREMENTAL
+             if (marking->count==MarkChunk::RANGE_CHUNK_JOB)
+             {
+                hx::Object *owner = marking->rangeOwner;
+                IncrementalRangeScan scan = marking->rangeScan;
+                size_t cursor = marking->rangeStart;
+                size_t item = 0;
+                marking->count = 0;
+                scan(owner, cursor, item, this);
+                continue;
+             }
+             #endif
           }
 
           while(marking)
@@ -3885,7 +3916,7 @@ static int sMaxZeroQueueSize = 32;
 
 #ifdef HXCPP_GC_INCREMENTAL
 #include "Incremental.h"
-static void IncrementalAutomatic(hx::ImmixAllocator *inAlloc, bool inPressure);
+static void IncrementalAutomatic(hx::ImmixAllocator *inAlloc, bool inPressure, size_t inAllocated);
 #endif
 
 class GlobalAllocator
@@ -4181,9 +4212,10 @@ public:
          __hxcpp_gc_safe_point();
 
       #ifdef HXCPP_GC_INCREMENTAL
+      size_t incrementalAllocated = inSize+mIncrementalAllocated.load(std::memory_order_relaxed);
       if (sgInternalEnable && (hx::gIncrementalActive.load(std::memory_order_relaxed) ||
-          inSize+mIncrementalAllocated.load(std::memory_order_relaxed) > mIncrementalStartAt.load(std::memory_order_relaxed)))
-         IncrementalAutomatic(HX_CTX_GET,inSize+mIncrementalAllocated.load(std::memory_order_relaxed) > mIncrementalStartAt.load(std::memory_order_relaxed)*3/2);
+          incrementalAllocated > mIncrementalStartAt.load(std::memory_order_relaxed)))
+         IncrementalAutomatic(HX_CTX_GET,incrementalAllocated > mIncrementalPressureAt.load(std::memory_order_relaxed),incrementalAllocated);
       #endif
 
       //Should we force a collect ? - the 'large' data are not considered when allocating objects
@@ -4627,9 +4659,10 @@ public:
    BlockDataInfo *GetFreeBlock(size_t inRequiredBytes, hx::ImmixAllocator *inAlloc)
    {
       #ifdef HXCPP_GC_INCREMENTAL
+      size_t incrementalAllocated = mIncrementalAllocated.load(std::memory_order_relaxed);
       if (sgInternalEnable && (hx::gIncrementalActive.load(std::memory_order_relaxed) ||
-          mIncrementalAllocated.load(std::memory_order_relaxed) > mIncrementalStartAt.load(std::memory_order_relaxed)))
-         IncrementalAutomatic(inAlloc,mIncrementalAllocated.load(std::memory_order_relaxed) > mIncrementalStartAt.load(std::memory_order_relaxed)*3/2);
+          incrementalAllocated > mIncrementalStartAt.load(std::memory_order_relaxed)))
+         IncrementalAutomatic(inAlloc,incrementalAllocated > mIncrementalPressureAt.load(std::memory_order_relaxed),incrementalAllocated);
       #endif
       while(true)
       {
@@ -5426,6 +5459,7 @@ public:
         sThreadWake[inId]->wait(sThreadPoolLock, [&inId]() { return sRunningThreads & (1 << inId); });
         
         sThreadSleeping[inId] = false;
+        sWorkerStarted[inId] = true;
    }
 
 
@@ -5504,6 +5538,48 @@ public:
       #endif
    }
 
+   #ifdef HXCPP_GC_INCREMENTAL
+   // Ends a background job only if no worker is running it
+   bool TryStopThreadJobs()
+   {
+      if (!sAllThreads)
+         return true;
+      std::lock_guard<std::mutex> l(sThreadPoolLock);
+      if (sRunningThreads)
+         return false;
+      sgThreadPoolAbort = false;
+      sAllThreads = 0;
+      sgThreadPoolJob = tpjNone;
+      sLazyThreads = 0;
+      return true;
+   }
+
+   // The pool and this thread mark together. A worker that the scheduler has
+   //  not run by the end has taken no work, so a slice does not wait for it.
+   void MarkSliceRound(hx::MarkContext *inCtx)
+   {
+      inCtx->releaseJobs();
+      StartThreadJobs(tpjMark, MAX_GC_THREADS, false);
+      inCtx->processMarkStack();
+
+      std::lock_guard<std::mutex> l(sThreadPoolLock);
+      // No more lazy wakes for this round
+      sgThreadCount = 0;
+      for(int i=0;i<MAX_GC_THREADS;i++)
+         if (!sWorkerStarted[i])
+            sRunningThreads &= ~(1<<i);
+      if (sRunningThreads)
+      {
+         sThreadJobDoneSleeping = true;
+         sThreadJobDone->wait(sThreadPoolLock, []() { return sRunningThreads == false; });
+         sThreadJobDoneSleeping = false;
+      }
+      sAllThreads = 0;
+      sgThreadPoolJob = tpjNone;
+      sLazyThreads = 0;
+   }
+   #endif
+
    void StopThreadJobs(bool inKill)
    {
       bool maybeExtraWake = false;
@@ -5568,7 +5644,10 @@ public:
       sLazyThreads = sRunningThreads != sAllThreads;
 
       for(int i=0;i<start;i++)
+      {
+         sWorkerStarted[i] = false;
          SignalThreadPool(sThreadWake[i],sThreadSleeping[i]);
+      }
 
       if (inWait)
       {
@@ -5583,7 +5662,7 @@ public:
 
          if (sRunningThreads)
          {
-            printf("Bad thread stop %d\n", sRunningThreads);
+            printf("Bad thread stop %d\n", sRunningThreads.load());
             DebuggerTrap();
          }
       }
@@ -5619,11 +5698,9 @@ public:
          return;
       GlobalAllocator *owner = static_cast<GlobalAllocator *>(inData);
 #ifdef HX_MULTI_THREAD_MARKING
-      if (MAX_GC_THREADS > 1)
-      {
-         inCtx->releaseJobs();
-         owner->StartThreadJobs(tpjMark, MAX_GC_THREADS, true);
-      }
+      // A zeroing job left running has the pool
+      if (MAX_GC_THREADS > 1 && !owner->mZeroingLeft)
+         owner->MarkSliceRound(inCtx);
       else
 #endif
          inCtx->processMarkStack();
@@ -5801,6 +5878,8 @@ public:
                return false;
             }
          }
+         // Weak processing and reclamation use the pool
+         StopZeroingLeft();
          hx::IncrementalData().tracing = false;
          hx::gIncrementalAllocationsWhite = false;
       }
@@ -6155,6 +6234,7 @@ public:
                   std::lock_guard<std::mutex> lock(hx::IncrementalData().statsLock);
                   hx::IncrementalData().fallbacks++;
                }
+               owner->StopZeroingLeft();
                owner->CancelIncremental();
                for (int i = 0; i < owner->mLocalAllocs.size(); i++)
                {
@@ -6168,7 +6248,13 @@ public:
       } incrementalExit{this, this_local, inLocked, incrementalStarted};
 #endif
 
-      StopThreadJobs(true);
+      #ifdef HXCPP_GC_INCREMENTAL
+      // A slice only marks, which does not disturb the zeroing thread, so it
+      //  does not wait for one that the scheduler has preempted
+      mZeroingLeft = hx::sIncrementalRequestMs > 0 && !sgCensus && !TryStopThreadJobs();
+      if (!mZeroingLeft)
+      #endif
+         StopThreadJobs(true);
       #ifdef HXCPP_DEBUG
       sgAllocsSinceLastSpam = 0;
       #endif
@@ -6254,6 +6340,7 @@ public:
          }
          if (active && state.failed.exchange(false, std::memory_order_relaxed))
          {
+            StopZeroingLeft();
             CancelIncremental();
             {
                std::lock_guard<std::mutex> lock(state.statsLock);
@@ -6270,8 +6357,20 @@ public:
                // Materialize the previous completed collection's free ranges
                // before replacing its row marks with a partial new mark.
                for (int i = 0; i < mAllBlocks.size(); i++)
-                  if (!mAllBlocks[i]->mReclaimed)
-                     mAllBlocks[i]->reclaim<false>(nullptr);
+               {
+                  BlockDataInfo *block = mAllBlocks[i];
+                  if (mZeroingLeft)
+                  {
+                     int expected = 0;
+                     while (!block->mZeroLock.compare_exchange_weak(expected, 1))
+                        expected = 0;
+                  }
+                  if (!block->mReclaimed)
+                     block->reclaim<false>(nullptr);
+                  if (mZeroingLeft)
+                     block->mZeroLock = 0;
+               }
+               state.cycleStarted(mIncrementalAllocated.load(std::memory_order_relaxed));
                state.failed.store(false, std::memory_order_relaxed);
                hx::gIncrementalActive.store(true, std::memory_order_relaxed);
             }
@@ -6307,6 +6406,13 @@ public:
                state.cycles++;
                state.lastSlices = state.slices;
             }
+            // A cycle the allocator cut short started too late, and needed more
+            //  slices than it got. An explicit collection says nothing about pacing.
+            size_t cycleAllocated = mIncrementalAllocated.load(std::memory_order_relaxed);
+            if (requested)
+               state.cycleFinished(cycleAllocated, state.slices);
+            else if (!inMajor)
+               state.cycleFinished(cycleAllocated, state.slices * 1.5);
             state.clearWork();
          }
          else
@@ -6732,10 +6838,17 @@ public:
       mTotalAfterLastCollect = MemUsage();
 
       #ifdef HXCPP_GC_INCREMENTAL
-      // A stable live heap must not trigger another major mark immediately.
-      // Spend half of the normal allocation reserve before starting, then
-      // shorten the scheduling interval once three quarters have been spent.
-      mIncrementalStartAt.store(std::max(size_t{256}*1024,targetFree/2),std::memory_order_relaxed);
+      // The stop-the-world collector spends every free block, and grows the heap
+      //  up to its target, before it collects. Pacing against less than that
+      //  runs a cycle more often than it would collect.
+      {
+         size_t heap = std::max(sWorkingMemorySize, GetWorkingMemory());
+         size_t reserve = std::max(targetFree, heap>mem ? heap-mem : 0);
+         size_t startAt, pressureAt;
+         hx::IncrementalData().plan(reserve, startAt, pressureAt);
+         mIncrementalStartAt.store(startAt,std::memory_order_relaxed);
+         mIncrementalPressureAt.store(pressureAt,std::memory_order_relaxed);
+      }
       mIncrementalAllocated.store(0,std::memory_order_relaxed);
       #endif
 
@@ -6906,6 +7019,15 @@ public:
    }
 
    #ifdef HXCPP_GC_INCREMENTAL
+   void StopZeroingLeft()
+   {
+      if (mZeroingLeft)
+      {
+         StopThreadJobs(true);
+         mZeroingLeft = false;
+      }
+   }
+
    void CancelIncremental()
    {
       if (hx::gIncrementalActive.load(std::memory_order_relaxed))
@@ -7268,6 +7390,8 @@ public:
 
    #ifdef HXCPP_GC_INCREMENTAL
    std::atomic_size_t mIncrementalStartAt{hx::sgMinimumWorkingMemory/2};
+   std::atomic_size_t mIncrementalPressureAt{hx::sgMinimumWorkingMemory*3/4};
+   bool mZeroingLeft = false;
    std::atomic_size_t mIncrementalAllocated{0};
    #endif
 

@@ -2,7 +2,7 @@
 #define HX_INCREMENTAL_API_H
 
 #ifdef HXCPP_GC_INCREMENTAL
-static void IncrementalAutomatic(hx::ImmixAllocator *inAlloc, bool inPressure)
+static void IncrementalAutomatic(hx::ImmixAllocator *inAlloc, bool inPressure, size_t inAllocated)
 {
    if (!sgInternalEnable)
       return;
@@ -20,7 +20,7 @@ static void IncrementalAutomatic(hx::ImmixAllocator *inAlloc, bool inPressure)
    } release{state};
    double now = hx::IncrementalNow();
    double due = state.nextAutomatic.load(std::memory_order_relaxed);
-   if (!inPressure && now < due)
+   if (!inPressure && now < due && !state.sliceDue(inAllocated, now))
       return;
    state.nextAutomatic.store(now + state.intervalMs.load() / 1000.0, std::memory_order_relaxed);
    double previous = hx::sIncrementalRequestMs;
@@ -35,6 +35,8 @@ static void IncrementalAutomatic(hx::ImmixAllocator *inAlloc, bool inPressure)
       throw;
    }
    hx::sIncrementalRequestMs = previous;
+   state.lastSliceAllocated.store(inAllocated, std::memory_order_relaxed);
+   state.lastSliceEnd.store(hx::IncrementalNow(), std::memory_order_relaxed);
 }
 #endif
 
@@ -158,6 +160,14 @@ int __hxcpp_gc_incremental_test(int inOperation, hx::Object *inObject)
          return state.finishPending;
       case 8:
          return GetLocalAlloc()->allocBase && GetLocalAlloc()->spaceEnd > GetLocalAlloc()->spaceStart;
+      case 9:
+      {
+         int chunks = 0;
+         for (hx::MarkChunk *chunk = hx::sGlobalChunks.processList; chunk; chunk = chunk->next)
+            if (chunk->count == hx::MarkChunk::RANGE_CHUNK_JOB)
+               chunks++;
+         return chunks;
+      }
       default:
          return -1;
    }

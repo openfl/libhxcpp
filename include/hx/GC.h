@@ -384,7 +384,10 @@ extern HXCPP_EXTERN_CLASS_ATTRIBUTES int gPrevByteMarkID;
 HXCPP_EXTERN_CLASS_ATTRIBUTES void IncrementalRemember(hx::Object *inOwner, const void *inValue, StackContext *inCtx);
 HXCPP_EXTERN_CLASS_ATTRIBUTES void IncrementalAllocated(void *inValue, bool inObject, ImmixAllocator *inCtx);
 typedef bool (*IncrementalRangeScan)(hx::Object *, size_t &, size_t &, MarkContext *);
-HXCPP_EXTERN_CLASS_ATTRIBUTES bool IncrementalRange(hx::Object *inOwner, IncrementalRangeScan inScan, MarkContext *inCtx);
+typedef size_t (*IncrementalRangeLength)(hx::Object *);
+enum { IncrementalRangeChunk = 256 };
+// With inLength the range is scanned in chunks that can run in any order, on any marker
+HXCPP_EXTERN_CLASS_ATTRIBUTES bool IncrementalRange(hx::Object *inOwner, IncrementalRangeScan inScan, MarkContext *inCtx, IncrementalRangeLength inLength = nullptr);
 HXCPP_EXTERN_CLASS_ATTRIBUTES void IncrementalMutationEnter(hx::Object *inOwner, StackContext *inCtx);
 HXCPP_EXTERN_CLASS_ATTRIBUTES void IncrementalMutationLeave(hx::Object *inOwner, StackContext *inCtx);
 #ifdef HXCPP_GC_INCREMENTAL_VERIFY
