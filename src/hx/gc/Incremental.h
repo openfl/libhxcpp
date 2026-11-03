@@ -248,7 +248,11 @@ void IncrementalAllocated(void *inValue, bool inObject, ImmixAllocator *inAlloc)
 void IncrementalMutationEnter(Object *inOwner, StackContext *inCtx)
 {
    if (inCtx)
+   {
+      if (inCtx->mIncrementalMutations < IncrementalScopeDepth)
+         inCtx->mIncrementalScopes[inCtx->mIncrementalMutations] = inOwner;
       inCtx->mIncrementalMutations++;
+   }
    IncrementalRemember(inOwner, nullptr, inCtx);
 }
 
@@ -317,6 +321,45 @@ bool IncrementalRange(Object *inOwner, IncrementalRangeScan inScan, MarkContext 
    return true;
 }
 
+// A black holder can acquire an edge after it was scanned. Revisits it even if
+// its ordinary header already belongs to this cycle.
+static bool IncrementalRevisit(Object *inOwner, MarkContext *inCtx)
+{
+   IncrementalState &state = IncrementalData();
+   try
+   {
+      if (!state.dirty.insert(inOwner).second)
+         return true;
+   }
+   catch (const std::bad_alloc &)
+   {
+      state.failed.store(true, std::memory_order_relaxed);
+      return false;
+   }
+   MarkObjectAlloc(inOwner, inCtx);
+   inCtx->pushObj(inOwner);
+   auto range = state.rangeOwners.find(inOwner);
+   if (range != state.rangeOwners.end())
+   {
+      IncrementalRangeJob &job = state.ranges[range->second];
+      job.cursor = job.item = 0;
+   }
+   return true;
+}
+
+// A holder in an open mutation scope changes without barriers, so no earlier
+// scan of it counts: the stop that finishes a cycle scans it again. The app is
+// at an allocation in the scope, where a full collection could run too.
+static bool IncrementalRevisitScopes(StackContext *inCtx, MarkContext *inMark)
+{
+   if (inCtx->mIncrementalMutations > IncrementalScopeDepth)
+      return false;
+   for (unsigned int i = 0; i < inCtx->mIncrementalMutations; i++)
+      if (!IncrementalRevisit(inCtx->mIncrementalScopes[i], inMark))
+         return false;
+   return true;
+}
+
 static bool IncrementalEntries(std::vector<IncrementalEntry> &inEntries, size_t &ioRead, MarkContext *inCtx)
 {
    IncrementalState &state = IncrementalData();
@@ -338,28 +381,8 @@ static bool IncrementalEntries(std::vector<IncrementalEntry> &inEntries, size_t 
          // invalidate an entire large container on every element write.
          continue;
       }
-      if (!entry.owner)
-         continue;
-      try
-      {
-         if (!state.dirty.insert(entry.owner).second)
-            continue;
-      }
-      catch (const std::bad_alloc &)
-      {
-         state.failed.store(true, std::memory_order_relaxed);
+      if (entry.owner && !IncrementalRevisit(entry.owner, inCtx))
          return false;
-      }
-      MarkObjectAlloc(entry.owner, inCtx);
-      // A black holder can acquire an edge after it was scanned. Revisit it
-      // even if its ordinary header already belongs to this cycle.
-      inCtx->pushObj(entry.owner);
-      auto range = state.rangeOwners.find(entry.owner);
-      if (range != state.rangeOwners.end())
-      {
-         IncrementalRangeJob &job = state.ranges[range->second];
-         job.cursor = job.item = 0;
-      }
    }
    inEntries.clear();
    ioRead = 0;

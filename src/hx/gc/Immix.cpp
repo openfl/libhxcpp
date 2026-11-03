@@ -5866,18 +5866,19 @@ public:
       #ifdef HXCPP_GC_INCREMENTAL
       if (hx::IncrementalData().tracing) {
          if (!hx::IncrementalDrain(&mMarker,IncrementalMarkWorkers,this)) return false;
-         if (hx::IncrementalData().deadline > 0) {
-            for (int i=0;i<mLocalAllocs.size();i++)
-               if (((hx::StackContext *)mLocalAllocs[i])->mIncrementalMutations) return false;
-            // Avoid adding weak processing and reclamation to a full marking
-            // slice. Roots and mutation logs are checked again at the next
-            // stop before the cycle is allowed to finish.
-            if (!hx::IncrementalData().finishPending)
-            {
-               hx::IncrementalData().finishPending = true;
-               return false;
-            }
+         // Avoid adding weak processing and reclamation to a full marking
+         // slice. Roots and mutation logs are checked again at the next stop
+         // before the cycle is allowed to finish.
+         if (hx::IncrementalData().deadline > 0 && !hx::IncrementalData().finishPending)
+         {
+            hx::IncrementalData().finishPending = true;
+            return false;
          }
+         mMarker.init();
+         for (int i=0;i<mLocalAllocs.size();i++)
+            if (!hx::IncrementalRevisitScopes((hx::StackContext *)mLocalAllocs[i],&mMarker))
+               return false;
+         if (!hx::IncrementalDrain(&mMarker,IncrementalMarkWorkers,this)) return false;
          // Weak processing and reclamation use the pool
          StopZeroingLeft();
          hx::IncrementalData().tracing = false;
@@ -6335,7 +6336,7 @@ public:
          if (active && hx::sIncrementalRequestMs == 0)
          {
             for (int i = 0; i < mLocalAllocs.size(); i++)
-               if (((hx::StackContext *)mLocalAllocs[i])->mIncrementalMutations)
+               if (((hx::StackContext *)mLocalAllocs[i])->mIncrementalMutations > hx::IncrementalScopeDepth)
                   state.failed.store(true, std::memory_order_relaxed);
          }
          if (active && state.failed.exchange(false, std::memory_order_relaxed))

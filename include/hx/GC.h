@@ -386,6 +386,7 @@ HXCPP_EXTERN_CLASS_ATTRIBUTES void IncrementalAllocated(void *inValue, bool inOb
 typedef bool (*IncrementalRangeScan)(hx::Object *, size_t &, size_t &, MarkContext *);
 typedef size_t (*IncrementalRangeLength)(hx::Object *);
 enum { IncrementalRangeChunk = 256 };
+enum { IncrementalScopeDepth = 8 };
 // With inLength the range is scanned in chunks that can run in any order, on any marker
 HXCPP_EXTERN_CLASS_ATTRIBUTES bool IncrementalRange(hx::Object *inOwner, IncrementalRangeScan inScan, MarkContext *inCtx, IncrementalRangeLength inLength = nullptr);
 HXCPP_EXTERN_CLASS_ATTRIBUTES void IncrementalMutationEnter(hx::Object *inOwner, StackContext *inCtx);

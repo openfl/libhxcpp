@@ -6,9 +6,10 @@ static void IncrementalAutomatic(hx::ImmixAllocator *inAlloc, bool inPressure, s
 {
    if (!sgInternalEnable)
       return;
-   hx::StackContext *ctx = static_cast<hx::StackContext *>(inAlloc);
-   if (ctx->mIncrementalMutations)
-      return;
+   // A slice can run inside a mutation scope, as one on another thread can: the
+   // allocation that brought it here is a safe point, and only finishing waits
+   // for the scope. An app whose allocation is mostly array storage would
+   // otherwise get no slices, and every collection would be a full stop.
    hx::IncrementalState &state = hx::IncrementalData();
    bool expected = false;
    if (!state.automaticRunning.compare_exchange_strong(expected, true, std::memory_order_relaxed))

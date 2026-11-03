@@ -427,6 +427,7 @@ struct StackContext : public hx::ImmixAllocator
    std::vector<hx::IncrementalEntry> mIncrementalEntries;
    size_t mIncrementalRead = 0;
    unsigned int mIncrementalMutations = 0;
+   hx::Object *mIncrementalScopes[hx::IncrementalScopeDepth];
    #endif
    #ifdef HXCPP_STACK_IDS
       int  mThreadId;

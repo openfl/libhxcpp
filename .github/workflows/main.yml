@@ -229,7 +229,7 @@ jobs:
       if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
       working-directory: test/regression
       run: |
-        for test in GcMutationRoots GcContainerMutation IncrementalGcSlices IncrementalGcContainers IncrementalGcArrayChunks IncrementalGcFinishBoundary GcWeakMapChain GenerationalFinalizerLifecycle GenerationalLargeBufferLifecycle; do
+        for test in GcMutationRoots GcContainerMutation IncrementalGcSlices IncrementalGcContainers IncrementalGcArrayChunks IncrementalGcPacing IncrementalGcFinishBoundary GcWeakMapChain GenerationalFinalizerLifecycle GenerationalLargeBufferLifecycle; do
           (cd "$test" && haxe -main Main -cpp bin -lib hxcpp -D HXCPP_M64 -D HXCPP_GC_INCREMENTAL -D HXCPP_GC_INCREMENTAL_VERIFY -D HXCPP_GC_INCREMENTAL_TEST -D HXCPP_SANITIZE=${{ matrix.sanitize }} && bin/Main > out.txt && diff <(tr -d '\r' < stdout.txt) <(tr -d '\r' < out.txt))
         done
 
