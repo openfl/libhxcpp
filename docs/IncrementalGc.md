@@ -70,6 +70,7 @@ Conventional fixtures under `test/regression` cover:
 | `IncrementalGcArrayChunks` | Array chunks still queued at a stop, through shrinking and reallocation, and dropped with a failed cycle |
 | `IncrementalGcPacing` | Cycles spending the free space, and finishing when all allocation is in mutation scopes |
 | `IncrementalGcStartSweep` | Dead start bits cleared before their mark id returns, and no full reclaim, on a heap fragmented into small holes |
+| `IncrementalGcStats` | Every counter from `getStats` read by name after a finished cycle |
 | `IncrementalGcFinishBoundary` | New roots, descendants and container stores published between strong marking and finishing |
 | `IncrementalGcVerifier` | Independent detection of an omitted descendant |
 | `GcWeakMapChain` | Weak-map reachability closure |

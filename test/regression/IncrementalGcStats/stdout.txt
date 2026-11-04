@@ -1,0 +1,2 @@
+every counter can be read by name: true
+a finished cycle shows in the counters: true

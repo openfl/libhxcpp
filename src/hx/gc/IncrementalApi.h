@@ -107,19 +107,21 @@ Dynamic __hxcpp_gc_incremental_stats()
       sliceMax = state.maxSlicePauseMs;
       syncMax = state.maxSynchronousPauseMs;
    }
-   return hx::Anon_obj::Create(12)
-       ->setFixed(0, HX_CSTRING("cycles"), cycles)
-       ->setFixed(1, HX_CSTRING("pauses"), pauses)
-       ->setFixed(2, HX_CSTRING("fallbacks"), fallbacks)
-       ->setFixed(3, HX_CSTRING("totalPauseMs"), total)
-       ->setFixed(4, HX_CSTRING("maxPauseMs"), longest)
-       ->setFixed(5, HX_CSTRING("lastPauseMs"), last)
-       ->setFixed(6, HX_CSTRING("lastCycleSlices"), slices)
-       ->setFixed(7, HX_CSTRING("active"), hx::gIncrementalActive.load())
-       ->setFixed(8, HX_CSTRING("forcedFinishes"), forced)
-       ->setFixed(9, HX_CSTRING("requestedSlices"), requested)
-       ->setFixed(10, HX_CSTRING("maxSlicePauseMs"), sliceMax)
-       ->setFixed(11, HX_CSTRING("maxSynchronousPauseMs"), syncMax);
+   // Not fixed fields: a read by name searches those by hash, so they have to
+   // be set in hash order
+   return hx::Anon_obj::Create()
+       ->Add(HX_CSTRING("cycles"), cycles)
+       ->Add(HX_CSTRING("pauses"), pauses)
+       ->Add(HX_CSTRING("fallbacks"), fallbacks)
+       ->Add(HX_CSTRING("totalPauseMs"), total)
+       ->Add(HX_CSTRING("maxPauseMs"), longest)
+       ->Add(HX_CSTRING("lastPauseMs"), last)
+       ->Add(HX_CSTRING("lastCycleSlices"), slices)
+       ->Add(HX_CSTRING("active"), hx::gIncrementalActive.load())
+       ->Add(HX_CSTRING("forcedFinishes"), forced)
+       ->Add(HX_CSTRING("requestedSlices"), requested)
+       ->Add(HX_CSTRING("maxSlicePauseMs"), sliceMax)
+       ->Add(HX_CSTRING("maxSynchronousPauseMs"), syncMax);
 #else
    return hx::Anon_obj::Create(1)->setFixed(0, HX_CSTRING("active"), false);
 #endif
