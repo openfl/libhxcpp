@@ -6918,17 +6918,6 @@ public:
       mTotalAfterLastCollect = MemUsage();
 
       #ifdef HXCPP_GC_INCREMENTAL
-      // The stop-the-world collector spends every free block, and grows the heap
-      //  up to its target, before it collects. Pacing against less than that
-      //  runs a cycle more often than it would collect.
-      {
-         size_t heap = std::max(sWorkingMemorySize, GetWorkingMemory());
-         size_t reserve = std::max(targetFree, heap>mem ? heap-mem : 0);
-         size_t startAt, pressureAt;
-         hx::IncrementalData().plan(reserve, startAt, pressureAt);
-         mIncrementalStartAt.store(startAt,std::memory_order_relaxed);
-         mIncrementalPressureAt.store(pressureAt,std::memory_order_relaxed);
-      }
       mIncrementalAllocated.store(0,std::memory_order_relaxed);
       #endif
 
@@ -6985,6 +6974,22 @@ public:
       #endif
 
       createFreeList();
+
+      #ifdef HXCPP_GC_INCREMENTAL
+      // The stop-the-world collector spends the free list, and grows the heap up
+      //  to its target, before it collects. Pacing against less runs a cycle more
+      //  often than it would collect. Pacing against more, by counting free rows
+      //  in holes too small to use, lets the allocator run out before a cycle starts.
+      {
+         size_t reserve = mFreeListBytes;
+         if (sWorkingMemorySize>GetWorkingMemory())
+            reserve += sWorkingMemorySize-GetWorkingMemory();
+         size_t startAt, pressureAt;
+         hx::IncrementalData().plan(reserve, startAt, pressureAt);
+         mIncrementalStartAt.store(startAt,std::memory_order_relaxed);
+         mIncrementalPressureAt.store(pressureAt,std::memory_order_relaxed);
+      }
+      #endif
 
       // This saves some running/stall time, but increases the total CPU usage
       // Delaying it until just before the block is used to improve the cache locality
@@ -7245,6 +7250,9 @@ public:
          place[i] += place[i-1];
 
       mFreeBlocks.setSize(place[IMMIX_LINES]);
+      #ifdef HXCPP_GC_INCREMENTAL
+      mFreeListBytes = 0;
+      #endif
       for(int i=0;i<mAllBlocks.size();i++)
       {
          BlockDataInfo *info = mAllBlocks[i];
@@ -7252,6 +7260,9 @@ public:
          {
             info->mOwned = false;
             mFreeBlocks[place[info->mMaxHoleSize>>IMMIX_LINE_BITS]++] = info;
+            #ifdef HXCPP_GC_INCREMENTAL
+            mFreeListBytes += info->GetFreeData();
+            #endif
          }
       }
 
@@ -7494,6 +7505,7 @@ public:
    std::atomic_size_t mIncrementalStartAt{hx::sgMinimumWorkingMemory/2};
    std::atomic_size_t mIncrementalPressureAt{hx::sgMinimumWorkingMemory*3/4};
    bool mZeroingLeft = false;
+   size_t mFreeListBytes = 0;
    size_t mReclaimAhead = 0;
    std::atomic_size_t mIncrementalAllocated{0};
    #endif
