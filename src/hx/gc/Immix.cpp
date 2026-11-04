@@ -994,6 +994,20 @@ struct BlockDataInfo
       return doZero;
    }
 
+   #ifdef HXCPP_GC_INCREMENTAL
+   bool tryReclaim()
+   {
+      int expected{ 0 };
+      if (!mZeroLock.compare_exchange_strong(expected, 1))
+         return false;
+      bool doReclaim = !mReclaimed && !mOwned;
+      if (doReclaim)
+         reclaim<false>(0);
+      mZeroLock = 0;
+      return doReclaim;
+   }
+   #endif
+
    bool tryZero()
    {
       if (mZeroed)
@@ -1097,10 +1111,50 @@ struct BlockDataInfo
          mReclaimed = false;
       }
 
+      #ifdef HXCPP_GC_INCREMENTAL
+      mMaxHoleSize = largestHole();
+      #else
       uint16_t left{ static_cast<uint16_t>((IMMIX_USEFUL_LINES - mUsedRows) << IMMIX_LINE_BITS) };
       if (left<mMaxHoleSize)
          mMaxHoleSize = left;
+      #endif
    }
+
+   #ifdef HXCPP_GC_INCREMENTAL
+   // For the free list, which a block joins before it has been reclaimed
+   uint16_t largestHole() const
+   {
+      const unsigned char *rowMarked = mPtr->mRowMarked;
+      int largest = 0;
+      int hole = 0;
+      int r = IMMIX_HEADER_LINES;
+      while(r<IMMIX_LINES)
+      {
+         if ((r & 3)==0 && r+4<=IMMIX_LINES)
+         {
+            unsigned int rows = *reinterpret_cast<const unsigned int *>(rowMarked+r);
+            if (rows==0)
+            {
+               hole += 4;
+               r += 4;
+               continue;
+            }
+         }
+         if (rowMarked[r])
+         {
+            if (hole>largest)
+               largest = hole;
+            hole = 0;
+         }
+         else
+            hole++;
+         r++;
+      }
+      if (hole>largest)
+         largest = hole;
+      return static_cast<uint16_t>(largest << IMMIX_LINE_BITS);
+   }
+   #endif
 
    // mUsedRows and mUsedBytes from the row marks
    void countMarkedRows()
@@ -1931,7 +1985,7 @@ struct GlobalChunks
       if (!last)
          return;
       int surplusCount = 0;
-      for(MarkChunk *c = last->next; c; c = c->next)
+      for(MarkChunk *c = last->next; c && surplusCount<inMost*2; c = c->next)
          surplusCount++;
       int toFree = std::min(inMost, surplusCount/2);
       MarkChunk *surplus = last->next;
@@ -5377,6 +5431,15 @@ public:
       {
          if (mZeroListQueue>=sMaxZeroQueueSize)
          {
+            #ifdef HXCPP_GC_INCREMENTAL
+            // A finished cycle left its sweep for later. This thread has the time
+            //  now, which the next cycle's first stop would not.
+            bool reclaimed = false;
+            while(!reclaimed && mReclaimAhead<mZeroList.size())
+               reclaimed = mZeroList[mReclaimAhead++]->tryReclaim();
+            if (reclaimed)
+               continue;
+            #endif
             spinCount++;
             if (spinCount<10000)
                // Spin
@@ -5554,16 +5617,22 @@ public:
       return true;
    }
 
-   // The pool and this thread mark together. A worker that the scheduler has
-   //  not run by the end has taken no work, so a slice does not wait for it.
+   // The pool and this thread mark together
    void MarkSliceRound(hx::MarkContext *inCtx)
    {
       inCtx->releaseJobs();
       StartThreadJobs(tpjMark, MAX_GC_THREADS, false);
       inCtx->processMarkStack();
+      JoinStartedWorkers();
+   }
+   #endif
 
+   // Ends a job the collecting thread has been working on beside the pool. A
+   //  worker the scheduler has not run yet has taken no work, so it is not waited for.
+   void JoinStartedWorkers()
+   {
       std::lock_guard<std::mutex> l(sThreadPoolLock);
-      // No more lazy wakes for this round
+      // No more lazy wakes for this job
       sgThreadCount = 0;
       for(int i=0;i<MAX_GC_THREADS;i++)
          if (!sWorkerStarted[i])
@@ -5578,7 +5647,6 @@ public:
       sgThreadPoolJob = tpjNone;
       sLazyThreads = 0;
    }
-   #endif
 
    void StopThreadJobs(bool inKill)
    {
@@ -6322,6 +6390,7 @@ public:
       STAMP(t1)
 
       #ifdef HXCPP_GC_INCREMENTAL
+      bool cycleFinished = false;
       {
          hx::IncrementalState &state = hx::IncrementalData();
          bool active = hx::gIncrementalActive.load(std::memory_order_relaxed);
@@ -6356,10 +6425,11 @@ public:
                state.clearWork();
                state.slices = 0;
                // Materialize the previous completed collection's free ranges
-               // before replacing its row marks with a partial new mark.
-               for (int i = 0; i < mAllBlocks.size(); i++)
+               // before replacing its row marks with a partial new mark. Only
+               // a block in the free list can be allocated from in this cycle.
+               for (int i = 0; i < mFreeBlocks.size(); i++)
                {
-                  BlockDataInfo *block = mAllBlocks[i];
+                  BlockDataInfo *block = mFreeBlocks[i];
                   if (mZeroingLeft)
                   {
                      int expected = 0;
@@ -6415,6 +6485,7 @@ public:
             else if (!inMajor)
                state.cycleFinished(cycleAllocated, state.slices * 1.5);
             state.clearWork();
+            cycleFinished = true;
          }
          else
          {
@@ -6498,6 +6569,14 @@ public:
             reclaimBlocks(full,stats);
          }
       }
+      #ifdef HXCPP_GC_INCREMENTAL
+      // The sweep is most of the stop that finishes a cycle. The zeroing thread
+      //  or the allocator does it instead, as each block comes up for use
+      else if (!full && cycleFinished)
+      {
+         countRows(stats);
+      }
+      #endif
       else
       {
          reclaimBlocks(full,stats);
@@ -6967,7 +7046,13 @@ public:
       // Minor collections leave the spare chunks to the next full one, so a
       //  burst repeated between full collections does not make them again
       if (!generational)
+      {
+         #ifdef HXCPP_GC_INCREMENTAL
+         hx::sGlobalChunks.trimFree(256, cycleFinished ? 128 : 1024);
+         #else
          hx::sGlobalChunks.trimFree(256, 1024);
+         #endif
+      }
 
       for(int i=0;i<LOCAL_POOL_SIZE;i++)
       {
@@ -7087,9 +7172,11 @@ public:
       {
          for(int i=0;i<MAX_GC_THREADS;i++)
             sThreadBlockDataStats[i].clear();
-         StartThreadJobs(full ? tpjReclaimFull : tpjReclaim, mAllBlocks.size(), true);
-         outStats = sThreadBlockDataStats[0];
-         for(int i=1;i<MAX_GC_THREADS;i++)
+         StartThreadJobs(full ? tpjReclaimFull : tpjReclaim, mAllBlocks.size(), false);
+         outStats.clear();
+         ReclaimAsync(outStats);
+         JoinStartedWorkers();
+         for(int i=0;i<MAX_GC_THREADS;i++)
             outStats.add(sThreadBlockDataStats[i]);
       }
       else
@@ -7126,9 +7213,11 @@ public:
       {
          for(int i=0;i<MAX_GC_THREADS;i++)
             sThreadBlockDataStats[i].clear();
-         StartThreadJobs(tpjCountRows, mAllBlocks.size(), true);
-         outStats = sThreadBlockDataStats[0];
-         for(int i=1;i<MAX_GC_THREADS;i++)
+         StartThreadJobs(tpjCountRows, mAllBlocks.size(), false);
+         outStats.clear();
+         CountAsync(outStats);
+         JoinStartedWorkers();
+         for(int i=0;i<MAX_GC_THREADS;i++)
             outStats.add(sThreadBlockDataStats[i]);
       }
       else
@@ -7143,22 +7232,31 @@ public:
    // buils mFreeBlocks and maybe starts the async-zero process on mZeroList
    void createFreeList()
    {
-      mFreeBlocks.clear();
+      // Smallest hole first. Holes are whole rows, so counting them into place
+      //  costs less than sorting, and this is on the collector's stop
+      int place[IMMIX_LINES+1] = {};
+      for(int i=0;i<mAllBlocks.size();i++)
+      {
+         BlockDataInfo *info = mAllBlocks[i];
+         if (info->GetFreeRows() > 0 && info->mMaxHoleSize>256)
+            place[(info->mMaxHoleSize>>IMMIX_LINE_BITS)+1]++;
+      }
+      for(int i=1;i<=IMMIX_LINES;i++)
+         place[i] += place[i-1];
 
+      mFreeBlocks.setSize(place[IMMIX_LINES]);
       for(int i=0;i<mAllBlocks.size();i++)
       {
          BlockDataInfo *info = mAllBlocks[i];
          if (info->GetFreeRows() > 0 && info->mMaxHoleSize>256)
          {
             info->mOwned = false;
-            mFreeBlocks.push(info);
+            mFreeBlocks[place[info->mMaxHoleSize>>IMMIX_LINE_BITS]++] = info;
          }
       }
 
       size_t extra{ std::max(mAllBlocks.size(), static_cast<size_t>(8 << IMMIX_BLOCK_GROUP_BITS)) };
       mFreeBlocks.safeReserveExtra(extra);
-
-      std::sort(&mFreeBlocks[0], &mFreeBlocks[0] + mFreeBlocks.size(), SmallestFreeFirst );
 
       for(int i=0;i<BLOCK_OFSIZE_COUNT;i++)
          mNextFreeBlockOfSize[i] = mFreeBlocks.size();
@@ -7181,6 +7279,9 @@ public:
    void backgroundProcessFreeList(bool inJit)
    {
       mZeroListQueue = 0;
+      #ifdef HXCPP_GC_INCREMENTAL
+      mReclaimAhead = 0;
+      #endif
       #ifdef HX_GC_ZERO_EARLY
       mZeroList.setSize(mFreeBlocks.size());
       memcpy( &mZeroList[0], &mFreeBlocks[0], mFreeBlocks.size()*sizeof(void *));
@@ -7393,6 +7494,7 @@ public:
    std::atomic_size_t mIncrementalStartAt{hx::sgMinimumWorkingMemory/2};
    std::atomic_size_t mIncrementalPressureAt{hx::sgMinimumWorkingMemory*3/4};
    bool mZeroingLeft = false;
+   size_t mReclaimAhead = 0;
    std::atomic_size_t mIncrementalAllocated{0};
    #endif
 
