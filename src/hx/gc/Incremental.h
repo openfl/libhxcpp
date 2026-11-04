@@ -25,6 +25,13 @@ static const double sPaceSpend = 1.5;
 // Past this share of what is left after the start, slices stop waiting
 static const double sPacePressure = 0.75;
 
+// A dead object keeps its start bit until something clears it, and its mark id
+// comes round again after 16 collections. Each collection owes the sweep this
+// share of the blocks, so every block is swept well before that.
+static const int sSweepPeriod = 12;
+enum { IncrementalSweepBatch = 8 };
+static bool IncrementalSweepBlocks(Object *, size_t &ioBlock, size_t &, MarkContext *);
+
 struct IncrementalRangeJob
 {
    Object *owner;
@@ -52,6 +59,13 @@ struct IncrementalState
    std::atomic<double> sliceCredit{0};
    std::atomic<size_t> lastSliceAllocated{0};
    std::atomic<double> lastSliceEnd{0};
+   // Blocks owed to the sweep, and where it has reached
+   size_t sweepDue = 0;
+   size_t sweepCursor = 0;
+   size_t sweepBlocks = 0;
+   size_t sweepPerSlice = 1;
+   int collectionsSinceFull = 0;
+   uint64_t fullReclaims = 0;
    std::vector<IncrementalEntry> detached;
    size_t detachedRead = 0;
    bool logsPending = false;
@@ -105,6 +119,7 @@ struct IncrementalState
       cycleAllocated = inAllocated;
       lastSliceAllocated.store(inAllocated, std::memory_order_relaxed);
       lastSliceEnd.store(0, std::memory_order_relaxed);
+      sweepPerSlice = static_cast<size_t>(sweepDue / std::max(1.0, paceSlices)) + 1;
    }
 
    void cycleFinished(size_t inAllocated, double inSlices)
@@ -184,6 +199,13 @@ static bool IncrementalExpired()
    // objects. Check in bounded batches without a shared counter cache line.
    static thread_local unsigned int checks = 0;
    return (++checks & 63) == 0 && IncrementalNow() >= state.deadline;
+}
+
+// For work too large to wait for IncrementalExpired's next look at the clock
+static bool IncrementalPastDeadline()
+{
+   IncrementalState &state = IncrementalData();
+   return state.tracing && state.deadline > 0 && IncrementalNow() >= state.deadline;
 }
 
 static void IncrementalScanned(Object *inObject)
@@ -410,6 +432,29 @@ static bool IncrementalQueueChunks(IncrementalRangeJob &ioJob, int inBatch)
    return ioJob.cursor >= length;
 }
 
+// Queues up to inBlocks of what the sweep is owed. Blocks only join mAllBlocks
+// before the cursor by moving later ones along, so a job that runs late can
+// repeat a block but the cursor misses none.
+static void IncrementalQueueSweep(size_t inBlocks)
+{
+   IncrementalState &state = IncrementalData();
+   size_t blocks = std::min(inBlocks, state.sweepDue);
+   for (size_t done = 0; done < blocks; done += IncrementalSweepBatch)
+   {
+      if (state.sweepCursor >= state.sweepBlocks)
+         state.sweepCursor = 0;
+      MarkChunk *chunk = sGlobalChunks.alloc();
+      chunk->count = MarkChunk::RANGE_CHUNK_JOB;
+      chunk->rangeOwner = nullptr;
+      chunk->rangeScan = IncrementalSweepBlocks;
+      chunk->rangeStart = state.sweepCursor;
+      sGlobalChunks.pushJob(chunk, false);
+      state.sweepCursor += IncrementalSweepBatch;
+      state.work++;
+   }
+   state.sweepDue -= std::min(state.sweepDue, (blocks + IncrementalSweepBatch - 1) / IncrementalSweepBatch * IncrementalSweepBatch);
+}
+
 static bool IncrementalDrain(MarkContext *inCtx, void (*inProcess)(MarkContext *, void *), void *inData)
 {
    IncrementalState &state = IncrementalData();
@@ -424,6 +469,12 @@ static bool IncrementalDrain(MarkContext *inCtx, void (*inProcess)(MarkContext *
             return false;
          if (inCtx->hasWork())
             return false;
+         // A cycle does not finish owing the sweep
+         if (state.sweepDue)
+         {
+            IncrementalQueueSweep(64 * IncrementalSweepBatch);
+            continue;
+         }
          if (state.rangeHead >= state.rangeQueue.size())
             return !state.logsPending;
          if (IncrementalExpired())

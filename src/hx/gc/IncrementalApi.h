@@ -161,6 +161,10 @@ int __hxcpp_gc_incremental_test(int inOperation, hx::Object *inObject)
          return state.finishPending;
       case 8:
          return GetLocalAlloc()->allocBase && GetLocalAlloc()->spaceEnd > GetLocalAlloc()->spaceStart;
+      case 10:
+         return sGlobalAlloc->maxStartAge();
+      case 11:
+         return static_cast<int>(state.fullReclaims);
       case 9:
       {
          int chunks = 0;

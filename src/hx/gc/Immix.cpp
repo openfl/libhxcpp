@@ -1121,6 +1121,47 @@ struct BlockDataInfo
    }
 
    #ifdef HXCPP_GC_INCREMENTAL
+   // What a full reclaim does for start bits, in a stop during a cycle. An object
+   //  marked by neither this cycle nor the last is dead.
+   void clearDeadStarts()
+   {
+      unsigned int current = hx::gMarkID;
+      unsigned int previous = static_cast<unsigned int>(hx::gPrevByteMarkID) << 24;
+      for(int r=IMMIX_HEADER_LINES;r<IMMIX_LINES;r++)
+      {
+         unsigned int starts = allocStart[r];
+         if (!starts)
+            continue;
+         const unsigned int *headers = reinterpret_cast<const unsigned int *>(mPtr->row(r));
+         for(int bit=0;bit<32;bit++)
+            if (starts & (1u<<bit))
+            {
+               unsigned int id = headers[bit] & IMMIX_ALLOC_MARK_ID;
+               if (id!=current && id!=previous)
+                  starts ^= (1u<<bit);
+            }
+         allocStart[r] = starts;
+      }
+   }
+
+   #ifdef HXCPP_GC_INCREMENTAL_TEST
+   int maxStartAge() const
+   {
+      int oldest = 0;
+      for(int r=IMMIX_HEADER_LINES;r<IMMIX_LINES;r++)
+      {
+         const unsigned int *headers = reinterpret_cast<const unsigned int *>(mPtr->row(r));
+         for(int bit=0;bit<32;bit++)
+            if (allocStart[r] & (1u<<bit))
+            {
+               int id = (headers[bit] & IMMIX_ALLOC_MARK_ID) >> 24;
+               oldest = std::max(oldest, (hx::gByteMarkID - id) & MARK_BYTE_MASK);
+            }
+      }
+      return oldest;
+   }
+   #endif
+
    // For the free list, which a block joins before it has been reclaimed
    uint16_t largestHole() const
    {
@@ -2166,6 +2207,7 @@ static double IncrementalNow()
    return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
 }
 static bool IncrementalExpired();
+static bool IncrementalPastDeadline();
 static void IncrementalScanned(Object *inObject);
 #endif
 
@@ -2372,6 +2414,7 @@ public:
                 size_t item = 0;
                 marking->count = 0;
                 scan(owner, cursor, item, this);
+                if (IncrementalPastDeadline()) { releaseIncrementalJobs(); return; }
                 continue;
              }
              #endif
@@ -6452,6 +6495,8 @@ public:
             state.dirty.clear();
             state.slices++;
             mMarker.init();
+            // A share in each slice, so that none pays for it all
+            hx::IncrementalQueueSweep(state.sweepPerSlice);
             state.logsPending = !hx::IncrementalEntries(state.detached, state.detachedRead, &mMarker);
             for (int i = 0; i < mLocalAllocs.size(); i++)
             {
@@ -6890,7 +6935,11 @@ public:
       STAMP(t5)
 
       size_t mem = mRowsInUse<<IMMIX_LINE_BITS;
+      #ifdef HXCPP_GC_INCREMENTAL
+      if (full || cycleFinished)
+      #else
       if (full)
+      #endif
          mLiveBytes = stats.bytesInUse;
       size_t baseMem = full ? bytesInUse : mem;
       #ifdef HXCPP_GC_DYNAMIC_SIZE
@@ -6918,6 +6967,26 @@ public:
       mTotalAfterLastCollect = MemUsage();
 
       #ifdef HXCPP_GC_INCREMENTAL
+      // The sweep replaces the periodic full reclaim, whose stop grows with the
+      //  heap. A full reclaim is still what catches up if the sweep falls behind,
+      //  and what gives memory back when the heap is well over its target.
+      {
+         hx::IncrementalState &state = hx::IncrementalData();
+         size_t share = mAllBlocks.size()/hx::sSweepPeriod + 1;
+         if (full)
+         {
+            state.sweepDue = 0;
+            state.collectionsSinceFull = 0;
+            state.fullReclaims++;
+         }
+         state.sweepDue += share;
+         state.sweepBlocks = mAllBlocks.size();
+         state.collectionsSinceFull++;
+         size_t have = GetWorkingMemory();
+         bool overTarget = state.collectionsSinceFull>=15 && have>sWorkingMemorySize+std::max(size_t{8}*1024*1024,sWorkingMemorySize/4);
+         sgTimeToNextTableUpdate = (state.sweepDue>share*2 || overTarget) ? 1 : 15;
+      }
+
       mIncrementalAllocated.store(0,std::memory_order_relaxed);
       #endif
 
@@ -7110,6 +7179,31 @@ public:
    }
 
    #ifdef HXCPP_GC_INCREMENTAL
+   void SweepBlocks(size_t inFirst)
+   {
+      size_t last = std::min(inFirst+hx::IncrementalSweepBatch, (size_t)mAllBlocks.size());
+      for(size_t i=inFirst;i<last;i++)
+      {
+         BlockDataInfo *block = mAllBlocks[i];
+         // A zeroing job left running may be reclaiming the block
+         int expected = 0;
+         while (!block->mZeroLock.compare_exchange_weak(expected, 1))
+            expected = 0;
+         block->clearDeadStarts();
+         block->mZeroLock = 0;
+      }
+   }
+
+   #ifdef HXCPP_GC_INCREMENTAL_TEST
+   int maxStartAge()
+   {
+      int oldest = 0;
+      for(int i=0;i<mAllBlocks.size();i++)
+         oldest = std::max(oldest, mAllBlocks[i]->maxStartAge());
+      return oldest;
+   }
+   #endif
+
    void StopZeroingLeft()
    {
       if (mZeroingLeft)
@@ -7149,6 +7243,8 @@ public:
          hx::gRememberedByteMarkID = hx::gByteMarkID | HX_GC_REMEMBERED;
       }
       hx::IncrementalDiscard(&mMarker);
+      // Sweep jobs went with the rest
+      sgTimeToNextTableUpdate = 0;
    }
 
    void ResumeIncremental(LocalAllocator *inCurrent, bool inLocked)
@@ -8607,6 +8703,17 @@ inline LocalAllocator *GetLocalAlloc(bool inAllowEmpty=false)
       return (LocalAllocator *)hx::gMainThreadContext;
    #endif
 }
+
+#ifdef HXCPP_GC_INCREMENTAL
+namespace hx
+{
+static bool IncrementalSweepBlocks(Object *, size_t &ioBlock, size_t &, MarkContext *)
+{
+   sGlobalAlloc->SweepBlocks(ioBlock);
+   return true;
+}
+}
+#endif
 
 #include "IncrementalApi.h"
 

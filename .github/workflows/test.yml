@@ -402,7 +402,7 @@ jobs:
         working-directory: test/regression
         run: |
           failed=""
-          for test in GcMutationRoots GcContainerMutation IncrementalGcSlices IncrementalGcContainers IncrementalGcArrayChunks IncrementalGcPacing IncrementalGcFinishBoundary IncrementalGcVerifier IncrementalWindowsHeaders GcWeakMapChain GenerationalFinalizerLifecycle GenerationalLargeBufferLifecycle; do
+          for test in GcMutationRoots GcContainerMutation IncrementalGcSlices IncrementalGcContainers IncrementalGcArrayChunks IncrementalGcPacing IncrementalGcStartSweep IncrementalGcFinishBoundary IncrementalGcVerifier IncrementalWindowsHeaders GcWeakMapChain GenerationalFinalizerLifecycle GenerationalLargeBufferLifecycle; do
             echo "::group::incremental gc: $test"
             # The lifecycle fixtures' hxml selects generational mode; compile
             # the same Main with incremental mode here instead.

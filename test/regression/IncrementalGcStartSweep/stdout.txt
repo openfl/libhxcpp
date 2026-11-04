@@ -1,0 +1,2 @@
+start bits go before their mark id returns: true
+steady allocation needs no full reclaim: true
