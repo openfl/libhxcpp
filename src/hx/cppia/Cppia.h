@@ -772,6 +772,8 @@ public:
 
    CppiaFunction  *newFunc;
    CppiaExpr      *initExpr;
+   // The frame initExpr's locals need, `this` included
+   int            initStackSize;
    CppiaExpr      *enumMeta;
 
 
