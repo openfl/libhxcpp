@@ -157,8 +157,18 @@ class TestUtf8 extends Test {
 	}
 
 	public function test_decode_malformed_string() {
-		for (hex in ['61626364656667f09d84', '6162636465666768c3', 'e3833061', '616263646566676880', 'eda080', 'c0af']) {
-			Assert.raises(() -> Utf8.decode(Bytes.ofHex(hex).asView()));
+		// Each malformed sequence becomes one U+FFFD, as Haxe 4's Bytes.toString
+		// gives, since Haxe 5's decodes here
+		var expected = [
+			'61626364656667f09d84' => 'abcdefg\u{FFFD}',
+			'6162636465666768c3' => 'abcdefgh\u{FFFD}',
+			'e3833061' => '\u{FFFD}0a',
+			'616263646566676880' => 'abcdefgh\u{FFFD}',
+			'eda080' => '\u{FFFD}\u{FFFD}\u{FFFD}',
+			'c0af' => '\u{FFFD}\u{FFFD}'
+		];
+		for (hex => text in expected) {
+			Assert.equals(text, Utf8.decode(Bytes.ofHex(hex).asView()));
 		}
 	}
 }

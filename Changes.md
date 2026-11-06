@@ -2,6 +2,7 @@
 libhxcpp 6.0.0 (unreleased)
 ------------------------------------------------------------
 
+* cpp.encoding.Utf8.decode replaces each malformed UTF-8 sequence with U+FFFD instead of throwing, with smart strings or without. Haxe 5's Bytes.toString and getString decode with it, so they threw for bytes that Haxe 4's, which go through String::create, decode with U+FFFD in the same places. Valid input still takes the decoder that counts first; only malformed input takes the replacing one. Utf8.codepoint still throws
 * Fixed String::utf8_str into a view, at API level 500, writing the bytes and then throwing when the view had room for them but not the terminator. It returns false before writing anything. It also stopped a UTF-16 string at its first NUL, which is a character, and reported that length (libhxcpp #408)
 * Fixed String::create from a UTF-16 view, at API level 500, completing a high surrogate at the end of the view with the unit after it. The view bounds it: a high surrogate the view does not complete throws Invalid UTF16, as a broken pair inside it did (libhxcpp #412)
 * Fixed cpp.encoding.Utf8.encode returning a null array for the empty string, at API level 500 (libhxcpp #406)
