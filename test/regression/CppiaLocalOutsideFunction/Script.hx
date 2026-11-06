@@ -16,8 +16,19 @@ class Script {
 		var y = x + 1;
 		return y * 2;
 	};
+	static var fromInit:String;
+
+	// A class's __init__ is not a function, but it has a frame for its locals
+	// (HaxeFoundation/haxe's unit.issues.Issue7499 declares one there)
+	static function __init__() {
+		var unused:String;
+		var name = "init";
+		var count = Std.random(1) + 2;
+		var join = () -> name + count;
+		fromInit = join();
+	}
 
 	static function main() {
-		Sys.println('block $block, list $list, caught $caught, twice ${twice(2)}');
+		Sys.println('block $block, list $list, caught $caught, twice ${twice(2)}, init $fromInit');
 	}
 }
