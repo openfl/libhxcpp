@@ -594,7 +594,8 @@ double __hxcpp_date_now()
    ularge.LowPart = file_time.dwLowDateTime;
    ularge.HighPart = file_time.dwHighDateTime;
 
-   return (double)( (long) ((ularge.QuadPart - EPOCH) / 10000000L) ) +
+   // A long is 32 bits on Windows, x64 too, and the seconds pass it in 2038
+   return (double)( (__int64) ((ularge.QuadPart - EPOCH) / 10000000L) ) +
           system_time.wMilliseconds*0.001;
    #elif defined(USE_GETTIMEOFDAY)
    struct timeval tv;
