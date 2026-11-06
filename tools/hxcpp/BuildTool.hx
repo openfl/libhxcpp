@@ -226,6 +226,8 @@ class BuildTool
          mDefines.set("MSVC18+","1");
       }
 
+      Pgo.setup(mDefines);
+
       include("toolchain/finish-setup.xml", false);
 
 
@@ -344,6 +346,8 @@ class BuildTool
       }
       else
       {
+         if (mCompiler!=null)
+            Pgo.prepare(mCompiler.mObjDir);
          for(target in inTargets)
             buildTarget(target,destination);
       }
@@ -777,12 +781,17 @@ class BuildTool
             var manifest = mDefines.get("manifestFile");
             if (manifest!=null)
                extraDeps.push(manifest);
+            if (Pgo.stampFile!=null)
+               extraDeps.push(Pgo.stampFile);
 
             var linker = mLinkers.get(target.mToolID);
             var output = linker.link(target,objs, mCompiler, extraDeps);
 
             if (output!="")
             {
+               if (target.mToolID=="exe" || target.mToolID=="dll")
+                  Pgo.linked(output);
+
                if (mStripper!=null)
                {
                   if (target.mToolID=="exe" || target.mToolID=="dll")

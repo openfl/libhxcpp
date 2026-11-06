@@ -310,6 +310,33 @@ jobs:
         timeout 600 sh test/emscripten/cffi-js-prime/run-fields.sh
         timeout 600 sh test/emscripten/cffi-js-prime/run-strings.sh
 
+  check-pgo:
+    name: Check HXCPP_PGO with ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: MSVC, os: windows-latest, cxx: '', arch: HXCPP_M64 }
+          - { name: GCC, os: ubuntu-latest, cxx: g++, arch: HXCPP_M64 }
+          - { name: Clang, os: ubuntu-latest, cxx: clang++, arch: HXCPP_M64 }
+          - { name: Apple Clang, os: macos-latest, cxx: '', arch: HXCPP_ARM64 }
+    runs-on: ${{ matrix.os }}
+    steps:
+    - name: checkout
+      uses: actions/checkout@v7
+
+    - name: setup
+      uses: ./.github/workflows/setup
+      with:
+        haxe: 4.3.7
+
+    - name: Generate, train on and use a profile
+      # Git Bash on Windows
+      shell: bash
+      run: |
+        if [ -n "${{ matrix.cxx }}" ]; then export CXX=${{ matrix.cxx }}; fi
+        bash test/pgo/check.sh ${{ matrix.arch }}
+
   check-haxelib:
     name: Check installing with haxelib
     strategy:

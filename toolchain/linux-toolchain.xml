@@ -40,6 +40,15 @@
   <exe name="${CXX}" if="CXX" />
   <flag value="-c"/>
   <flag value="-flto" if="HXCPP_OPTIMIZE_LINK" unless="debug"/>
+  <flag value="-fprofile-generate=${HXCPP_PGO_DIR}" if="HXCPP_PGO_GENERATE"/>
+  <flag value="-fprofile-update=atomic" if="HXCPP_PGO_GENERATE HXCPP_PGO_GCC"/>
+  <flag value="-fprofile-use=${HXCPP_PGO_DIR}" if="HXCPP_PGO_USE HXCPP_PGO_GCC"/>
+  <flag value="-fprofile-partial-training" if="HXCPP_PGO_USE HXCPP_PGO_GCC"/>
+  <flag value="-Wno-missing-profile" if="HXCPP_PGO_USE HXCPP_PGO_GCC"/>
+  <flag value="-Wno-coverage-mismatch" if="HXCPP_PGO_USE HXCPP_PGO_GCC"/>
+  <flag value="-fprofile-use=${HXCPP_PGO_DIR}/default.profdata" if="HXCPP_PGO_USE HXCPP_PGO_CLANG"/>
+  <flag value="-Wno-profile-instr-unprofiled" if="HXCPP_PGO_USE HXCPP_PGO_CLANG"/>
+  <flag value="-Wno-profile-instr-out-of-date" if="HXCPP_PGO_USE HXCPP_PGO_CLANG"/>
   <flag value="-fvisibility=hidden"/>
   <cppflag value="-frtti"/>
   <flag value="-g" if="HXCPP_DEBUG_LINK"/>
@@ -69,6 +78,9 @@
   <flag value="-fpic"/>
   <flag value="-fPIC"/>
   <flag value="-flto" if="HXCPP_OPTIMIZE_LINK" unless="debug"/>
+  <flag value="-fprofile-generate=${HXCPP_PGO_DIR}" if="HXCPP_PGO_GENERATE"/>
+  <flag value="-fprofile-use=${HXCPP_PGO_DIR}" if="HXCPP_PGO_USE HXCPP_PGO_GCC"/>
+  <flag value="-fprofile-partial-training" if="HXCPP_PGO_USE HXCPP_PGO_GCC"/>
   <flag value="-m32" unless="noM32"/>
   <flag value="-m64" if="HXCPP_M64" unless="noM64" />
   <flag value="-Xlinker"/>
@@ -86,6 +98,9 @@
   <flag value="-debug" if="HXCPP_DEBUG_LINK" />
   <flag value="-rdynamic"/>
   <flag value="-flto" if="HXCPP_OPTIMIZE_LINK" unless="debug"/>
+  <flag value="-fprofile-generate=${HXCPP_PGO_DIR}" if="HXCPP_PGO_GENERATE"/>
+  <flag value="-fprofile-use=${HXCPP_PGO_DIR}" if="HXCPP_PGO_USE HXCPP_PGO_GCC"/>
+  <flag value="-fprofile-partial-training" if="HXCPP_PGO_USE HXCPP_PGO_GCC"/>
   <flag value="-fsanitize=${HXCPP_SANITIZE}" if="HXCPP_SANITIZE"/>
   <flag value="-m32" unless="noM32"/>
   <flag value="-m64" if="HXCPP_M64" unless="noM64" />

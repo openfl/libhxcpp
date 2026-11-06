@@ -52,6 +52,15 @@
   <include name="toolchain/common-defines.xml" />
   <flag value="-flto" if="HXCPP_OPTIMIZE_LINK" unless="debug || HXCPP_LTO_THIN"/>
   <flag value="-flto=thin" if="HXCPP_LTO_THIN" unless="debug"/>
+  <flag value="-fprofile-generate=${HXCPP_PGO_DIR}" if="HXCPP_PGO_GENERATE"/>
+  <flag value="-fprofile-update=atomic" if="HXCPP_PGO_GENERATE HXCPP_PGO_GCC"/>
+  <flag value="-fprofile-use=${HXCPP_PGO_DIR}" if="HXCPP_PGO_USE HXCPP_PGO_GCC"/>
+  <flag value="-fprofile-partial-training" if="HXCPP_PGO_USE HXCPP_PGO_GCC"/>
+  <flag value="-Wno-missing-profile" if="HXCPP_PGO_USE HXCPP_PGO_GCC"/>
+  <flag value="-Wno-coverage-mismatch" if="HXCPP_PGO_USE HXCPP_PGO_GCC"/>
+  <flag value="-fprofile-use=${HXCPP_PGO_DIR}/default.profdata" if="HXCPP_PGO_USE HXCPP_PGO_CLANG"/>
+  <flag value="-Wno-profile-instr-unprofiled" if="HXCPP_PGO_USE HXCPP_PGO_CLANG"/>
+  <flag value="-Wno-profile-instr-out-of-date" if="HXCPP_PGO_USE HXCPP_PGO_CLANG"/>
   <objdir value="obj/darwin${OBJEXT}/" />
   <flag value="-msse4.1" if="HXCPP_SSE4" unless="HXCPP_ARM" />
   <outflag value="-o"/>
@@ -71,6 +80,9 @@
   <flag value="-fpic"/>
   <flag value="-fPIC"/>
   <flag value="-dynamiclib"/>
+  <flag value="-fprofile-generate=${HXCPP_PGO_DIR}" if="HXCPP_PGO_GENERATE"/>
+  <flag value="-fprofile-use=${HXCPP_PGO_DIR}" if="HXCPP_PGO_USE HXCPP_PGO_GCC"/>
+  <flag value="-fprofile-partial-training" if="HXCPP_PGO_USE HXCPP_PGO_GCC"/>
   <flag value="-arch" />
   <flag value="${HXCPP_ARCH}"/>
   <flag value="-framework"/>
@@ -90,6 +102,9 @@
   <flag value="@executable_path"/>
   <flag value="-Wl,-rpath,${HXCPP_RPATH}" if="HXCPP_RPATH" />
   <flag value="-Wl,-cache_path_lto,/tmp" if="HXCPP_OPTIMIZE_LINK_INCREMENTAL" unless="debug"/>
+  <flag value="-fprofile-generate=${HXCPP_PGO_DIR}" if="HXCPP_PGO_GENERATE"/>
+  <flag value="-fprofile-use=${HXCPP_PGO_DIR}" if="HXCPP_PGO_USE HXCPP_PGO_GCC"/>
+  <flag value="-fprofile-partial-training" if="HXCPP_PGO_USE HXCPP_PGO_GCC"/>
   <fromfile value="" if="GCC_OLD" />
   <cppflag value="-stdlib=libc++" unless="STDLIBCPP" />
   <cppflag value="-stdlib=libstdc++" if="STDLIBCPP" />
