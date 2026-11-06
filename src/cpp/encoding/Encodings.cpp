@@ -142,6 +142,17 @@ namespace
         return 0xFFFD;
     }
 #endif
+
+    // A code point that is not a Unicode scalar value, a surrogate or past
+    // U+10FFFF, has no UTF-8 or UTF-16 form. The UTF-16 encoder refused them
+    // and the UTF-8 one wrote invalid bytes
+    void checkScalar(char32_t codepoint)
+    {
+        if ((codepoint >= 0xD800 && codepoint < 0xE000) || codepoint > 0x10FFFF)
+        {
+            hx::Throw(HX_CSTRING("Invalid codepoint"));
+        }
+    }
 }
 
 int cpp::encoding::Utf8::getByteCount(const null&)
@@ -152,6 +163,8 @@ int cpp::encoding::Utf8::getByteCount(const null&)
 
 int cpp::encoding::Utf8::getByteCount(char32_t codepoint)
 {
+    checkScalar(codepoint);
+
     if (codepoint <= 0x7F)
     {
         return 1;
@@ -281,7 +294,8 @@ Array<uint8_t> cpp::encoding::Utf8::encode(const String& string)
 
     if (0 == string.length)
     {
-        return 0;
+        // An empty array: 0 would be a null one
+        return Array<uint8_t>(0, 0);
     }
 
     if (string.isAsciiEncoded())
@@ -297,8 +311,17 @@ Array<uint8_t> cpp::encoding::Utf8::encode(const String& string)
     }
 
 #if defined(HX_SMART_STRINGS)
-    // estimate the utf8 length with an upper bound
-    Array<uint8_t> out(string.length * 3, 0);
+    // Counted first: an array of three bytes a unit, which resize only made
+    //  shorter, kept that capacity as long as the bytes lived, three times
+    //  what a mostly ASCII string needs (libhxcpp #405)
+    auto bytes = getByteCount(string);
+
+    if (bytes > 0x7fffffff)
+    {
+        return hx::Throw(HX_CSTRING("String too long"));
+    }
+
+    Array<uint8_t> out(static_cast<int>(bytes), 0);
     View<uint8_t> buffer(out->Pointer(), out->length);
 
     auto units = string.raw_wptr();
@@ -310,8 +333,6 @@ Array<uint8_t> cpp::encoding::Utf8::encode(const String& string)
         k += encode(stringCodepoint(units, string.length, i), buffer.slice(k));
     }
 
-    out->resize(k);
-
     return out;
 #else
     return hx::Throw(HX_CSTRING("Unexpected encoding error"));
@@ -320,6 +341,9 @@ Array<uint8_t> cpp::encoding::Utf8::encode(const String& string)
 
 int cpp::encoding::Utf8::encode(char32_t codepoint, const cpp::marshal::View<uint8_t>& buffer)
 {
+    // Before anything is written
+    checkScalar(codepoint);
+
     if (codepoint <= 0x7F)
     {
         buffer[0] = static_cast<uint8_t>(codepoint);
@@ -557,6 +581,8 @@ int cpp::encoding::Utf16::getByteCount(const null&)
 
 int cpp::encoding::Utf16::getByteCount(char32_t codepoint)
 {
+    checkScalar(codepoint);
+
     return codepoint <= 0xFFFF ? 2 : 4;
 }
 

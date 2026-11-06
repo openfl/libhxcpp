@@ -1332,6 +1332,9 @@ Changelog starts.
 libhxcpp 6.0.0 (unreleased)
 ------------------------------------------------------------
 
+* Fixed cpp.encoding.Utf8.encode returning a null array for the empty string, at API level 500 (libhxcpp #406)
+* Fixed cpp.encoding.Utf8.encode writing bytes for a code point that is no Unicode scalar value, a surrogate or one past U+10FFFF, which UTF-8 cannot hold and the UTF-16 encoder refused. Both encoders, and both getByteCount, throw for one before writing anything, at API level 500 (libhxcpp #407)
+* Fixed Haxe 5's Bytes.ofString keeping an array of three bytes for each unit of a string that was not all ASCII: cpp.encoding.Utf8.encode allocated for the worst case and only shortened it, so a megabyte of ASCII with one other character held 3 MB. It counts the bytes and allocates them exactly (libhxcpp #405)
 * Sped up joining an Array<Int>, which made a String for each element and then joined those. The digits go straight into the result, so joining 8,192 integers 200 times takes 41 ms instead of 53 ms, what writing them with std::to_chars takes (libhxcpp #415)
 * Fixed Date.now() on Windows going back to 1902 after January 2038, x64 builds too: the seconds since 1970 passed through a long, which is 32 bits on Windows (libhxcpp #413)
 * Fixed Gc.memInfo64(Gc.MEM_INFO_CURRENT) leaving out most of what was allocated since the last collection: a block taken from the free list without the lock, which is the usual way, was not counted until the next collection. Retaining 2 MB of arrays showed 90 KB more (libhxcpp #414)
