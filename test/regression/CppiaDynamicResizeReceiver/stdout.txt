@@ -1,0 +1,6 @@
+interpreter:
+resize calls=1 first=[1] second=[4,five,6]
+setSize calls=1 first=[1] second=[4,five,6]
+jit:
+resize calls=1 first=[1] second=[4,five,6]
+setSize calls=1 first=[1] second=[4,five,6]

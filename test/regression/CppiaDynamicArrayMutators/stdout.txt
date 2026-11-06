@@ -1,0 +1,12 @@
+interpreter:
+typed=3
+reverse=3,two,1
+shrink=3 sizeCalls=1
+grow=3,null,null length=3
+empty=0
+jit:
+typed=3
+reverse=3,two,1
+shrink=3 sizeCalls=1
+grow=3,null,null length=3
+empty=0

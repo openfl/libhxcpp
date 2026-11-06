@@ -1,0 +1,10 @@
+interpreter:
+typed-blit: OK
+dynamic-blit: OK
+exact-size: OK
+resize-limit: OK
+jit:
+typed-blit: OK
+dynamic-blit: OK
+exact-size: OK
+resize-limit: OK

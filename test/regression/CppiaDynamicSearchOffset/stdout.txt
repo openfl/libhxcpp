@@ -1,0 +1,16 @@
+interpreter:
+typed=2,2
+default=0,4
+offset=2,2
+negative=4,2
+outside=-1,4
+effect=2 calls=1
+caught=offset failure
+jit:
+typed=2,2
+default=0,4
+offset=2,2
+negative=4,2
+outside=-1,4
+effect=2 calls=1
+caught=offset failure

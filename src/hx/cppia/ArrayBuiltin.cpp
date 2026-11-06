@@ -1245,14 +1245,20 @@ struct ArrayBuiltin : public ArrayBuiltinBase
       return inArray->keyValueIterator().mPtr;
    }
 
+   // These can throw, and an exception must not unwind through generated
+   //  code: the callers check for the one these leave pending
    static void SLJIT_CALL runSetSizeExact( Array_obj<ELEM> *inArray, int size )
    {
+      TRY_NATIVE
       inArray->__SetSizeExact(size);
+      CATCH_NATIVE
    }
 
    static void SLJIT_CALL runResize( Array_obj<ELEM> *inArray, int size )
    {
+      TRY_NATIVE
       inArray->resize(size);
+      CATCH_NATIVE
    }
 
 
@@ -1273,7 +1279,9 @@ struct ArrayBuiltin : public ArrayBuiltinBase
        // this, inDestElement, inSourceArray, inSourceElement, inElementCount
        Array_obj<ELEM> *dest = (Array_obj<ELEM> *)inArgs[0].obj;
        Array_obj<ELEM> *src = (Array_obj<ELEM> *)inArgs[2].obj;
+       TRY_NATIVE
        dest->blit( inArgs[1].ival, src, inArgs[3].ival, inArgs[4].ival );
+       CATCH_NATIVE
    }
 
 
@@ -1892,6 +1900,7 @@ struct ArrayBuiltin : public ArrayBuiltinBase
                genNullReferenceExceptionCheck(compiler, thisVal);
                args[0]->genCode(compiler, sJitArg1.as(jtInt), etInt);
                compiler->callNative( (void *)runSetSizeExact, thisVal, sJitArg1.as(jtInt));
+               compiler->checkException();
                break;
             }
 
@@ -1902,6 +1911,7 @@ struct ArrayBuiltin : public ArrayBuiltinBase
                genNullReferenceExceptionCheck(compiler, thisVal);
                args[0]->genCode(compiler, sJitArg1.as(jtInt), etInt);
                compiler->callNative( (void *)runResize, thisVal, sJitArg1.as(jtInt));
+               compiler->checkException();
                break;
             }
 
@@ -1917,6 +1927,7 @@ struct ArrayBuiltin : public ArrayBuiltinBase
                args[2]->genCode(compiler, fargs.arg(3,jtInt), etInt);
                args[3]->genCode(compiler, fargs.arg(4,jtInt), etInt);
                compiler->callNative( (void *)runBlit, fargs );
+               compiler->checkException();
                break;
             }
 
