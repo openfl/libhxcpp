@@ -2598,6 +2598,27 @@ String _hx_utf8_to_utf16(const unsigned char *ptr, int inUtf8Len, bool addHash)
 
    return String(str, char16Count);
 }
+#elif (HXCPP_API_LEVEL>=500)
+// For cpp.encoding.Utf8.decode without smart strings, where a String keeps
+//  UTF-8: the bytes, with each malformed sequence replaced by U+FFFD as
+//  _hx_utf8_to_utf16 replaces it, so both give the same text
+String _hx_utf8_replace_malformed(const unsigned char *ptr, int inUtf8Len)
+{
+   int bytes = 0;
+   const unsigned char *u = ptr;
+   const unsigned char *end = ptr + inUtf8Len;
+   while(u<end)
+      bytes += UTF8Bytes(DecodeAdvanceUTF8(u,end));
+
+   char *str = hx::NewString(bytes);
+   char *o = str;
+   u = ptr;
+   while(u<end)
+      UTF8EncodeAdvance(o,DecodeAdvanceUTF8(u,end));
+   str[bytes] = 0;
+
+   return String(str, bytes);
+}
 #endif
 
 

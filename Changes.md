@@ -1332,6 +1332,7 @@ Changelog starts.
 libhxcpp 6.0.0 (unreleased)
 ------------------------------------------------------------
 
+* cpp.encoding.Utf8.decode replaces each malformed UTF-8 sequence with U+FFFD instead of throwing, with smart strings or without. Haxe 5's Bytes.toString and getString decode with it, so they threw for bytes that Haxe 4's, which go through String::create, decode with U+FFFD in the same places. Valid input still takes the decoder that counts first; only malformed input takes the replacing one. Utf8.codepoint still throws
 * Fixed cpp.encoding.Utf8.encode returning a null array for the empty string, at API level 500 (libhxcpp #406)
 * Fixed cpp.encoding.Utf8.encode writing bytes for a code point that is no Unicode scalar value, a surrogate or one past U+10FFFF, which UTF-8 cannot hold and the UTF-16 encoder refused. Both encoders, and both getByteCount, throw for one before writing anything, at API level 500 (libhxcpp #407)
 * Fixed Haxe 5's Bytes.ofString keeping an array of three bytes for each unit of a string that was not all ASCII: cpp.encoding.Utf8.encode allocated for the worst case and only shortened it, so a megabyte of ASCII with one other character held 3 MB. It counts the bytes and allocates them exactly (libhxcpp #405)
