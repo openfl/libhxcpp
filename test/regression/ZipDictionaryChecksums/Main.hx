@@ -18,13 +18,19 @@ extern class NativeZip {
 final dictionaryStream = "78f91a0b045dcb40307514209c94cce492ccfcbcc4a24a00a2e60b13";
 final dictionaryId = 0x1a0b045d;
 
-// The native stream a Compress or Uncompress works on: Haxe 4's std keeps
-//  the handle in `s`, Haxe 5's keeps an hx::zip object in `impl`
+// The native stream a Compress or Uncompress works on: Haxe 4's std and Haxe
+//  5.0.0-preview.1's keep the handle in `s`, later Haxe 5 keeps an hx::zip
+//  object in `impl`. Both report haxe_ver 5, so the field is found at run time.
+function nativeStream(o:Dynamic):Dynamic {
+	var impl = Reflect.field(o, "impl");
+	return impl != null ? impl : Reflect.field(o, "s");
+}
+
 inline function deflater(c:Compress):Dynamic
-	return @:privateAccess #if (haxe_ver >= 5) c.impl #else c.s #end;
+	return nativeStream(c);
 
 inline function inflater(u:Uncompress):Dynamic
-	return @:privateAccess #if (haxe_ver >= 5) u.impl #else u.s #end;
+	return nativeStream(u);
 
 function claim(name:String, value:Bool)
 	Sys.println(name + ": " + value);
