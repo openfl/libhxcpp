@@ -2,6 +2,9 @@
 libhxcpp 6.0.0 (unreleased)
 ------------------------------------------------------------
 
+* Fixed cpp.encoding.Utf8.encode returning a null array for the empty string, at API level 500 (libhxcpp #406)
+* Fixed cpp.encoding.Utf8.encode writing bytes for a code point that is no Unicode scalar value, a surrogate or one past U+10FFFF, which UTF-8 cannot hold and the UTF-16 encoder refused. Both encoders, and both getByteCount, throw for one before writing anything, at API level 500 (libhxcpp #407)
+* Fixed Haxe 5's Bytes.ofString keeping an array of three bytes for each unit of a string that was not all ASCII: cpp.encoding.Utf8.encode allocated for the worst case and only shortened it, so a megabyte of ASCII with one other character held 3 MB. It counts the bytes and allocates them exactly (libhxcpp #405)
 * Fixed an exception from blit, setSize or resize under the cppia JIT ending the process instead of reaching the script's catch, on typed arrays and on Array<Dynamic>: their native calls had no exception bridge. The script catches it, as it does interpreted and in compiled code (libhxcpp #404)
 * Fixed resize() and cpp.NativeArray.setSize() on an Array<Dynamic> under the cppia JIT evaluating the array expression twice, so a call in it ran twice and the array it returned the second time was the one resized. The JIT evaluates it once (libhxcpp #411)
 * Fixed indexOf and lastIndexOf on an Array<Dynamic> under the cppia JIT ignoring fromIndex: the JIT never generated it, so a call or exception in it was lost too. The search starts from it, as it does interpreted and in compiled code (libhxcpp #410)
