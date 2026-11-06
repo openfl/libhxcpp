@@ -1333,6 +1333,7 @@ libhxcpp 6.0.0 (unreleased)
 ------------------------------------------------------------
 
 * Fixed Date.now() on Windows going back to 1902 after January 2038, x64 builds too: the seconds since 1970 passed through a long, which is 32 bits on Windows (libhxcpp #413)
+* Fixed Gc.memInfo64(Gc.MEM_INFO_CURRENT) leaving out most of what was allocated since the last collection: a block taken from the free list without the lock, which is the usual way, was not counted until the next collection. Retaining 2 MB of arrays showed 90 KB more (libhxcpp #414)
 * Fixed the cppia JIT ending the host when a typed array's blit, cpp.NativeArray.setSize or resize threw, as for a range out of bounds or a size too large, even inside a try/catch: the runtime's exception unwound through generated code. Those calls, and the same ones on an Array<Dynamic>, leave the exception for the script to catch, as the interpreter does (libhxcpp #404)
 * Fixed reverse() and resize() on an Array<Dynamic> doing nothing in the cppia interpreter, which did not evaluate resize's argument either (libhxcpp #409)
 * Fixed indexOf and lastIndexOf on an Array<Dynamic> ignoring their fromIndex under the cppia JIT, which did not evaluate it either, so its side effects and exceptions were lost (libhxcpp #410)
