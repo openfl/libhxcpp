@@ -67,7 +67,8 @@ jobs:
       arch: 32
       sep: /
       ext: .dso
-      os: ubuntu-latest
+      # testViewsSurviveCollection fails on ubuntu-26.04 (libhxcpp #430)
+      os: ubuntu-24.04
 
   Linux64:
     uses: ./.github/workflows/test.yml

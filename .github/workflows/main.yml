@@ -184,11 +184,16 @@ jobs:
         include:
         - name: UBSan
           sanitize: undefined
+          os: ubuntu-latest
         - name: ASan
           sanitize: address
+          os: ubuntu-latest
+        # ubuntu-26.04's TSan reports races in the allocator that 24.04's
+        #  does not (libhxcpp #430)
         - name: TSan
           sanitize: thread
-    runs-on: ubuntu-latest
+          os: ubuntu-24.04
+    runs-on: ${{ matrix.os }}
     env:
       # Each test would otherwise recompile the whole runtime
       HXCPP_COMPILE_CACHE: ${{ github.workspace }}/.hxcpp-cache
