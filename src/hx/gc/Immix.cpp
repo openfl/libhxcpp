@@ -4838,7 +4838,12 @@ public:
 
             // After zero/reclaim, it might be that the hole size is smaller than we thought.
             if (result->mMaxHoleSize>=inRequiredBytes)
+            {
+               // Assume all will be used, as below: a block taken here was
+               //  missing from the current memory until the next collection
+               mCurrentRowsInUse += result->GetFreeRows();
                return result;
+            }
 
             repoolReclaimedBlock(result);
             continue;
@@ -7627,7 +7632,8 @@ public:
 
 
    size_t mRowsInUse;
-   size_t mCurrentRowsInUse;
+   // Threads take free blocks without a lock, and count them here
+   std::atomic_size_t mCurrentRowsInUse;
    std::atomic_size_t mLargeAllocSpace;
    size_t mLargeAllocForceRefresh;
    // Read unlocked to decide on a collection, changed under mLargeListLock

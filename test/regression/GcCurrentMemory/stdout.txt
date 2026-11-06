@@ -1,0 +1,3 @@
+current heap estimate includes the newly allocated payload: true
+full collection accounts for the retained payload: true
+all retained arrays remain intact: true
