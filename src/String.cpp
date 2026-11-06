@@ -965,21 +965,27 @@ String String::create(const::cpp::marshal::View<char>& buffer)
 
 String String::create(const cpp::marshal::View<char16_t>& buffer)
 {
-    auto start = reinterpret_cast<const char16_t*>(buffer.ptr.ptr);
-    auto end   = start + buffer.length;
-    auto extra = 0;
+    auto units  = reinterpret_cast<const char16_t*>(buffer.ptr.ptr);
+    auto length = int64_t{ 0 };
 
-    while (start < end) {
-        if (Char16Advance(start) == false)
+    // Up to a terminator, inside the view: a high surrogate is completed only
+    //  by a low one the view holds, and Char16Advance would read past its end
+    while (length < buffer.length && units[length] != 0)
+    {
+        auto unit = units[length++];
+
+        if (IsUtf16Surrogate(unit))
         {
-            // set extra to 1 so we don't include the null terminating character in the calculated length.
-            extra = 1;
+            if (IsUtf16LowSurrogate(unit) || length >= buffer.length || !IsUtf16LowSurrogate(units[length]))
+            {
+                hx::Throw(HX_CSTRING("Invalid UTF16"));
+            }
 
-            break;
+            length++;
         }
     }
 
-    return String::create(buffer.ptr.ptr, buffer.length - (end - start) - extra);
+    return String::create(buffer.ptr.ptr, length);
 }
 
 #endif
@@ -2886,16 +2892,10 @@ bool String::utf8_str(::cpp::marshal::View<char> buffer, int* outByteLength) con
 #ifdef HX_SMART_STRINGS
     if (isUTF16Encoded())
     {
+        // All of it: a NUL in the string is a character, not its end
         auto cursor = __w;
-
-        while (Char16Advance(cursor,false)) {}
-
-        auto calculated = cursor - __w - 1;
-
-        cursor = __w;
-
-        auto end   = cursor + calculated;
-        auto chars = 0;
+        auto end    = __w + length;
+        auto chars  = 0;
 
         while (cursor < end)
         {
@@ -2926,7 +2926,8 @@ bool String::utf8_str(::cpp::marshal::View<char> buffer, int* outByteLength) con
     }
 #endif
 
-    if (buffer.length < length)
+    // The terminator too, before anything is written
+    if (buffer.length < length + 1)
     {
         return false;
     }
