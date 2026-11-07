@@ -83,6 +83,38 @@ jobs:
         working-directory: test/haxe
         run: bash ../../.github/workflows/traced.sh bin/TestMain
 
+      # Haxe 5 can take typed modules from a compilation server's cache or
+      # from an hxb archive instead of typing them again, and the generator
+      # must find the same metadata either way: @:cppFileCode, @:buildXml and
+      # the rest (libhxcpp #153). Once on Linux is enough
+      - name: runtime build (compilation server)
+        id: runtime_server
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' && !startsWith(inputs.haxe, '4.') && runner.os == 'Linux' }}
+        working-directory: test/haxe
+        run: |
+          haxe --wait 6153 &
+          server=$!
+          trap 'kill $server' EXIT
+          sleep 2
+          # The second build takes its modules from the server's cache
+          haxe --connect 6153 compile-default.hxml -D $HXCPP_ARCH_FLAG
+          haxe --connect 6153 compile-default.hxml -D $HXCPP_ARCH_FLAG
+      - name: runtime run (compilation server)
+        if: ${{ !cancelled() && steps.runtime_server.outcome == 'success' }}
+        working-directory: test/haxe
+        run: bin/TestMain
+      - name: runtime build (hxb)
+        id: runtime_hxb
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' && !startsWith(inputs.haxe, '4.') && runner.os == 'Linux' }}
+        working-directory: test/haxe
+        run: |
+          haxe compile-default.hxml -D $HXCPP_ARCH_FLAG --hxb ${{ runner.temp }}/runtime.hxb
+          haxe compile-default.hxml -D $HXCPP_ARCH_FLAG --hxb-lib ${{ runner.temp }}/runtime.hxb
+      - name: runtime run (hxb)
+        if: ${{ !cancelled() && steps.runtime_hxb.outcome == 'success' }}
+        working-directory: test/haxe
+        run: bin/TestMain
+
       - name: native build
         id: native
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
