@@ -7,6 +7,10 @@ using StringTools;
 //  counts what it runs, HXCPP_PGO=use builds it again from those counts.
 //
 // The counts go in HXCPP_PGO_DIR (default "pgo" in the build directory).
+//  HXCPP_PGO_RUN_DIR names the folder the program is run from when that is
+//  not where it is linked (a tool that copies it to an application folder):
+//  MSVC's profiling runtime is put there too, and the counts MSVC writes
+//  beside the program are gathered from there as well.
 //  MSVC applies them when it links, GCC and Clang when they compile, so a
 //  change of mode or of counts relinks an MSVC build and recompiles a GCC or
 //  Clang one. The objects have a folder of their own, so the plain optimised
@@ -19,6 +23,7 @@ class Pgo
    static var generate = false;
    static var family = "";
    static var dir = "";
+   static var runDir:String = null;
    static var defines:haxe.ds.StringMap<String>;
 
    // Before finish-setup.xml: sets the defines the toolchain files test
@@ -59,6 +64,13 @@ class Pgo
       PathManager.mkdir(dir);
 
       defines.set("HXCPP_PGO_DIR", dir);
+      if (defines.exists("HXCPP_PGO_RUN_DIR"))
+      {
+         runDir = defines.get("HXCPP_PGO_RUN_DIR");
+         if (!PathManager.isAbsolute(runDir))
+            runDir = PathManager.combine(Sys.getCwd(), runDir);
+         runDir = Path.normalize(runDir);
+      }
       defines.set("HXCPP_OPTIMIZE_LINK", "1");
       defines.set(generate ? "HXCPP_PGO_GENERATE" : "HXCPP_PGO_USE", "1");
       defines.set("HXCPP_PGO_" + family.toUpperCase(), "1");
@@ -126,32 +138,62 @@ class Pgo
    // After a program or library is linked
    public static function linked(output:String)
    {
-      if (!active || !generate)
+      if (!active)
          return;
+      if (!generate)
+      {
+         // The optimised program no longer needs MSVC's profiling runtime
+         //  where it runs (the copy beside the link is left with the build)
+         if (family=="msvc" && runDir!=null)
+         {
+            var runtime = Path.join([runDir, "pgort140.dll"]);
+            if (FileSystem.exists(runtime) && programFolders(Path.directory(output)).length>1)
+               FileSystem.deleteFile(runtime);
+         }
+         return;
+      }
 
       // Counts from an earlier build of the program no longer fit it
       for(file in countFiles())
          FileSystem.deleteFile(file);
       if (family=="msvc")
-         for(file in msvcCountsBeside(Path.directory(output)))
-            FileSystem.deleteFile(file);
+         for(folder in programFolders(Path.directory(output)))
+            for(file in msvcCountsBeside(folder))
+               FileSystem.deleteFile(file);
       var merged = dir + "/default.profdata";
       if (FileSystem.exists(merged))
          FileSystem.deleteFile(merged);
 
-      // The instrumented program needs MSVC's profiling runtime
+      // The instrumented program needs MSVC's profiling runtime beside it,
+      //  wherever it is run from
       if (family=="msvc")
       {
-         var dest = Path.join([Path.directory(output), "pgort140.dll"]);
-         if (!FileSystem.exists(dest))
+         var found:String = null;
+         for(folder in programFolders(Path.directory(output)))
          {
-            var found = findOnPath("pgort140.dll");
-            if (found!=null)
-               sys.io.File.copy(found, dest);
-            else
+            var dest = Path.join([folder, "pgort140.dll"]);
+            if (FileSystem.exists(dest))
+               continue;
+            if (found==null)
+               found = findOnPath("pgort140.dll");
+            if (found==null)
+            {
                Log.warn("pgort140.dll is not on the PATH: the instrumented program needs it beside it to run");
+               break;
+            }
+            PathManager.mkdir(folder);
+            sys.io.File.copy(found, dest);
          }
       }
+   }
+
+   // Where the program may run: where it is linked, and HXCPP_PGO_RUN_DIR
+   static function programFolders(linkedDir:String)
+   {
+      var folders = [linkedDir=="" ? "." : linkedDir];
+      if (runDir!=null && Path.normalize(PathManager.combine(Sys.getCwd(), folders[0]))!=runDir)
+         folders.push(runDir);
+      return folders;
    }
 
    // An instrumented MSVC program writes its counts beside itself, as
@@ -167,13 +209,14 @@ class Pgo
          if (number!=null && number>=next)
             next = number + 1;
       }
-      for(file in msvcCountsBeside(Sys.getCwd()))
-      {
-         var dest = '$dir/$name!$next.pgc';
-         next++;
-         sys.io.File.copy(file, dest);
-         FileSystem.deleteFile(file);
-      }
+      for(folder in programFolders(Sys.getCwd()))
+         for(file in msvcCountsBeside(folder))
+         {
+            var dest = '$dir/$name!$next.pgc';
+            next++;
+            sys.io.File.copy(file, dest);
+            FileSystem.deleteFile(file);
+         }
    }
 
    static function msvcCountsBeside(inDir:String)
