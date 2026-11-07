@@ -11,7 +11,9 @@ CffiNekoNullBoolWithoutInit: runs neko, which loads an ndll the test builds
 CffiNekoValueTags: runs neko, which loads an ndll the test builds
 CffiPrimeUnicodeFallback: loads an ndll it builds, and Emscripten links statically
 CffiQuietMissingPrimitive: loads an ndll it builds, and Emscripten links statically
+CppiaAdoptInstances: threads (std::thread, which needs a pthreads build)
 CppiaArrayAccess: its host is the first --next section, which -D emscripten does not reach
+CppiaBlitException: processes
 CppiaBreakpoints: threads
 CppiaHostArgs: processes
 CppiaHostFunctionOrder: its host is the first --next section, which -D emscripten does not reach
