@@ -8,8 +8,9 @@ import cpp.cppia.Module;
 // before stays on the old code and keeps the old module loaded until it is
 // dropped. openfl/libhxcpp#265
 //
-// The modules are loaded and the instances held on joined native workers, so
-// stale values on the main thread's stack do not decide what is live.
+// Every call into script code runs on a joined native worker, so stale values
+// it leaves on a stack do not decide what keeps a module loaded. The main
+// thread only collects and prints.
 @:cppFileCode('
 #include <thread>
 #include <hx/Native.h>
@@ -27,9 +28,7 @@ class Main {
 	static var doubler:Dynamic;
 	static var reshaped:Dynamic;
 	static var bound:Void->Int;
-	static var report:Array<Dynamic>;
-	static var keepsOld:Bool;
-	static var staysOld:Bool;
+	static var lines:Array<String>;
 
 	static function load(name:String):Module {
 		var module = Module.fromData(sys.io.File.getBytes(haxe.io.Path.join([dir, name])).getData());
@@ -49,16 +48,39 @@ class Main {
 
 	static function adopt() {
 		next = load("v2.cppia");
-		report = untyped next.adoptInstances(previous);
+		var report:Array<Dynamic> = untyped next.adoptInstances(previous);
 		untyped previous.release();
 		previous = null;
+		var rows = [for (r in report) '${r.name} moved ${r.moved}' + (r.reason == null ? "" : ': ${r.reason}')];
+		rows.sort(Reflect.compare);
+		lines.push('report: ${rows.join(", ")}');
 	}
 
-	// The old code runs on a worker too, so nothing it leaves on the stack
-	// keeps the old module
+	static function useMoved() {
+		// Moved, with their fields as they were
+		lines.push('counter runs the new code: ${counter.step() == 16 && counter.version() == "v2 counter"}');
+		lines.push('the subclass runs its new override: ${doubler.step() == 20 && doubler.version() == "v2 counter"}');
+		var stepper:Stepper = counter;
+		lines.push('the host interface reaches the new code: ${stepper.step() == 26}');
+		var counterClass = next.resolveClass("Counter");
+		lines.push('they are of the new classes: ${Type.getClass(counter) == counterClass && Std.isOfType(counter, counterClass) && Std.isOfType(doubler, counterClass) && Type.getClass(doubler) == next.resolveClass("Doubler")}');
+	}
+
 	static function useOld() {
-		staysOld = reshaped.version() == "v1";
-		keepsOld = bound() == 27 && counter.step() == 37;
+		// Stayed
+		lines.push('the reshaped instance keeps its class: ${reshaped.version() == "v1"}');
+		lines.push('the bound method keeps the old code: ${bound() == 27 && counter.step() == 37}');
+	}
+
+	static function dropOld() {
+		bound = null;
+		reshaped = null;
+	}
+
+	static function dropAll() {
+		counter = doubler = null;
+		untyped next.release();
+		next = null;
 	}
 
 	static function retained():String {
@@ -71,38 +93,19 @@ class Main {
 
 	static function main() {
 		dir = haxe.io.Path.directory(Sys.programPath());
-		var stepper:Stepper = null;
 		for (jit in [false, true]) {
 			Host.enableJit(jit);
+			lines = [];
 			untyped __cpp__("runJoined({0})", loadOld);
 			untyped __cpp__("runJoined({0})", adopt);
-
-			var rows = [for (r in report) '${r.name} moved ${r.moved}' + (r.reason == null ? "" : ': ${r.reason}')];
-			rows.sort(Reflect.compare);
-			Sys.println('jit $jit: report: ${rows.join(", ")}');
-
-			// Moved, with their fields as they were
-			Sys.println('jit $jit: counter runs the new code: ${counter.step() == 16 && counter.version() == "v2 counter"}');
-			Sys.println('jit $jit: the subclass runs its new override: ${doubler.step() == 20 && doubler.version() == "v2 counter"}');
-			stepper = counter;
-			Sys.println('jit $jit: the host interface reaches the new code: ${stepper.step() == 26}');
-			var counterClass = next.resolveClass("Counter");
-			Sys.println('jit $jit: they are of the new classes: ${Type.getClass(counter) == counterClass && Std.isOfType(counter, counterClass) && Std.isOfType(doubler, counterClass) && Type.getClass(doubler) == next.resolveClass("Doubler")}');
-
-			// Stayed
+			untyped __cpp__("runJoined({0})", useMoved);
 			untyped __cpp__("runJoined({0})", useOld);
-			Sys.println('jit $jit: the reshaped instance keeps its class: $staysOld');
-			Sys.println('jit $jit: the bound method keeps the old code: $keepsOld');
-			Sys.println('jit $jit: the old module keeps only what stayed: ${retained()}');
-
-			bound = null;
-			reshaped = null;
-			untyped __cpp__("runJoined({0})", () -> {});
-			Sys.println('jit $jit: and is freed once they go: "${retained()}"');
-
-			counter = doubler = null;
-			untyped next.release();
-			next = null;
+			lines.push('the old module keeps only what stayed: ${retained()}');
+			untyped __cpp__("runJoined({0})", dropOld);
+			lines.push('and is freed once they go: "${retained()}"');
+			untyped __cpp__("runJoined({0})", dropAll);
+			for (line in lines)
+				Sys.println('jit $jit: $line');
 		}
 	}
 }
