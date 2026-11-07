@@ -2,6 +2,7 @@
 libhxcpp 6.0.0 (unreleased)
 ------------------------------------------------------------
 
+* Fixed the incremental collector (HXCPP_GC_INCREMENTAL) freeing a thread object's arrays while the thread was being created, as the gc stress test's verifier caught on Windows. A slice could find the new object on the stack while its first array was being allocated, and the cycle could end before the constructor's barrier, with the arrays stored after that unscanned. The arrays are now made in a mutation scope, which the stop that finishes a cycle scans again
 * Fixed an exception from blit, setSize or resize under the cppia JIT ending the process instead of reaching the script's catch, on typed arrays and on Array<Dynamic>: their native calls had no exception bridge. The script catches it, as it does interpreted and in compiled code (libhxcpp #404)
 * Fixed resize() and cpp.NativeArray.setSize() on an Array<Dynamic> under the cppia JIT evaluating the array expression twice, so a call in it ran twice and the array it returned the second time was the one resized. The JIT evaluates it once (libhxcpp #411)
 * Fixed indexOf and lastIndexOf on an Array<Dynamic> under the cppia JIT ignoring fromIndex: the JIT never generated it, so a call or exception in it was lost too. The search starts from it, as it does interpreted and in compiled code (libhxcpp #410)
