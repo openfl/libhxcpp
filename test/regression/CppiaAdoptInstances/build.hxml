@@ -1,0 +1,12 @@
+-cp v1
+--main Script
+-cppia bin/v1.cppia
+--next
+-cp v2
+--main Script
+-cppia bin/v2.cppia
+--next
+--main Main
+-cpp bin
+-D scriptable
+--dce no

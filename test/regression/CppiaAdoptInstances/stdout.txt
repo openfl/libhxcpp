@@ -1,0 +1,18 @@
+jit false: report: Counter moved 1, Doubler moved 1, Reshaped moved 0: field b is not in the old class
+jit false: counter runs the new code: true
+jit false: the subclass runs its new override: true
+jit false: the host interface reaches the new code: true
+jit false: they are of the new classes: true
+jit false: the reshaped instance keeps its class: true
+jit false: the bound method keeps the old code: true
+jit false: the old module keeps only what stayed: Reshaped x1, closures x1
+jit false: and is freed once they go: ""
+jit true: report: Counter moved 1, Doubler moved 1, Reshaped moved 0: field b is not in the old class
+jit true: counter runs the new code: true
+jit true: the subclass runs its new override: true
+jit true: the host interface reaches the new code: true
+jit true: they are of the new classes: true
+jit true: the reshaped instance keeps its class: true
+jit true: the bound method keeps the old code: true
+jit true: the old module keeps only what stayed: Reshaped x1, closures x1
+jit true: and is freed once they go: ""

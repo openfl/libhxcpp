@@ -441,6 +441,8 @@ void CppiaConst::fromStream(CppiaStream &stream)
 
 
 
+static Array<Dynamic> adoptInstances(CppiaModule *inNext, CppiaModule *inPrevious);
+
 // Cppia Object - manage
 class CppiaObject : public hx::CppiaLoadedModule_obj
 {
@@ -570,10 +572,47 @@ public:
       #endif
    };
 
+   // Moves the live instances of the previous module's classes onto this
+   //  module's classes of the same name, where their fields are laid out the
+   //  same, and reports each class that had any (libhxcpp #265)
+   Array<Dynamic> adopt(Dynamic inPrevious)
+   {
+      CppiaObject *previous = dynamic_cast<CppiaObject *>(inPrevious.mPtr);
+      if (!previous)
+         hx::Throw(HX_CSTRING("adoptInstances takes a cppia module"));
+      if (previous==this)
+         hx::Throw(HX_CSTRING("adoptInstances takes another module"));
+      if (previous->cppia->released)
+         hx::Throw(HX_CSTRING("adoptInstances takes a module before its release"));
+      // Moved instances run this module's code, which needs its statics
+      boot();
+      return adoptInstances(cppia, previous->cppia);
+   }
+
+   struct AdoptFunc : public hx::LocalFunc
+   {
+      hx::Object *module;
+      AdoptFunc(hx::Object *inModule) : module(inModule) { }
+      Dynamic __Run(const Array<Dynamic> &inArgs) HXCPP_OVERRIDE
+      {
+         return static_cast<CppiaObject *>(module)->adopt(inArgs->length ? inArgs[0] : Dynamic());
+      }
+      #if (HXCPP_API_LEVEL<500)
+      Dynamic __run(const Dynamic &inPrevious) HXCPP_OVERRIDE { return static_cast<CppiaObject *>(module)->adopt(inPrevious); }
+      #endif
+      int __ArgCount() const HXCPP_OVERRIDE { return 1; }
+      void __Mark(hx::MarkContext *__inCtx) HXCPP_OVERRIDE { HX_MARK_MEMBER(module); }
+      #ifdef HXCPP_VISIT_ALLOCS
+      void __Visit(hx::VisitContext *__inCtx) HXCPP_OVERRIDE { HX_VISIT_OBJECT(module); }
+      #endif
+   };
+
    hx::Val __Field(const String &inName, hx::PropertyAccess inCallProp) HXCPP_OVERRIDE
    {
       if (inName==HX_CSTRING("release"))
          return Dynamic(new ReleaseFunc(this));
+      if (inName==HX_CSTRING("adoptInstances"))
+         return Dynamic(new AdoptFunc(this));
       return hx::CppiaLoadedModule_obj::__Field(inName, inCallProp);
    }
 
@@ -1202,6 +1241,171 @@ static hx::Anon retainedRow(const char *inName, const RetainedTally &inTally)
    return row;
 }
 
+// The census visitor is one global, so its users take turns
+static std::mutex *sCensusVisitorLock = new std::mutex();
+
+static void censusWithVisitor(void (*inVisitor)(hx::Object *, size_t))
+{
+   {
+      hx::AutoGCFreeZone wait;
+      sCensusVisitorLock->lock();
+   }
+   gCensusVisitor = inVisitor;
+   __hxcpp_gc_census();
+   gCensusVisitor = 0;
+   sCensusVisitorLock->unlock();
+}
+
+
+// --- Moving live instances onto a replaced class (libhxcpp #265) ---
+//
+// An instance of a script class finds everything about its class through its
+// script vtable, whose slot -1 is the class: its methods, its interfaces, how
+// the collector marks it, Type.getClass. So an instance moves to another class
+// by having that one pointer replaced. It stays where it is, at its size, so
+// the new class must lay out every field as the old one did.
+
+// A previous module's class with live instances, and the class they move to,
+// or why they cannot
+struct Adoption
+{
+   CppiaClassInfo *to;
+   std::string reason;
+   size_t moved;
+   size_t live;
+   Adoption() : to(0), moved(0), live(0) { }
+};
+static std::map<CppiaClassInfo *, Adoption> *sAdoptions = 0;
+
+static std::string typeName(TypeData *inType)
+{
+   return std::string(inType->name.utf8_str());
+}
+
+// The interfaces a class and its script super classes implement, by name
+static std::vector<std::string> interfaceNames(CppiaClassInfo *inInfo)
+{
+   std::vector<std::string> names;
+   for(CppiaClassInfo *info=inInfo; info; info=info->superType ? info->superType->cppiaClass : 0)
+      for(size_t i=0;i<info->implements.size();i++)
+         names.push_back(typeName(info->cppia.types[info->implements[i]]));
+   std::sort(names.begin(), names.end());
+   return names;
+}
+
+// The first difference between two lists of a class's storage, its fields or
+//  its dynamic functions, which are linked with their super classes' first
+static std::string slotDifference(const char *inWhat, CppiaClassInfo *inFrom, std::vector<CppiaVar *> &inOld,
+                                  CppiaClassInfo *inTo, std::vector<CppiaVar *> &inNew)
+{
+   for(size_t i=0;i<inOld.size() || i<inNew.size();i++)
+   {
+      if (i>=inOld.size())
+         return std::string(inWhat) + " " + inTo->cppia.identStr(inNew[i]->nameId) + " is not in the old class";
+      std::string name = inFrom->cppia.identStr(inOld[i]->nameId);
+      if (i>=inNew.size())
+         return std::string(inWhat) + " " + name + " is not in the new class";
+      if (name!=inTo->cppia.identStr(inNew[i]->nameId))
+         return std::string(inWhat) + " " + name + " is not where it was";
+      if (inOld[i]->storeType!=inNew[i]->storeType || inOld[i]->offset!=inNew[i]->offset)
+         return std::string(inWhat) + " " + name + " changed its type";
+   }
+   return std::string();
+}
+
+// Why instances of inFrom cannot become instances of inTo, or empty when they can
+static std::string incompatibility(CppiaClassInfo *inFrom, CppiaClassInfo *inTo)
+{
+   if (inFrom->haxeBase!=inTo->haxeBase)
+      return "it extends another host class";
+   TypeData *from = inFrom->superType;
+   TypeData *to = inTo->superType;
+   while(from || to)
+   {
+      if (!from || !to || typeName(from)!=typeName(to))
+         return "its super classes are not the same";
+      from = from->cppiaClass ? from->cppiaClass->superType : 0;
+      to = to->cppiaClass ? to->cppiaClass->superType : 0;
+   }
+   if (interfaceNames(inFrom)!=interfaceNames(inTo))
+      return "it implements other interfaces";
+   std::string field = slotDifference("field", inFrom, inFrom->memberVars, inTo, inTo->memberVars);
+   if (field.empty())
+      field = slotDifference("dynamic function", inFrom, inFrom->dynamicFunctions, inTo, inTo->dynamicFunctions);
+   if (!field.empty())
+      return field;
+   if (inFrom->classSize!=inTo->classSize || inFrom->extraData!=inTo->extraData ||
+       inFrom->dynamicMapOffset!=inTo->dynamicMapOffset || inFrom->containsPointers!=inTo->containsPointers)
+      return "its instances are laid out otherwise";
+   return std::string();
+}
+
+// Called with each object the census marks, on one thread with every other stopped
+static void adoptVisit(hx::Object *inObj, size_t)
+{
+   // A module marks its own Class objects
+   if (getScriptClassInfo(inObj))
+      return;
+   void **vtable = inObj->__GetScriptVTable();
+   if (!vtable)
+      return;
+   std::map<CppiaClassInfo *, Adoption>::iterator found = sAdoptions->find((CppiaClassInfo *)vtable[-1]);
+   if (found==sAdoptions->end())
+      return;
+   Adoption &adoption = found->second;
+   adoption.live++;
+   if (!adoption.to)
+      return;
+   void ***slot = (void ***)((char *)inObj + found->first->getScriptVTableOffset());
+   if (*slot!=vtable)
+      return;
+   *slot = adoption.to->vtable;
+   adoption.moved++;
+}
+
+static Array<Dynamic> adoptInstances(CppiaModule *inNext, CppiaModule *inPrevious)
+{
+   std::map<CppiaClassInfo *, Adoption> adoptions;
+   for(size_t i=0;i<inPrevious->classes.size();i++)
+   {
+      CppiaClassInfo *info = inPrevious->classes[i];
+      if (info->isInterface || info->isEnum || !info->vtable)
+         continue;
+      Adoption &adoption = adoptions[info];
+      CppiaClassInfo *to = inNext->findClass(String::create(info->name.c_str()));
+      if (!to || to->isInterface || to->isEnum || !to->vtable)
+         adoption.reason = "the new module has no class of that name";
+      else
+      {
+         adoption.reason = incompatibility(info, to);
+         if (adoption.reason.empty())
+            adoption.to = to;
+      }
+   }
+
+   sAdoptions = &adoptions;
+   censusWithVisitor(adoptVisit);
+   sAdoptions = 0;
+
+   std::vector< std::pair<std::string, Adoption> > rows;
+   for(std::map<CppiaClassInfo *, Adoption>::iterator i=adoptions.begin(); i!=adoptions.end(); ++i)
+      if (i->second.live)
+         rows.push_back(std::make_pair(i->first->name, i->second));
+   std::sort(rows.begin(), rows.end(), [](const std::pair<std::string, Adoption> &a, const std::pair<std::string, Adoption> &b)
+      { return a.first < b.first; });
+
+   Array<Dynamic> result = Array_obj<Dynamic>::__new(0,(int)rows.size());
+   for(size_t r=0;r<rows.size();r++)
+   {
+      hx::Anon row = hx::Anon_obj::Create();
+      row->__SetField(HX_CSTRING("name"), String::create(rows[r].first.c_str()), hx::paccDynamic);
+      row->__SetField(HX_CSTRING("moved"), (int)std::min(rows[r].second.moved, (size_t)0x7fffffff), hx::paccDynamic);
+      row->__SetField(HX_CSTRING("reason"), rows[r].second.reason.empty() ? String() : String::create(rows[r].second.reason.c_str()), hx::paccDynamic);
+      result->push(row);
+   }
+   return result;
+}
+
 } // end namespace hx
 
 // Collects, then reports each released module that is still loaded: its
@@ -1223,9 +1427,7 @@ Array<Dynamic> __scriptable_cppia_retained()
    }
 
    hx::sRetained = &retained;
-   hx::gCensusVisitor = hx::retainedVisit;
-   __hxcpp_gc_census();
-   hx::gCensusVisitor = 0;
+   hx::censusWithVisitor(hx::retainedVisit);
    hx::sRetained = 0;
 
    // Copied out under the lock, and turned into Haxe values after it: a
