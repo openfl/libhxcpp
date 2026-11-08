@@ -2,6 +2,10 @@
 libhxcpp 6.0.0 (unreleased)
 ------------------------------------------------------------
 
+* Fixed the 32-bit x86 collector missing live objects held only in EBP when frame pointers are omitted. It now captures EBP with the other callee-saved registers; the lost strings in the Linux 32 CFFI tests were one consequence (libhxcpp #430)
+* Fixed GCC TSan builds reporting allocator races because a Clang sanitizer annotation also disabled instrumentation of the block-claim atomics on newer GCC. GCC keeps those atomics instrumented, without adding suppressions, and the Linux 32 and TSan jobs run on ubuntu-latest again (libhxcpp #430)
+* Fixed the fuzz job failing to find libFuzzer on Ubuntu 26.04 with Clang 21, whose reported runtime directory differs from the compiler-rt package's lib/linux directory. Setup and the fuzz build now check both locations for the native archive
+* Haxe 5 preview tests run in their own workflow, so their failures remain visible separately from the stable Haxe 4 runtime checks
 * Added HXCPP_PGO, profile-guided optimisation with MSVC, GCC and Clang: -D HXCPP_PGO=generate builds a program that counts what it runs, and -D HXCPP_PGO=use builds it again from what a run counted, with link-time optimisation. On a replication benchmark it took a further 4 to 29% off with MSVC, 19 to 43% with GCC and 12 to 46% with Clang. See docs/ProfileGuidedOptimisation.md
 * Fixed HXCPP_OPTIMIZE_LINK builds with Clang on Linux failing to link ("file format not recognized"): objects were compiled with -flto and linked without it, which GCC's linker plugin covered for, on one thread, and Clang's bitcode objects did not. Programs and shared libraries now link with -flto
 * Fixed an MSVC build with HXCPP_OPTIMIZE_LINK failing after any change (C1382, then LNK1257) until its objects were deleted: a group's PCH is rebuilt whenever one of its files compiles, and the link checks each object against the PCH it was compiled with. When the PCH is rebuilt under link-time code generation, the rest of the group is compiled against it too

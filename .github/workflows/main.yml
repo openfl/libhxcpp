@@ -131,48 +131,6 @@ jobs:
     - name: Build and run the regression tests on Alpine
       run: docker run --rm -v "$PWD:/w" -w /w alpine:edge sh -c "apk add --no-cache neko g++ linux-headers && sh test/regression/run-generated.sh"
 
-  # Haxe 5.0.0-preview.1 passes API level 500 but generates code for the level
-  # 430 runtime, and the build tool builds it against that runtime
-  # (BuildTool.haxeRuntimeLevels). Every suite runs with it on Linux, and the
-  # core suites on Windows and macOS arm64.
-  haxe5-preview-linux:
-    name: Haxe 5.0.0-preview.1 / Linux 64
-    needs: [check-headers, check-gc-defines]
-    uses: ./.github/workflows/test.yml
-    with:
-      haxe: 5.0.0-preview.1
-      arch: 64
-      sep: /
-      ext: .dso
-      os: ubuntu-latest
-      stress: '["default generational-verify"]'
-      bindir: Linux64
-
-  haxe5-preview-windows:
-    name: Haxe 5.0.0-preview.1 / Windows 64
-    needs: [check-headers, check-gc-defines]
-    uses: ./.github/workflows/test.yml
-    with:
-      haxe: 5.0.0-preview.1
-      arch: 64
-      sep: \
-      ext: .dll
-      os: windows-latest
-      scope: smoke
-
-  haxe5-preview-macos:
-    name: Haxe 5.0.0-preview.1 / macOS arm64
-    needs: [check-headers, check-gc-defines]
-    uses: ./.github/workflows/test.yml
-    with:
-      haxe: 5.0.0-preview.1
-      arch: Arm64
-      sep: /
-      ext: .dylib
-      os: macos-latest
-      scope: smoke
-      bindir: MacArm64
-
   # The regression, std and GC stress suites under UBSan, ASan and TSan. A
   # sanitizer report fails its suite; the reports go to files because the
   # runner only shows stdout. Each suite runs even when one before it failed.

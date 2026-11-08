@@ -1,0 +1,65 @@
+name: haxe 5 preview
+on:
+  push:
+    branches: [main, 'release/**']
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE.txt'
+      - '.github/ISSUE_TEMPLATE/**'
+  pull_request:
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE.txt'
+      - '.github/ISSUE_TEMPLATE/**'
+  workflow_dispatch:
+
+# A newer push to the same branch or pull request supersedes the run in progress,
+# except on main and release branches
+concurrency:
+  # Each push to main or a release branch is its own group, so every commit
+  # there gets a complete result; elsewhere the newest push wins
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || ((github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release/')) && github.sha) || github.ref }}
+  cancel-in-progress: true
+
+# Haxe 5 preview failures are reported separately from the stable runtime gate.
+jobs:
+  # Haxe 5.0.0-preview.1 passes API level 500 but generates code for the level
+  # 430 runtime, and the build tool builds it against that runtime
+  # (BuildTool.haxeRuntimeLevels). Every suite runs with it on Linux, and the
+  # core suites on Windows and macOS arm64.
+  haxe5-preview-linux:
+    name: Haxe 5.0.0-preview.1 / Linux 64
+    uses: ./.github/workflows/test.yml
+    with:
+      haxe: 5.0.0-preview.1
+      arch: 64
+      sep: /
+      ext: .dso
+      os: ubuntu-latest
+      stress: '["default generational-verify"]'
+      bindir: Linux64
+
+  haxe5-preview-windows:
+    name: Haxe 5.0.0-preview.1 / Windows 64
+    uses: ./.github/workflows/test.yml
+    with:
+      haxe: 5.0.0-preview.1
+      arch: 64
+      sep: \
+      ext: .dll
+      os: windows-latest
+      scope: smoke
+
+  haxe5-preview-macos:
+    name: Haxe 5.0.0-preview.1 / macOS arm64
+    uses: ./.github/workflows/test.yml
+    with:
+      haxe: 5.0.0-preview.1
+      arch: Arm64
+      sep: /
+      ext: .dylib
+      os: macos-latest
+      scope: smoke
+      bindir: MacArm64

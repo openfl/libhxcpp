@@ -127,6 +127,7 @@ struct RegisterCaptureBuffer
    void *ebx;
    void *edi;
    void *esi;
+   void *ebp;
 
    void   *frame[CAPTURE_FRAME_WORDS];
    size_t frameWords = 0;
