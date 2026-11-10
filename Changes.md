@@ -2,6 +2,7 @@
 libhxcpp 6.0.0 (unreleased)
 ------------------------------------------------------------
 
+* Fixed a program on Linux with glibc staying as large as its largest burst of large allocations, such as the files a game reads while it loads: glibc keeps a freed buffer's memory in its heap unless it had mapped the buffer on its own, and once a buffer mapped on its own has been freed it stops mapping those of that size or less, up to 32 MB. The memory of the large buffers a collection freed then stayed the process's. The collector now trims the C heap once 16 MB has been freed to it, on the thread that frees the buffers. A program that dropped 384 MB of 4 MB buffers stayed at 396 MB resident and now returns to 12 MB
 * Fixed the 32-bit x86 collector missing live objects held only in EBP when frame pointers are omitted. It now captures EBP with the other callee-saved registers; the lost strings in the Linux 32 CFFI tests were one consequence (libhxcpp #430)
 * Fixed GCC TSan builds reporting allocator races because a Clang sanitizer annotation also disabled instrumentation of the block-claim atomics on newer GCC. GCC keeps those atomics instrumented, without adding suppressions, and the Linux 32 and TSan jobs run on ubuntu-latest again (libhxcpp #430)
 * Fixed the fuzz job failing to find libFuzzer on Ubuntu 26.04 with Clang 21, whose reported runtime directory differs from the compiler-rt package's lib/linux directory. Setup and the fuzz build now check both locations for the native archive
