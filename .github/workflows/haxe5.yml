@@ -23,7 +23,10 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || ((github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release/')) && github.sha) || github.ref }}
   cancel-in-progress: true
 
-# Haxe 5 preview failures are reported separately from the stable runtime gate.
+# Haxe 5 is not released, so its failures are warnings: with warn_only, a
+# failing step leaves its job green, and the warnings job below lists every
+# step that failed. Each failure still gets an issue, but it holds back
+# neither a merge nor a release (CONTRIBUTING.md).
 jobs:
   # Haxe 5.0.0-preview.1 passes API level 500 but generates code for the level
   # 430 runtime, and the build tool builds it against that runtime
@@ -34,6 +37,7 @@ jobs:
     uses: ./.github/workflows/test.yml
     with:
       haxe: 5.0.0-preview.1
+      warn_only: true
       arch: 64
       sep: /
       ext: .dso
@@ -46,6 +50,7 @@ jobs:
     uses: ./.github/workflows/test.yml
     with:
       haxe: 5.0.0-preview.1
+      warn_only: true
       arch: 64
       sep: \
       ext: .dll
@@ -57,9 +62,31 @@ jobs:
     uses: ./.github/workflows/test.yml
     with:
       haxe: 5.0.0-preview.1
+      warn_only: true
       arch: Arm64
       sep: /
       ext: .dylib
       os: macos-latest
       scope: smoke
       bindir: MacArm64
+
+  warnings:
+    name: Haxe 5.0.0-preview.1 / warnings
+    needs: [haxe5-preview-linux, haxe5-preview-windows, haxe5-preview-macos]
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+    steps:
+      - name: list the steps that failed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          jobs="repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/attempts/${{ github.run_attempt }}/jobs"
+          gh api --paginate "$jobs" --jq '.jobs[] | .name as $job | .steps[]? | select(.conclusion == "failure") | "\($job): \(.name)"' > failed.txt
+          if [ -s failed.txt ]; then
+            { echo "### Haxe 5.0.0-preview.1 failures (warnings)"; sed 's/^/- /' failed.txt; } >> "$GITHUB_STEP_SUMMARY"
+            while read -r line; do echo "::warning title=Haxe 5.0.0-preview.1::$line failed"; done < failed.txt
+          else
+            echo "No Haxe 5.0.0-preview.1 step failed." >> "$GITHUB_STEP_SUMMARY"
+          fi
