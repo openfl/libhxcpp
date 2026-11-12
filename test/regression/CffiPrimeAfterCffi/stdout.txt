@@ -1,0 +1,7 @@
+direct Prime preserves the string: true
+CFFI fallback preserves the same string: true
+direct Prime preserves the string: true
+CFFI fallback preserves the same string: true
+direct Prime preserves the string: true
+CFFI fallback preserves the same string: true
+CFFI fallback preserves a native Unicode result: true

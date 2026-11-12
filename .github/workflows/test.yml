@@ -37,6 +37,12 @@ on:
         required: false
         type: string
         default: ''
+      # A preview Haxe: each step after checkout continues on error, so a failure
+      # leaves its job green, and the calling workflow reports it as a warning
+      warn_only:
+        required: false
+        type: boolean
+        default: false
 
 env:
   HXCPP_ARCH_FLAG: ${{ inputs.arch == 'Arm64' && 'HXCPP_ARM64' || format('HXCPP_M{0}', inputs.arch) }}
@@ -55,12 +61,14 @@ jobs:
       - name: checkout
         uses: actions/checkout@v7
       - name: setup
+        continue-on-error: ${{ inputs.warn_only }}
         id: setup
         uses: ./.github/workflows/setup
         with:
           haxe: ${{ inputs.haxe }}
 
       - name: runtime build
+        continue-on-error: ${{ inputs.warn_only }}
         id: runtime
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         working-directory: test/haxe
@@ -68,41 +76,49 @@ jobs:
       # Under lldb on macOS, so an intermittent crash there leaves every
       # thread's stack (libhxcpp #254)
       - name: runtime run
+        continue-on-error: ${{ inputs.warn_only }}
         if: ${{ !cancelled() && steps.runtime.outcome == 'success' }}
         working-directory: test/haxe
         run: bash ../../.github/workflows/traced.sh bin/TestMain
       # compile.hxml builds with the generational collector, so the default
       # one needs its own build
       - name: runtime build (default gc)
+        continue-on-error: ${{ inputs.warn_only }}
         id: runtime_default
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         working-directory: test/haxe
         run: haxe compile-default.hxml -D $HXCPP_ARCH_FLAG
       - name: runtime run (default gc)
+        continue-on-error: ${{ inputs.warn_only }}
         if: ${{ !cancelled() && steps.runtime_default.outcome == 'success' }}
         working-directory: test/haxe
         run: bash ../../.github/workflows/traced.sh bin/TestMain
 
       - name: native build
+        continue-on-error: ${{ inputs.warn_only }}
         id: native
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         working-directory: test/native
         run: haxe compile.hxml -D $HXCPP_ARCH_FLAG ${{ inputs.haxe == '5.0.0-preview.1' && '-D haxe_5_preview_1' || '' }}
       - name: native run
+        continue-on-error: ${{ inputs.warn_only }}
         if: ${{ !cancelled() && steps.native.outcome == 'success' }}
         working-directory: test/native
         run: bin/Native
       - name: native build (no smart strings)
+        continue-on-error: ${{ inputs.warn_only }}
         id: native_narrow
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         working-directory: test/native
         run: haxe compile.hxml -D disable_unicode_strings -D $HXCPP_ARCH_FLAG ${{ inputs.haxe == '5.0.0-preview.1' && '-D haxe_5_preview_1' || '' }}
       - name: native run (no smart strings)
+        continue-on-error: ${{ inputs.warn_only }}
         if: ${{ !cancelled() && steps.native_narrow.outcome == 'success' }}
         working-directory: test/native
         run: bin/Native
 
       - name: cffi build
+        continue-on-error: ${{ inputs.warn_only }}
         id: cffi
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         working-directory: test/cffi
@@ -117,27 +133,32 @@ jobs:
             cp project/ndll/*/prime${{ inputs.ext }} bin/neko/prime.ndll
           fi
       - name: cffi run
+        continue-on-error: ${{ inputs.warn_only }}
         if: ${{ !cancelled() && steps.cffi.outcome == 'success' }}
         working-directory: test/cffi
         run: |
           bin/cpp/TestMain-debug
           bin/cpp-utf8/TestMain-debug
       - name: cffi run (neko)
+        continue-on-error: ${{ inputs.warn_only }}
         if: ${{ !cancelled() && steps.cffi.outcome == 'success' && inputs.arch == '64' && inputs.haxe != '5.0.0-preview.1' }}
         working-directory: test/cffi/bin/neko
         run: neko TestMain.n
 
       - name: debugger build
+        continue-on-error: ${{ inputs.warn_only }}
         id: debugger
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         working-directory: test/debugger
         run: haxe compile.hxml -D $HXCPP_ARCH_FLAG
       - name: debugger run
+        continue-on-error: ${{ inputs.warn_only }}
         if: ${{ !cancelled() && steps.debugger.outcome == 'success' }}
         working-directory: test/debugger
         run: bin/App-debug
 
       - name: std setup mariadb
+        continue-on-error: ${{ inputs.warn_only }}
         id: mariadb
         if: ${{ !cancelled() && steps.setup.outcome == 'success' && runner.os == 'Linux' }}
         run: |
@@ -147,11 +168,13 @@ jobs:
           sudo systemctl start mariadb
           sudo mariadb -u root -e "create database hxcpp; grant all privileges on hxcpp.* to hxcpp@localhost identified by 'hxcpp'; flush privileges;"
       - name: std build
+        continue-on-error: ${{ inputs.warn_only }}
         id: std
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         working-directory: test/std
         run: haxe compile${{ inputs.arch }}.hxml
       - name: std run
+        continue-on-error: ${{ inputs.warn_only }}
         if: ${{ !cancelled() && steps.std.outcome == 'success' }}
         working-directory: test/std
         env:
@@ -159,6 +182,7 @@ jobs:
         run: ${{ inputs.arch == 'Arm64' && 'arm64' || format('cpp{0}', inputs.arch) }}/Test
 
       - name: build tool c/cxx_standard attributes
+        continue-on-error: ${{ inputs.warn_only }}
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         working-directory: test/cxx_standard
         run: |
@@ -167,16 +191,19 @@ jobs:
             haxelib run hxcpp $xml clean
           done
       - name: build tool -options relative to the working directory
+        continue-on-error: ${{ inputs.warn_only }}
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         working-directory: test/build_options
         run: |
           haxelib run hxcpp xml/Build.xml -options options.txt
           test "$(./value | tr -d '\r')" = 42
       - name: build tool MSVC setup scripts with ! in the Visual Studio path
+        continue-on-error: ${{ inputs.warn_only }}
         if: ${{ !cancelled() && steps.setup.outcome == 'success' && runner.os == 'Windows' }}
         shell: powershell
         run: powershell -NoProfile -File test/msvc_setup/check.ps1
       - name: build tool copyFile overwrite
+        continue-on-error: ${{ inputs.warn_only }}
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         working-directory: test/copy_file
         run: |
@@ -187,6 +214,7 @@ jobs:
           test "$(tr -d '\r' < out/kept.txt)" = old
           test "$(tr -d '\r' < out/replaced.txt)" = new
       - name: build tool rejects file names that differ only in case
+        continue-on-error: ${{ inputs.warn_only }}
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         working-directory: test/case_collision
         run: |
@@ -200,20 +228,25 @@ jobs:
             grep -qF "$expected" <<< "$output"
           done
       - name: build tool long file names and the Windows path limit
+        continue-on-error: ${{ inputs.warn_only }}
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         run: bash test/long_paths/check.sh
       - name: build tool profile on a 64-bit Raspberry Pi
+        continue-on-error: ${{ inputs.warn_only }}
         if: ${{ !cancelled() && steps.setup.outcome == 'success' && runner.os == 'Linux' }}
         run: bash test/rpi_host/check.sh
       - name: run.n finds the compiled BuildTool in bin/${{ inputs.bindir }}
+        continue-on-error: ${{ inputs.warn_only }}
         if: ${{ !cancelled() && steps.setup.outcome == 'success' && inputs.bindir != '' }}
         run: bash test/run_bindir/check.sh ${{ inputs.bindir }}
 
       # Compile-only Apple checks that need no Haxe, here so they do not take a macOS runner of their own
       - name: GC register capture for an arm64 build that defines HXCPP_M64
+        continue-on-error: ${{ inputs.warn_only }}
         if: ${{ !cancelled() && runner.os == 'macOS' && inputs.arch == 'Arm64' }}
         run: clang++ -arch arm64 -std=c++11 -c -DHX_MACOS -DHXCPP_M64 -Iinclude src/hx/gc/GcRegCapture.cpp -o capture.o
       - name: SSL for iOS and tvOS at the default minimum version
+        continue-on-error: ${{ inputs.warn_only }}
         if: ${{ !cancelled() && runner.os == 'macOS' && inputs.arch == 'Arm64' }}
         run: |
           flags="-std=c++11 -c -arch arm64 -Iinclude -Iproject/thirdparty/mbedtls-3.6.7/include -Iproject/thirdparty/config/mbedtls/include -DMBEDTLS_USER_CONFIG_FILE=<mbedtls_config.h> -DHXCPP_M64 -DHXCPP_ARM64"
@@ -221,6 +254,7 @@ jobs:
           xcrun --sdk appletvos clang++ $flags -mtvos-version-min=9.0 -DAPPLETV=APPLETV src/hx/libs/ssl/SSL.cpp -o ssl-tvos.o
 
       - name: regression
+        continue-on-error: ${{ inputs.warn_only }}
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         working-directory: test/regression
         env:
@@ -229,11 +263,13 @@ jobs:
         run: haxe --run Run -D $HXCPP_ARCH_FLAG
       # Last: it moves the system clock, which the Windows runners don't allow
       - name: clock change build
+        continue-on-error: ${{ inputs.warn_only }}
         id: clock
         if: ${{ !cancelled() && steps.setup.outcome == 'success' && runner.os != 'Windows' }}
         working-directory: test/clock_change
         run: haxe build.hxml -D $HXCPP_ARCH_FLAG
       - name: clock change run
+        continue-on-error: ${{ inputs.warn_only }}
         if: ${{ !cancelled() && steps.clock.outcome == 'success' }}
         working-directory: test/clock_change
         run: |
@@ -256,29 +292,34 @@ jobs:
       - name: checkout
         uses: actions/checkout@v7
       - name: setup
+        continue-on-error: ${{ inputs.warn_only }}
         id: setup
         uses: ./.github/workflows/setup
         with:
           haxe: ${{ inputs.haxe }}
       - name: runtime (big blocks)
+        continue-on-error: ${{ inputs.warn_only }}
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         working-directory: test/haxe
         run: |
           haxe compile.hxml --debug -D HXCPP_GC_BIG_BLOCKS -D $HXCPP_ARCH_FLAG
           bin/TestMain-debug
       - name: runtime (moving gc)
+        continue-on-error: ${{ inputs.warn_only }}
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         working-directory: test/haxe
         run: |
           haxe compile.hxml --debug -D HXCPP_GC_DEBUG_ALWAYS_MOVE -D $HXCPP_ARCH_FLAG
           bin/TestMain-debug
       - name: runtime (moving gc, not generational)
+        continue-on-error: ${{ inputs.warn_only }}
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         working-directory: test/haxe
         run: |
           haxe compile-default.hxml -D HXCPP_GC_MOVING -D $HXCPP_ARCH_FLAG
           bin/TestMain
       - name: runtime (gc verify)
+        continue-on-error: ${{ inputs.warn_only }}
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         working-directory: test/haxe
         run: |
@@ -286,18 +327,21 @@ jobs:
           haxe compile.hxml -D HXCPP_GC_VERIFY -D HXCPP_GC_BIG_BLOCKS -D $HXCPP_ARCH_FLAG
           bin/TestMain
       - name: runtime (c++20)
+        continue-on-error: ${{ inputs.warn_only }}
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         working-directory: test/haxe
         run: |
           haxe compile.hxml -D HXCPP_CXX_STANDARD=20 -D $HXCPP_ARCH_FLAG
           bin/TestMain
       - name: telemetry (debug)
+        continue-on-error: ${{ inputs.warn_only }}
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         working-directory: test/telemetry
         run: |
           haxe compile.hxml -debug -D $HXCPP_ARCH_FLAG
           bin/TestMain-debug
       - name: telemetry (release)
+        continue-on-error: ${{ inputs.warn_only }}
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         working-directory: test/telemetry
         run: |
@@ -317,10 +361,12 @@ jobs:
       - name: checkout
         uses: actions/checkout@v7
       - name: setup
+        continue-on-error: ${{ inputs.warn_only }}
         uses: ./.github/workflows/setup
         with:
           haxe: ${{ inputs.haxe }}
       - name: stress
+        continue-on-error: ${{ inputs.warn_only }}
         working-directory: test/gc_stress
         shell: bash
         run: |
@@ -352,6 +398,7 @@ jobs:
           [ -z "$failed" ] || { echo "Failed modes:$failed"; exit 1; }
       # Freeing released cppia modules depends on what each collector mode marks and moves
       - name: cppia module free
+        continue-on-error: ${{ inputs.warn_only }}
         if: ${{ !cancelled() }}
         working-directory: test/regression/CppiaModuleFree
         shell: bash
@@ -395,10 +442,12 @@ jobs:
       - name: checkout
         uses: actions/checkout@v7
       - name: setup
+        continue-on-error: ${{ inputs.warn_only }}
         uses: ./.github/workflows/setup
         with:
           haxe: ${{ inputs.haxe }}
       - name: deterministic phases and semantics
+        continue-on-error: ${{ inputs.warn_only }}
         working-directory: test/regression
         run: |
           failed=""
@@ -414,12 +463,14 @@ jobs:
           done
           [ -z "$failed" ] || { echo "Failed tests:$failed"; exit 1; }
       - name: incremental stress
+        continue-on-error: ${{ inputs.warn_only }}
         if: ${{ !cancelled() }}
         working-directory: test/gc_stress
         run: |
           haxe compile.hxml -lib hxcpp -D HXCPP_GC_INCREMENTAL -D HXCPP_GC_INCREMENTAL_VERIFY -D $HXCPP_ARCH_FLAG
           bin/Stress 30 8 2012663045
       - name: incremental stress (big blocks)
+        continue-on-error: ${{ inputs.warn_only }}
         if: ${{ !cancelled() }}
         working-directory: test/gc_stress
         run: |
@@ -438,16 +489,19 @@ jobs:
       - name: checkout
         uses: actions/checkout@v7
       - name: setup
+        continue-on-error: ${{ inputs.warn_only }}
         id: setup
         uses: ./.github/workflows/setup
         with:
           haxe: ${{ inputs.haxe }}
       - name: haxe tests
+        continue-on-error: ${{ inputs.warn_only }}
         id: haxe_tests
         uses: ./.github/workflows/haxe-tests
         with:
           haxe: ${{ inputs.haxe }}
       - name: cppia build
+        continue-on-error: ${{ inputs.warn_only }}
         id: cppia
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         working-directory: test/cppia
@@ -455,15 +509,18 @@ jobs:
           haxe compile-host.hxml -D $HXCPP_ARCH_FLAG
           haxe compile-client.hxml -D $HXCPP_ARCH_FLAG
       - name: cppia run
+        continue-on-error: ${{ inputs.warn_only }}
         if: ${{ !cancelled() && steps.cppia.outcome == 'success' }}
         working-directory: test/cppia
         run: bin/CppiaHost bin/client.cppia
       - name: cppia run with the jit
+        continue-on-error: ${{ inputs.warn_only }}
         if: ${{ !cancelled() && steps.cppia.outcome == 'success' }}
         working-directory: test/cppia
         run: bin/CppiaHost bin/client.cppia -jit
       # The rest of Haxe's own C++ CI, tests/runci/targets/Cpp.hx
       - name: haxe sys
+        continue-on-error: ${{ inputs.warn_only }}
         if: ${{ !cancelled() && steps.haxe_tests.outcome == 'success' }}
         working-directory: haxe/tests/sys
         run: |
@@ -472,6 +529,7 @@ jobs:
           haxe -D $HXCPP_ARCH_FLAG --each compile-cpp.hxml
           EXISTS=1 bin/cpp/Main-debug
       - name: haxe threads
+        continue-on-error: ${{ inputs.warn_only }}
         if: ${{ !cancelled() && steps.haxe_tests.outcome == 'success' }}
         working-directory: haxe/tests/threads
         run: |
@@ -480,6 +538,7 @@ jobs:
       # Haxe 5 moved eventLoop under cross/ and runs every target's misc tests
       # from tests/misc (HaxeFoundation/haxe#12759); Haxe 4 has the old layout
       - name: haxe event loop
+        continue-on-error: ${{ inputs.warn_only }}
         if: ${{ !cancelled() && steps.haxe_tests.outcome == 'success' }}
         working-directory: haxe/tests/misc
         run: |
@@ -487,6 +546,7 @@ jobs:
           haxe -D $HXCPP_ARCH_FLAG build-cpp.hxml
           cpp/Main
       - name: haxe misc
+        continue-on-error: ${{ inputs.warn_only }}
         if: ${{ !cancelled() && steps.haxe_tests.outcome == 'success' }}
         working-directory: haxe/tests/misc
         run: |
@@ -496,6 +556,7 @@ jobs:
             haxe run-base.hxml --run Main cpp
           fi
       - name: haxe unit under cppia
+        continue-on-error: ${{ inputs.warn_only }}
         if: ${{ !cancelled() && steps.haxe_tests.outcome == 'success' }}
         working-directory: haxe/tests/unit
         run: |
@@ -516,14 +577,18 @@ jobs:
       - name: checkout
         uses: actions/checkout@v7
       - name: setup
+        continue-on-error: ${{ inputs.warn_only }}
         uses: ./.github/workflows/setup
         with:
           haxe: ${{ inputs.haxe }}
       - name: haxe tests
+        continue-on-error: ${{ inputs.warn_only }}
         uses: ./.github/workflows/haxe-tests
         with:
           haxe: ${{ inputs.haxe }}
       - name: build
+        continue-on-error: ${{ inputs.warn_only }}
         run: haxe compile-cpp.hxml -D ${{ env.HXCPP_ARCH_FLAG }} -D no_http
       - name: run
+        continue-on-error: ${{ inputs.warn_only }}
         run: bin${{ inputs.sep }}cpp${{ inputs.sep }}TestMain-debug
