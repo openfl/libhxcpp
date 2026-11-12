@@ -9,6 +9,7 @@ ArrayConcurrentString: threads
 AttachedThreadId: threads (std::thread, which needs a pthreads build)
 CffiNekoNullBoolWithoutInit: runs neko, which loads an ndll the test builds
 CffiNekoValueTags: runs neko, which loads an ndll the test builds
+CffiPrimeAfterCffi: loads an ndll it builds, and Emscripten links statically
 CffiPrimeUnicodeFallback: loads an ndll it builds, and Emscripten links statically
 CffiQuietMissingPrimitive: loads an ndll it builds, and Emscripten links statically
 CppiaArrayAccess: its host is the first --next section, which -D emscripten does not reach
