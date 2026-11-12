@@ -2,5 +2,5 @@ variable reference threw: Local variable outside a function
 variable declaration threw: Local variable outside a function
 return threw: Return outside a function
 constant loaded
-block 6, list [0,2,4], caught 2, twice 6
-block 6, list [0,2,4], caught 2, twice 6
+block 6, list [0,2,4], caught 2, twice 6, init init2
+block 6, list [0,2,4], caught 2, twice 6, init init2

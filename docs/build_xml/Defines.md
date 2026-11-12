@@ -51,6 +51,9 @@ Defines affecting how the code is compiled.  These can be on the command line wh
 | *HXCPP_DEBUG_LINK*      | Add symbols to final binary, even in release mode. |
 | *HXCPP_DEBUG_LINK_AND_STRIP* | Build with symbols as HXCPP_DEBUG_LINK does, then strip the final binary (for Android release builds) |
 | *HXCPP_OPTIMIZE_FOR_SIZE* | Optimise for code size rather than speed |
+| *HXCPP_OPTIMIZE_LINK*   | Optimise across files when linking (link-time code generation with MSVC, -flto with GCC and Clang). Slower to build |
+| *HXCPP_PGO*             | "generate" builds a program that counts what it runs, "use" builds it again from those counts. See [ProfileGuidedOptimisation.md](../ProfileGuidedOptimisation.md) |
+| *HXCPP_PGO_DIR*         | Where HXCPP_PGO keeps the counts, default "pgo" in the build folder |
 | *HXCPP_STACK_TRACE*     | Have valid function-level stack traces, even in release mode. |
 | *HXCPP_STACK_LINE*      | Include line information in stack traces, even in release mode. |
 | *HXCPP_CPPIA_STACK_SIZE* | The size in bytes of the stack each thread keeps cppia script frames on, default 131072 (128 KB). A script that recurses past it gets a "Stack Overflow" exception (docs/ThreadsAndStacks.md) |

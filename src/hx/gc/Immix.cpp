@@ -4531,7 +4531,11 @@ public:
    //     size seen early may not be written yet on a weakly ordered CPU
    //  * it is not critical whether the mNextFreeBlockOfSize is increased since
    //     skipping only leads to a bit of extra searching for the next allocation
-   #if defined(__has_feature)
+   // GCC's no_sanitize also hides the atomic claim of mZeroLock. Newer GCC
+   // defines __has_feature, so applying the Clang annotation there loses the
+   // ordering from the zeroing thread and block publication in TSan. GCC uses
+   // the race_top suppressions for the hint reads and keeps the atomics seen.
+   #if defined(__clang__) && defined(__has_feature)
      #if __has_feature(thread_sanitizer)
       __attribute__((no_sanitize("thread")))
      #endif

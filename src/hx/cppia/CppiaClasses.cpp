@@ -540,6 +540,7 @@ CppiaClassInfo::CppiaClassInfo(CppiaModule &inCppia) : cppia(inCppia)
    classSize = 0;
    newFunc = 0;
    initExpr = 0;
+   initStackSize = 0;
    enumMeta = 0;
    isInterface = false;
    interfaceSlotSize = 0;
@@ -1501,7 +1502,17 @@ void CppiaClassInfo::link()
       newFunc->link();
 
    if (initExpr)
+   {
+      // A class's __init__ is an expression rather than a function, but its
+      //  locals still need slots, so it gets a frame of its own
+      StackLayout *oldLayout = cppia.layout;
+      StackLayout layout(0);
+      layout.returnType = etVoid;
+      cppia.layout = &layout;
       initExpr = initExpr->link(cppia);
+      cppia.layout = oldLayout;
+      initStackSize = layout.size;
+   }
 
    // Functions
    for(int i=0;i<memberFunctions.size();i++)
@@ -1665,7 +1676,18 @@ void CppiaClassInfo::init(CppiaCtx *ctx, int inPhase)
    else if (inPhase==1)
    {
       if (initExpr)
+      {
+         // `this` is pushed already
+         int locals = initStackSize - (int)sizeof(void *);
+         if (locals>0)
+         {
+            if (ctx->pointer + locals > ctx->stackEnd && !ctx->growScriptStack(locals))
+               hx::Throw( HX_CSTRING("Stack Overflow") );
+            memset(ctx->pointer, 0, locals);
+            ctx->pointer += locals;
+         }
          initExpr->runVoid(ctx);
+      }
    }
 }
 

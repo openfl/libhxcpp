@@ -131,48 +131,6 @@ jobs:
     - name: Build and run the regression tests on Alpine
       run: docker run --rm -v "$PWD:/w" -w /w alpine:edge sh -c "apk add --no-cache neko g++ linux-headers && sh test/regression/run-generated.sh"
 
-  # Haxe 5.0.0-preview.1 passes API level 500 but generates code for the level
-  # 430 runtime, and the build tool builds it against that runtime
-  # (BuildTool.haxeRuntimeLevels). Every suite runs with it on Linux, and the
-  # core suites on Windows and macOS arm64.
-  haxe5-preview-linux:
-    name: Haxe 5.0.0-preview.1 / Linux 64
-    needs: [check-headers, check-gc-defines]
-    uses: ./.github/workflows/test.yml
-    with:
-      haxe: 5.0.0-preview.1
-      arch: 64
-      sep: /
-      ext: .dso
-      os: ubuntu-latest
-      stress: '["default generational-verify"]'
-      bindir: Linux64
-
-  haxe5-preview-windows:
-    name: Haxe 5.0.0-preview.1 / Windows 64
-    needs: [check-headers, check-gc-defines]
-    uses: ./.github/workflows/test.yml
-    with:
-      haxe: 5.0.0-preview.1
-      arch: 64
-      sep: \
-      ext: .dll
-      os: windows-latest
-      scope: smoke
-
-  haxe5-preview-macos:
-    name: Haxe 5.0.0-preview.1 / macOS arm64
-    needs: [check-headers, check-gc-defines]
-    uses: ./.github/workflows/test.yml
-    with:
-      haxe: 5.0.0-preview.1
-      arch: Arm64
-      sep: /
-      ext: .dylib
-      os: macos-latest
-      scope: smoke
-      bindir: MacArm64
-
   # The regression, std and GC stress suites under UBSan, ASan and TSan. A
   # sanitizer report fails its suite; the reports go to files because the
   # runner only shows stdout. Each suite runs even when one before it failed.
@@ -309,6 +267,33 @@ jobs:
       run: |
         timeout 600 sh test/emscripten/cffi-js-prime/run-fields.sh
         timeout 600 sh test/emscripten/cffi-js-prime/run-strings.sh
+
+  check-pgo:
+    name: Check HXCPP_PGO with ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: MSVC, os: windows-latest, cxx: '', arch: HXCPP_M64 }
+          - { name: GCC, os: ubuntu-latest, cxx: g++, arch: HXCPP_M64 }
+          - { name: Clang, os: ubuntu-latest, cxx: clang++, arch: HXCPP_M64 }
+          - { name: Apple Clang, os: macos-latest, cxx: '', arch: HXCPP_ARM64 }
+    runs-on: ${{ matrix.os }}
+    steps:
+    - name: checkout
+      uses: actions/checkout@v7
+
+    - name: setup
+      uses: ./.github/workflows/setup
+      with:
+        haxe: 4.3.7
+
+    - name: Generate, train on and use a profile
+      # Git Bash on Windows
+      shell: bash
+      run: |
+        if [ -n "${{ matrix.cxx }}" ]; then export CXX=${{ matrix.cxx }}; fi
+        bash test/pgo/check.sh ${{ matrix.arch }}
 
   check-haxelib:
     name: Check installing with haxelib
