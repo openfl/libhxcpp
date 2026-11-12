@@ -20,9 +20,9 @@ class Progress
          // Pad to the width of 100.0% so the file names line up
          var tenths = total > 0 ? Std.int(finished * 1000 / total) : 1000;
          var done = Std.int(tenths / 10) + "." + (tenths % 10) + "%";
-			while (done.length < 6)
-				done = done + " ";
-			return "\x1b[1m[" + done + "]\x1b[0m";
+         while (done.length < 6)
+            done = done + " ";
+         return "\x1b[1m[" + done + "]\x1b[0m";
       }
       var done = Std.string(finished);
       while (done.length < Std.string(total).length)
