@@ -2,7 +2,7 @@
 libhxcpp 6.0.0 (unreleased)
 ------------------------------------------------------------
 
-* Added HXCPP_PROGRESS_PERCENT, which shows a group's compile progress as a percentage of its files, [ 42.5%], instead of a count, [425/1000]
+* Added HXCPP_PROGRESS_PERCENT, which shows a group's compile progress as a percentage of its files, [42.5% ], instead of a count, [425/1000]
 * Fixed the 32-bit x86 collector missing live objects held only in EBP when frame pointers are omitted. It now captures EBP with the other callee-saved registers; the lost strings in the Linux 32 CFFI tests were one consequence (libhxcpp #430)
 * Fixed GCC TSan builds reporting allocator races because a Clang sanitizer annotation also disabled instrumentation of the block-claim atomics on newer GCC. GCC keeps those atomics instrumented, without adding suppressions, and the Linux 32 and TSan jobs run on ubuntu-latest again (libhxcpp #430)
 * Fixed the fuzz job failing to find libFuzzer on Ubuntu 26.04 with Clang 21, whose reported runtime directory differs from the compiler-rt package's lib/linux directory. Setup and the fuzz build now check both locations for the native archive
