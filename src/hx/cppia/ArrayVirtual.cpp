@@ -644,14 +644,14 @@ struct ArrayBuiltinAny : public ArrayBuiltinBase
       return 0;
    }
 
-   static int SLJIT_CALL runIndexOf( ArrayAnyImpl *inArray, hx::Object *inItem)
+   static int SLJIT_CALL runIndexOf( ArrayAnyImpl *inArray, hx::Object *inItem, hx::Object *inFrom)
    {
-      return inArray->indexOf(inItem);
+      return inArray->indexOf(inItem, inFrom);
    }
 
-   static int SLJIT_CALL runLastIndexOf( ArrayAnyImpl *inArray, hx::Object *inItem)
+   static int SLJIT_CALL runLastIndexOf( ArrayAnyImpl *inArray, hx::Object *inItem, hx::Object *inFrom)
    {
-      return inArray->lastIndexOf(inItem);
+      return inArray->lastIndexOf(inItem, inFrom);
    }
 
 
@@ -748,8 +748,11 @@ struct ArrayBuiltinAny : public ArrayBuiltinBase
          case afIndexOf:
          case afLastIndexOf:
             {
-            args[0]->genCode(compiler, sJitArg1.as(jtPointer), etObject);
-            compiler->callNative( (void *)(FUNC==afIndexOf ? runIndexOf : runLastIndexOf), thisVal, sJitArg1.as(jtPointer));
+            // The item, then fromIndex, which is null when the call leaves it out
+            JitTemp item(compiler,etObject);
+            args[0]->genCode(compiler, item, etObject);
+            args[1]->genCode(compiler, sJitArg2, etObject);
+            compiler->callNative( (void *)(FUNC==afIndexOf ? runIndexOf : runLastIndexOf), thisVal, item.as(jtPointer), sJitArg2.as(jtPointer));
             compiler->convertReturnReg(etInt, inDest, destType );
             }
             break;
