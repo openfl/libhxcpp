@@ -144,6 +144,22 @@ struct TLSData
 #define EXTERN_FAST_TLS_DATA(TYPE,NAME) \
    __declspec(thread) extern TYPE * NAME;
 
+#elif defined(HX_LINUX) && defined(__GNUC__) && !defined(HXCPP_PTHREAD_FAST_TLS)
+
+// The fast slot (the GC's stack context, read on each allocation that leaves
+// the inline path) is a plain thread-local pointer: one load from the thread
+// pointer instead of a call to pthread_getspecific. __thread rather than
+// thread_local, so the extern declaration reads it directly instead of
+// calling the wrapper C++ emits in case of a dynamic initializer.
+#define DECLARE_TLS_DATA(TYPE,NAME) \
+   ::hx::TLSData<TYPE> NAME;
+#define DECLARE_FAST_TLS_DATA(TYPE,NAME) \
+   __thread TYPE * NAME = nullptr;
+#define EXTERN_TLS_DATA(TYPE,NAME) \
+   extern ::hx::TLSData<TYPE> NAME;
+#define EXTERN_FAST_TLS_DATA(TYPE,NAME) \
+   extern __thread TYPE * NAME;
+
 #else
 
 #define DECLARE_TLS_DATA(TYPE,NAME) \
