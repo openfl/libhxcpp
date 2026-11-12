@@ -1,0 +1,9 @@
+draining by pop gives back the burst storage: true
+draining by pop leaves it empty and reusable: true
+draining by shift gives back the burst storage: true
+draining by shift leaves it empty and reusable: true
+draining by splice gives back the burst storage: true
+draining by splice leaves it empty and reusable: true
+draining by remove gives back the burst storage: true
+draining by remove leaves it empty and reusable: true
+a large array swinging in size keeps its items: true

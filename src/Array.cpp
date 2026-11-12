@@ -455,6 +455,7 @@ void ArrayBase::Splice(ArrayBase *outResult,int inPos,int inLen)
    if (after>0)
       memmove(mBase+(size_t)inPos*s, mBase + (size_t)(inPos+inLen)*s, (size_t)after*s);
    resize(length-inLen);
+   ShrinkAfterRemove();
 }
 
 void ArrayBase::Slice(ArrayBase *outResult,int inPos,int inEnd)
@@ -497,8 +498,27 @@ void ArrayBase::RemoveElement(int inPos)
       int s = GetElementSize();
       memmove(mBase + (size_t)inPos*s, mBase+(size_t)inPos*s + s, (size_t)(length-inPos-1)*s );
       resize(length-1);
+      ShrinkAfterRemove();
    }
+}
 
+// Down to twice the length, keeping shrinkKeepSlots: growing back needs the
+//  length to double, so an array that swings in size does not shrink and
+//  grow on every swing
+void ArrayBase::ShrinkStorage()
+{
+   HX_INCREMENTAL_MUTATION(this);
+   int newAlloc = length*2;
+   if (newAlloc<shrinkKeepSlots)
+      newAlloc = shrinkKeepSlots;
+   if (mAlloc<0 || newAlloc>=mAlloc)
+      return;
+   size_t bytes = (size_t)newAlloc*GetElementSize();
+   // All the kept storage is copied, not only the items: past the length it
+   //  is zero, which growing within it expects
+   mBase = (char *)hx::InternalRealloc(bytes, mBase, bytes);
+   mAlloc = newAlloc;
+   HX_OBJ_WB_GET(this,mBase);
 }
 
 // A copy into an atomic array writes every byte, so a large buffer for it

@@ -269,7 +269,8 @@ struct SocketWrapper : public hx::Object
 
    SOCKET socket;
    bool stream;
-   // Tells a socket from one that has the descriptor it had, for a poll
+   // Tells a socket from one that has the descriptor it had, for a poll.
+   //  Never 0, which stands for a library's handle, that has none
    unsigned int serial;
    // Made by the first read of a stream socket, and freed with the wrapper,
    // so that a read never finds it gone
@@ -325,7 +326,9 @@ struct SocketWrapper : public hx::Object
       SocketWrapper *wrap = new SocketWrapper();
       wrap->socket = inSocket;
       wrap->stream = inStream;
-      wrap->serial = ++sNextSocketSerial;
+      do
+         wrap->serial = ++sNextSocketSerial;
+      while (wrap->serial == 0);
       wrap->ahead = 0;
       sWrapperVtable.store(*(void **)wrap, std::memory_order_relaxed);
       _hx_set_finalizer(wrap, finalize);
@@ -1908,14 +1911,16 @@ SOCKET wrapped_sock(Dynamic inWrapper)
 // descriptor.
 struct PollQueue
 {
-   enum { READ = 1, WRITE = 2 };
+   // UNKNOWN: what the kernel has for the descriptor is not known
+   enum { READ = 1, WRITE = 2, UNKNOWN = 4 };
 
    // One descriptor, for every read and write index that names it
    struct Slot
    {
       int fd;
       // Of the socket the descriptor was registered for: one that has the
-      //  number of a closed socket is not registered yet
+      //  number of a closed socket is not registered yet. 0 for a library's
+      //  handle, which has no serial
       unsigned int serial;
       int want;
       int registered;
@@ -1987,7 +1992,8 @@ struct PollQueue
       close(fd);
    }
 
-   // Tells the kernel a descriptor's interest changed from inFrom to inTo
+   // Tells the kernel a descriptor's interest changed from inFrom to inTo,
+   //  where inFrom can be UNKNOWN
    bool change(int inFd, int inFrom, int inTo)
    {
       #ifdef HX_POLL_EPOLL
@@ -2002,6 +2008,10 @@ struct PollQueue
       //  closed and given out again
       if (op == EPOLL_CTL_ADD && errno == EEXIST)
          return epoll_ctl(fd, EPOLL_CTL_MOD, inFd, &ev) == 0;
+      // None, for a descriptor whose registration went with the socket
+      //  that had it
+      if (op == EPOLL_CTL_MOD && errno == ENOENT)
+         return epoll_ctl(fd, EPOLL_CTL_ADD, inFd, &ev) == 0;
       return false;
       #else
       bool ok = true;
@@ -2009,7 +2019,7 @@ struct PollQueue
       for(int f=0;f<2;f++)
       {
          int bit = f==0 ? READ : WRITE;
-         if ((inFrom & bit) == (inTo & bit))
+         if (inFrom != UNKNOWN && (inFrom & bit) == (inTo & bit))
             continue;
          struct kevent ev;
          EV_SET(&ev, inFd, filters[f], (inTo & bit) ? EV_ADD : EV_DELETE, 0, 0, 0);
@@ -2078,14 +2088,18 @@ struct PollQueue
       // The last prepare's registrations carry over for the same socket.
       //  Those of a socket left out, or closed and its number given to
       //  another, go: a closed descriptor's is gone already, and taking out
-      //  one the kernel no longer has fails harmlessly.
+      //  one the kernel no longer has fails harmlessly. A library's handle
+      //  has no serial, so the one prepared now may be the socket that was
+      //  registered or another the descriptor was given to since, whose
+      //  registration the kernel dropped when the first closed: it is
+      //  registered again, as UNKNOWN.
       for(size_t j=0;j<previous.size();j++)
       {
          Slot &old = previous[j];
          FdSlots &at = slotOf[old.fd];
          at.registered = 0;
          if (at.pending && slots[at.pending-1].serial==old.serial)
-            slots[at.pending-1].registered = old.registered;
+            slots[at.pending-1].registered = old.serial || !old.registered ? old.registered : (int)UNKNOWN;
          else if (old.registered)
             change(old.fd, old.registered, 0);
       }

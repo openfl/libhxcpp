@@ -63,6 +63,18 @@ class Main {
 		return refs;
 	}
 
+	// A local function has no receiver, so what it captures does not keep it
+	@:analyzer(ignore)
+	static function localClosures() {
+		var refs = [];
+		for (i in 0...COUNT) {
+			var r = receivers[i];
+			var local:Dynamic = function() return r.id;
+			refs.push(new cpp.vm.WeakRef(local));
+		}
+		return refs;
+	}
+
 	static function alive(refs:Array<cpp.vm.WeakRef<Dynamic>>)
 		return refs.filter(r -> r.get() != null).length;
 
@@ -79,6 +91,10 @@ class Main {
 		for (i in 0...3)
 			cpp.vm.Gc.run(true);
 		Sys.println("string methods checked: " + (alive(stringMethods) >= 0));
+		var locals = localClosures();
+		for (i in 0...3)
+			cpp.vm.Gc.run(true);
+		Sys.println("local functions released with live captures: " + (alive(locals) <= COUNT / 10));
 		for (i in 0...COUNT)
 			receivers[i] = null;
 		for (i in 0...3)

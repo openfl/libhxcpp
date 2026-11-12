@@ -68,6 +68,7 @@ NativeRefCopyRoot: threads (std::thread, which needs a pthreads build)
 NativeRefInterfaceRetarget: threads (std::thread, which needs a pthreads build)
 PollEmptyTimeout: sockets
 PollFailedConnect: sockets
+PollLibraryHandle: sockets
 PollRegistrations: sockets
 PollSocketLifetime: sockets
 PollingSafePoint: threads (std::thread, which needs a pthreads build)

@@ -396,6 +396,20 @@ public:
 
    void RemoveElement(int inIndex);
 
+   // Storage a removal never gives back: what a busy queue or stack
+   // usually holds, little enough to keep while it is empty
+   static const int shrinkKeepSlots = 16384;
+
+   // After pop, shift, remove or splice: a large array left under a quarter
+   // full gives back half its storage or more, so a queue or stack that
+   // drains after a burst does not hold what the burst grew it to
+   inline void ShrinkAfterRemove()
+   {
+      if (mAlloc>shrinkKeepSlots && length<(mAlloc>>2))
+         ShrinkStorage();
+   }
+   void ShrinkStorage();
+
 
    void Insert(int inPos);
 
@@ -764,7 +778,7 @@ public:
       if (length && hx::ContainsPointers<ELEM_>())
       {
          #ifdef HXCPP_GC_INCREMENTAL
-         if (length > 256 && hx::IncrementalRange(this,IncrementalScan,__inCtx)) return;
+         if (length > hx::IncrementalRangeChunk && hx::IncrementalRange(this,IncrementalScan,__inCtx,IncrementalLength)) return;
          #endif
          ELEM_ *ptr = (ELEM_ *)mBase;
          HX_MARK_MEMBER_ARRAY(ptr,length);
@@ -772,12 +786,13 @@ public:
    }
 
    #ifdef HXCPP_GC_INCREMENTAL
+   static size_t IncrementalLength(hx::Object *inOwner) { return static_cast<Array_obj<ELEM_> *>(inOwner)->length; }
    static bool IncrementalScan(hx::Object *inOwner, size_t &ioCursor, size_t &ioItem, hx::MarkContext *__inCtx) {
       Array_obj<ELEM_> *array = static_cast<Array_obj<ELEM_> *>(inOwner);
       size_t length = array->length;
       if (ioCursor >= length) return true;
       // Parenthesized: <windows.h> included before <hxcpp.h> defines a min macro
-      size_t count = (std::min)(size_t{256},length-ioCursor);
+      size_t count = (std::min)(size_t{hx::IncrementalRangeChunk},length-ioCursor);
       ELEM_ *ptr = reinterpret_cast<ELEM_ *>(array->mBase) + ioCursor;
       HX_MARK_MEMBER_ARRAY(ptr,count);
       ioCursor += count;
@@ -853,6 +868,7 @@ public:
       if (!length) return null();
       ELEM_ result = __get((int)length-1);
       resize((int)length-1);
+      ShrinkAfterRemove();
       return result;
    }
 

@@ -10,14 +10,37 @@ std::atomic<bool> gIncrementalActive{false};
 bool gIncrementalAllocationsWhite = false;
 static thread_local double sIncrementalRequestMs = 0;
 
+// A cycle's place in the reserve, the bytes the app can allocate before the
+// collector would have to stop it. The later a cycle starts the more garbage
+// each mark pays for, so it starts as late as it can still finish by.
+// The app gets at least this long between slices, however fast it allocates
+static const double sPaceMinGapMs = 0.25;
+// Slack on the time a cycle is expected to take
+static const double sPaceMargin = 1.3;
+// The earliest and latest start, as shares of the reserve
+static const double sPaceEarliest = 0.25;
+static const double sPaceLatest = 0.85;
+// The expected slices spend 1/sPaceSpend of the reserve left after the start
+static const double sPaceSpend = 1.5;
+// Past this share of what is left after the start, slices stop waiting
+static const double sPacePressure = 0.75;
+
+// A dead object keeps its start bit until something clears it, and its mark id
+// comes round again after 16 collections. Each collection owes the sweep this
+// share of the blocks, so every block is swept well before that.
+static const int sSweepPeriod = 12;
+enum { IncrementalSweepBatch = 8 };
+static bool IncrementalSweepBlocks(Object *, size_t &ioBlock, size_t &, MarkContext *);
+
 struct IncrementalRangeJob
 {
    Object *owner;
    IncrementalRangeScan scan;
+   IncrementalRangeLength length;
    size_t cursor = 0;
    size_t item = 0;
    bool queued = true;
-   IncrementalRangeJob(Object *inOwner, IncrementalRangeScan inScan) : owner(inOwner), scan(inScan) {}
+   IncrementalRangeJob(Object *inOwner, IncrementalRangeScan inScan, IncrementalRangeLength inLength) : owner(inOwner), scan(inScan), length(inLength) {}
 };
 
 struct IncrementalState
@@ -27,6 +50,22 @@ struct IncrementalState
    std::atomic<double> intervalMs{1.0};
    std::atomic<double> nextAutomatic{0};
    std::atomic<bool> automaticRunning{false};
+   // Learned from finished cycles: their slices, and the bytes allocated per ms
+   double paceSlices = 0;
+   double paceRate = 0;
+   double cycleStart = 0;
+   size_t cycleAllocated = 0;
+   // Bytes the app may allocate between slices, 0 until a cycle has been learned
+   std::atomic<double> sliceCredit{0};
+   std::atomic<size_t> lastSliceAllocated{0};
+   std::atomic<double> lastSliceEnd{0};
+   // Blocks owed to the sweep, and where it has reached
+   size_t sweepDue = 0;
+   size_t sweepCursor = 0;
+   size_t sweepBlocks = 0;
+   size_t sweepPerSlice = 1;
+   int collectionsSinceFull = 0;
+   uint64_t fullReclaims = 0;
    std::vector<IncrementalEntry> detached;
    size_t detachedRead = 0;
    bool logsPending = false;
@@ -74,6 +113,54 @@ struct IncrementalState
       work = 0;
    }
 
+   void cycleStarted(size_t inAllocated)
+   {
+      cycleStart = IncrementalNow();
+      cycleAllocated = inAllocated;
+      lastSliceAllocated.store(inAllocated, std::memory_order_relaxed);
+      lastSliceEnd.store(0, std::memory_order_relaxed);
+      sweepPerSlice = static_cast<size_t>(sweepDue / std::max(1.0, paceSlices)) + 1;
+   }
+
+   void cycleFinished(size_t inAllocated, double inSlices)
+   {
+      double elapsed = (IncrementalNow() - cycleStart) * 1000.0;
+      if (elapsed > 0 && inAllocated > cycleAllocated)
+      {
+         double rate = (inAllocated - cycleAllocated) / elapsed;
+         paceSlices = paceSlices > 0 ? (paceSlices + inSlices) / 2 : inSlices;
+         paceRate = paceRate > 0 ? (paceRate + rate) / 2 : rate;
+      }
+   }
+
+   void plan(double inReserve, size_t &outStart, size_t &outPressure)
+   {
+      double start = inReserve / 2;
+      double pressure = inReserve * 3 / 4;
+      double credit = 0;
+      if (paceSlices > 0 && paceRate > 0)
+      {
+         // What the app allocates while the expected slices run at the fastest pace allowed
+         double runway = paceSlices * paceRate * (budgetMs.load() + sPaceMinGapMs) * sPaceMargin;
+         start = std::min(inReserve * sPaceLatest, std::max(inReserve * sPaceEarliest, inReserve - runway));
+         credit = (inReserve - start) / (sPaceSpend * paceSlices);
+         pressure = start + (inReserve - start) * sPacePressure;
+      }
+      sliceCredit.store(credit, std::memory_order_relaxed);
+      outStart = std::max(size_t{256} * 1024, static_cast<size_t>(start));
+      outPressure = std::max(size_t{384} * 1024, static_cast<size_t>(pressure));
+   }
+
+   // The app has allocated its share of the reserve since the last slice, and
+   // has had its minimum time to run
+   bool sliceDue(size_t inAllocated, double inNow)
+   {
+      double credit = sliceCredit.load(std::memory_order_relaxed);
+      return credit > 0 && gIncrementalActive.load(std::memory_order_relaxed) &&
+             inAllocated >= lastSliceAllocated.load(std::memory_order_relaxed) + static_cast<size_t>(credit) &&
+             inNow >= lastSliceEnd.load(std::memory_order_relaxed) + sPaceMinGapMs / 1000.0;
+   }
+
    void pause(double inStart, bool inBudgeted)
    {
       double elapsed = (IncrementalNow() - inStart) * 1000.0;
@@ -112,6 +199,13 @@ static bool IncrementalExpired()
    // objects. Check in bounded batches without a shared counter cache line.
    static thread_local unsigned int checks = 0;
    return (++checks & 63) == 0 && IncrementalNow() >= state.deadline;
+}
+
+// For work too large to wait for IncrementalExpired's next look at the clock
+static bool IncrementalPastDeadline()
+{
+   IncrementalState &state = IncrementalData();
+   return state.tracing && state.deadline > 0 && IncrementalNow() >= state.deadline;
 }
 
 static void IncrementalScanned(Object *inObject)
@@ -176,7 +270,11 @@ void IncrementalAllocated(void *inValue, bool inObject, ImmixAllocator *inAlloc)
 void IncrementalMutationEnter(Object *inOwner, StackContext *inCtx)
 {
    if (inCtx)
+   {
+      if (inCtx->mIncrementalMutations < IncrementalScopeDepth)
+         inCtx->mIncrementalScopes[inCtx->mIncrementalMutations] = inOwner;
       inCtx->mIncrementalMutations++;
+   }
    IncrementalRemember(inOwner, nullptr, inCtx);
 }
 
@@ -202,7 +300,7 @@ static void IncrementalTransfer(StackContext *inCtx)
    inCtx->mIncrementalRead = 0;
 }
 
-bool IncrementalRange(Object *inOwner, IncrementalRangeScan inScan, MarkContext *inCtx)
+bool IncrementalRange(Object *inOwner, IncrementalRangeScan inScan, MarkContext *inCtx, IncrementalRangeLength inLength)
 {
    IncrementalState &state = IncrementalData();
    if (!state.tracing)
@@ -221,7 +319,7 @@ bool IncrementalRange(Object *inOwner, IncrementalRangeScan inScan, MarkContext 
       if (found == state.rangeOwners.end())
       {
          size_t index = state.ranges.size();
-         state.ranges.emplace_back(inOwner, inScan);
+         state.ranges.emplace_back(inOwner, inScan, inLength);
          state.rangeOwners.emplace(inOwner, index);
          state.rangeQueue.push_back(index);
       }
@@ -242,6 +340,45 @@ bool IncrementalRange(Object *inOwner, IncrementalRangeScan inScan, MarkContext 
       // An exception must not escape a marker worker thread.
       state.failed.store(true, std::memory_order_relaxed);
    }
+   return true;
+}
+
+// A black holder can acquire an edge after it was scanned. Revisits it even if
+// its ordinary header already belongs to this cycle.
+static bool IncrementalRevisit(Object *inOwner, MarkContext *inCtx)
+{
+   IncrementalState &state = IncrementalData();
+   try
+   {
+      if (!state.dirty.insert(inOwner).second)
+         return true;
+   }
+   catch (const std::bad_alloc &)
+   {
+      state.failed.store(true, std::memory_order_relaxed);
+      return false;
+   }
+   MarkObjectAlloc(inOwner, inCtx);
+   inCtx->pushObj(inOwner);
+   auto range = state.rangeOwners.find(inOwner);
+   if (range != state.rangeOwners.end())
+   {
+      IncrementalRangeJob &job = state.ranges[range->second];
+      job.cursor = job.item = 0;
+   }
+   return true;
+}
+
+// A holder in an open mutation scope changes without barriers, so no earlier
+// scan of it counts: the stop that finishes a cycle scans it again. The app is
+// at an allocation in the scope, where a full collection could run too.
+static bool IncrementalRevisitScopes(StackContext *inCtx, MarkContext *inMark)
+{
+   if (inCtx->mIncrementalMutations > IncrementalScopeDepth)
+      return false;
+   for (unsigned int i = 0; i < inCtx->mIncrementalMutations; i++)
+      if (!IncrementalRevisit(inCtx->mIncrementalScopes[i], inMark))
+         return false;
    return true;
 }
 
@@ -266,32 +403,56 @@ static bool IncrementalEntries(std::vector<IncrementalEntry> &inEntries, size_t 
          // invalidate an entire large container on every element write.
          continue;
       }
-      if (!entry.owner)
-         continue;
-      try
-      {
-         if (!state.dirty.insert(entry.owner).second)
-            continue;
-      }
-      catch (const std::bad_alloc &)
-      {
-         state.failed.store(true, std::memory_order_relaxed);
+      if (entry.owner && !IncrementalRevisit(entry.owner, inCtx))
          return false;
-      }
-      MarkObjectAlloc(entry.owner, inCtx);
-      // A black holder can acquire an edge after it was scanned. Revisit it
-      // even if its ordinary header already belongs to this cycle.
-      inCtx->pushObj(entry.owner);
-      auto range = state.rangeOwners.find(entry.owner);
-      if (range != state.rangeOwners.end())
-      {
-         IncrementalRangeJob &job = state.ranges[range->second];
-         job.cursor = job.item = 0;
-      }
    }
    inEntries.clear();
    ioRead = 0;
    return true;
+}
+
+// Queues a batch of a range's chunks for the markers, and returns whether that
+// was the last of them. A chunk names its owner and an index, so it finds the
+// current storage whichever slice it runs in.
+static bool IncrementalQueueChunks(IncrementalRangeJob &ioJob, int inBatch)
+{
+   IncrementalState &state = IncrementalData();
+   size_t length = ioJob.length(ioJob.owner);
+   for (int i = 0; i < inBatch && ioJob.cursor < length; i++)
+   {
+      MarkChunk *chunk = sGlobalChunks.alloc();
+      chunk->count = MarkChunk::RANGE_CHUNK_JOB;
+      chunk->rangeOwner = ioJob.owner;
+      chunk->rangeScan = ioJob.scan;
+      chunk->rangeStart = ioJob.cursor;
+      sGlobalChunks.pushJob(chunk, false);
+      ioJob.cursor += IncrementalRangeChunk;
+      state.work++;
+   }
+   return ioJob.cursor >= length;
+}
+
+// Queues up to inBlocks of what the sweep is owed. Blocks only join mAllBlocks
+// before the cursor by moving later ones along, so a job that runs late can
+// repeat a block but the cursor misses none.
+static void IncrementalQueueSweep(size_t inBlocks)
+{
+   IncrementalState &state = IncrementalData();
+   size_t blocks = std::min(inBlocks, state.sweepDue);
+   for (size_t done = 0; done < blocks; done += IncrementalSweepBatch)
+   {
+      if (state.sweepCursor >= state.sweepBlocks)
+         state.sweepCursor = 0;
+      MarkChunk *chunk = sGlobalChunks.alloc();
+      chunk->count = MarkChunk::RANGE_CHUNK_JOB;
+      chunk->rangeOwner = nullptr;
+      chunk->rangeScan = IncrementalSweepBlocks;
+      chunk->rangeStart = state.sweepCursor;
+      sGlobalChunks.pushJob(chunk, false);
+      state.sweepCursor += IncrementalSweepBatch;
+      state.work++;
+   }
+   state.sweepDue -= std::min(state.sweepDue, (blocks + IncrementalSweepBatch - 1) / IncrementalSweepBatch * IncrementalSweepBatch);
 }
 
 static bool IncrementalDrain(MarkContext *inCtx, void (*inProcess)(MarkContext *, void *), void *inData)
@@ -308,11 +469,17 @@ static bool IncrementalDrain(MarkContext *inCtx, void (*inProcess)(MarkContext *
             return false;
          if (inCtx->hasWork())
             return false;
+         // A cycle does not finish owing the sweep
+         if (state.sweepDue)
+         {
+            IncrementalQueueSweep(64 * IncrementalSweepBatch);
+            continue;
+         }
          if (state.rangeHead >= state.rangeQueue.size())
             return !state.logsPending;
          if (IncrementalExpired())
             return false;
-         // Feed several ranges to one worker round. Waking the marker pool for
+         // Feed several chunks to one worker round. Waking the marker pool for
          // each 256-element chunk costs more than scanning those elements.
          for (int batch = 0; batch < 64 && state.rangeHead < state.rangeQueue.size(); batch++)
          {
@@ -322,9 +489,18 @@ static bool IncrementalDrain(MarkContext *inCtx, void (*inProcess)(MarkContext *
             // Workers are stopped here. Scans enqueue objects; only their
             // later __Mark calls can append ranges and move this descriptor.
             IncrementalRangeJob &job = state.ranges[index];
-            inCtx->init();
-            bool complete = job.scan(job.owner, job.cursor, job.item, inCtx);
-            state.work++;
+            bool complete;
+            if (job.length)
+            {
+               complete = IncrementalQueueChunks(job, 64 - batch);
+               batch = 64;
+            }
+            else
+            {
+               inCtx->init();
+               complete = job.scan(job.owner, job.cursor, job.item, inCtx);
+               state.work++;
+            }
             if (complete)
                job.queued = false;
             else

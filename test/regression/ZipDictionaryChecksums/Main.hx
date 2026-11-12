@@ -18,6 +18,14 @@ extern class NativeZip {
 final dictionaryStream = "78f91a0b045dcb40307514209c94cce492ccfcbcc4a24a00a2e60b13";
 final dictionaryId = 0x1a0b045d;
 
+// The native stream a Compress or Uncompress works on: Haxe 4's std keeps
+//  the handle in `s`, Haxe 5's keeps an hx::zip object in `impl`
+inline function deflater(c:Compress):Dynamic
+	return @:privateAccess #if (haxe_ver >= 5) c.impl #else c.s #end;
+
+inline function inflater(u:Uncompress):Dynamic
+	return @:privateAccess #if (haxe_ver >= 5) u.impl #else u.s #end;
+
 function claim(name:String, value:Bool)
 	Sys.println(name + ": " + value);
 
@@ -41,7 +49,7 @@ function presetDictionary() {
 		Sys.stderr().writeString('execute: $e\n');
 	}
 	claim("a stream asking for a preset dictionary reports what it read", r != null && !r.done && r.read == 6 && r.write == 0);
-	claim("its adler32 is the dictionary's id", NativeZip.getAdler32(@:privateAccess u.s) == dictionaryId);
+	claim("its adler32 is the dictionary's id", NativeZip.getAdler32(inflater(u)) == dictionaryId);
 	claim("calling it again, which can make no progress, throws", throws(() -> u.execute(src, 6, dst, 0)));
 	u.close();
 	claim("Uncompress.run on it throws", throws(() -> Uncompress.run(src)));
@@ -92,16 +100,16 @@ function checksums() {
 	final out = Bytes.alloc(128);
 	final w = c.execute(text, 0, out, 0);
 	final trailer = (out.get(w.write - 4) << 24) | (out.get(w.write - 3) << 16) | (out.get(w.write - 2) << 8) | out.get(w.write - 1);
-	final deflated = NativeZip.getAdler32(@:privateAccess c.s);
+	final deflated = NativeZip.getAdler32(deflater(c));
 	c.close();
 	final u = new Uncompress();
 	final back = Bytes.alloc(64);
 	u.execute(out, 0, back, 0);
-	final inflated = NativeZip.getAdler32(@:privateAccess u.s);
+	final inflated = NativeZip.getAdler32(inflater(u));
 	u.close();
 	final expected = NativeZip.updateAdler32(1, text.getData(), 0, text.length);
 	claim("a stream's adler32 is its data's", w.done && deflated == expected && inflated == expected && trailer == expected);
-	claim("a closed stream is refused", throws(() -> NativeZip.getAdler32(@:privateAccess c.s)));
+	claim("a closed stream is refused", throws(() -> NativeZip.getAdler32(deflater(c))));
 }
 
 function main() {

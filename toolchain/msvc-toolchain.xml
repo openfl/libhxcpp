@@ -69,6 +69,10 @@
 
 <set name="HXCPP_LTCG_INCREMENTAL" value="1" if="HXCPP_OPTIMIZE_LINK_INCREMENTAL"/>
 
+<!-- HXCPP_PGO: the profile database is named after the program -->
+<set name="HXCPP_PGO_NAME" value="${HAXE_OUTPUT_FILE}" if="HXCPP_PGO HAXE_OUTPUT_FILE" unless="HXCPP_PGO_NAME"/>
+<set name="HXCPP_PGO_NAME" value="hxcpp" if="HXCPP_PGO" unless="HXCPP_PGO_NAME"/>
+
 <compiler id="MSVC" exe="cl.exe" if="windows">
   <exe name="${CL_EXE}" />
   <flag value="-nologo"/>
@@ -168,6 +172,8 @@
   <flag value="-winsysroot:${HXCPP_MSVC_ROOT}" if="HXCPP_MSVC_LLVM HXCPP_MSVC_ROOT" />
   <flag value="-machine:${MACHINE}"/>
   <flag value="-dll"/>
+  <flag value="-GENPROFILE:EXACT,PGD=${HXCPP_PGO_DIR}/${HXCPP_PGO_NAME}.pgd" if="HXCPP_PGO_GENERATE"/>
+  <flag value="-USEPROFILE:PGD=${HXCPP_PGO_DIR}/${HXCPP_PGO_NAME}.pgd" if="HXCPP_PGO_USE"/>
   <flag value="-debug:full" if="HXCPP_DEBUG_LINK" unless="HXCPP_FAST_LINK"/>
   <flag value="-debug:fastlink" if="HXCPP_FAST_LINK HXCPP_DEBUG_LINK"/>
   <flag value="-OPT:REF,ICF" if="HXCPP_PDB_FILE"/>
@@ -201,6 +207,8 @@
   <flag value="-INCREMENTAL:NO" if="HXCPP_PDB_FILE" />
   <flag value="-LTCG" if="HXCPP_OPTIMIZE_LINK" unless="debug || HXCPP_LTCG_INCREMENTAL"/>
   <flag value="-LTCG:INCREMENTAL" if="HXCPP_LTCG_INCREMENTAL" unless="debug"/>
+  <flag value="-GENPROFILE:EXACT,PGD=${HXCPP_PGO_DIR}/${HXCPP_PGO_NAME}.pgd" if="HXCPP_PGO_GENERATE"/>
+  <flag value="-USEPROFILE:PGD=${HXCPP_PGO_DIR}/${HXCPP_PGO_NAME}.pgd" if="HXCPP_PGO_USE"/>
   <flag value="-subsystem:windows${SUBSYSTEM_VER}" if="SUBSYSTEMWINDOWS" />
   <flag value="-subsystem:console${SUBSYSTEM_VER}" if="SUBSYSTEMCONSOLE" />
   <flag value="-NOIMPLIB" if="HXCPP_NO_IMPLIB" />

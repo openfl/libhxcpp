@@ -53,13 +53,12 @@ jobs:
     # run.sh links libFuzzer without its main, from compiler-rt
     - name: Install libFuzzer
       run: |
-        dir=$(clang++ --print-runtime-dir)
-        if ! ls "$dir"/libclang_rt.fuzzer_no_main*.a 2>/dev/null; then
+        if ! bash test/fuzz/find-libfuzzer.sh >/dev/null 2>&1; then
           major=$(clang++ -dumpversion | cut -d. -f1)
           sudo apt-get update -qq
           sudo apt-get install -y -qq libclang-rt-$major-dev
-          ls "$dir"/libclang_rt.fuzzer_no_main*.a
         fi
+        bash test/fuzz/find-libfuzzer.sh
 
     # The inputs that reached new code in earlier runs, so each run starts
     # where the last one stopped

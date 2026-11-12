@@ -409,7 +409,8 @@ class Fuzz {
 	/**
 		A pattern and a subject: one byte of options, then the pattern up to
 		a zero byte, then the subject. Every EReg method on the result, with
-		positions that may be out of range.
+		positions that may be out of range, once a match over the whole
+		subject has given an answer.
 	**/
 	static function ereg(b:Bytes) {
 		if (b.length < 1)
@@ -428,7 +429,15 @@ class Fuzz {
 		var r:EReg = attempt(() -> new EReg(pattern, opts));
 		if (r == null)
 			return;
-		if (attempt(() -> r.match(subject)) == true) {
+		var matched:Null<Bool> = attempt(() -> r.match(subject));
+		// PCRE2 gives up on a match after its match limit, 10 million steps
+		// from one start, and the EReg throws. A pattern such as "(\D+)*x"
+		// backtracks through every way to split the subject, so each call over
+		// the subject below would run to the limit again: five of them took
+		// 12 seconds under the sanitizers
+		if (matched == null)
+			return;
+		if (matched) {
 			var p = r.matchedPos();
 			if (p.pos < 0 || p.len < 0 || p.pos + p.len > subject.length)
 				fail('matchedPos ${p.pos},${p.len} is outside a subject of length ${subject.length}');

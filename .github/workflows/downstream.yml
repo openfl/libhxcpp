@@ -43,19 +43,30 @@ jobs:
       - name: libraries
         shell: bash
         run: |
-          haxelib install emitter 2.0.0 --always
-          haxelib install utest 1.13.2 --always
+          bash test/downstream/haxelib-install.sh emitter 2.0.0
+          bash test/downstream/haxelib-install.sh utest 1.13.2
           haxelib set utest 1.13.2 --always
           haxelib dev crossbyte "$PWD/crossbyte"
 
-      # Run from CrossByte's root: some tests look for src/ above the working directory
+      # Run from CrossByte's root: some tests look for src/ above the working directory.
+      # KNOWN_FAILURES are failures of CrossByte's own tests, not of this runtime:
+      # the step passes with a warning when they are the only ones. Take each out
+      # once CrossByte's test is fixed.
+      # - testASmallInt64IsAnInt64WhenWrapped expects an int32 when
+      #   Std.isOfType(boxed, Int) is true. hxcpp has answered true for an Int64
+      #   in the Int range since 2016, and BsonWriter.isInt64, which the encoder
+      #   goes by, sees the Int64 box libhxcpp makes of small values as well
+      #   (01d67a2f), so an int64 is written. The test should ask
+      #   BsonWriter.isInt64(boxed), as the encoder does.
       - name: native suite
         shell: bash
         working-directory: crossbyte
+        env:
+          KNOWN_FAILURES: testASmallInt64IsAnInt64WhenWrapped
         run: |
           haxe -cp src -lib emitter -cp tests -lib utest -D HXCPP_M64 -main NativeSmokeMain --cpp ../cb/native \
             --macro "crossbyte._internal.macro.HostPlatform.define()" --macro "crossbyte.test.SuiteCoverage.check()"
-          timeout 1200 ../cb/native/NativeSmokeMain
+          bash ../test/downstream/run-suite.sh ../cb/native.log timeout 1200 ../cb/native/NativeSmokeMain
 
       - name: stress suite
         if: ${{ !cancelled() }}
@@ -86,7 +97,7 @@ jobs:
         shell: bash
         run: |
           for lib in lime openfl lime-samples openfl-samples actuate flixel feathersui haxeui-core haxeui-openfl; do
-            haxelib install $lib --always > /dev/null || exit 1
+            bash test/downstream/haxelib-install.sh $lib || exit 1
           done
           haxelib list
 

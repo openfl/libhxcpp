@@ -1,0 +1,10 @@
+a library's socket, idle: true
+a library's socket, ready: true
+prepared again, idle: true
+prepared again, ready: true
+prepared for writing: true
+prepared for reading again: true
+a library's socket with a reused descriptor, idle: true
+a library's socket with a reused descriptor, ready: true
+a runtime socket with a library's descriptor, idle: true
+a runtime socket with a library's descriptor, ready: true

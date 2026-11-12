@@ -19,6 +19,34 @@ All six `gc_frames` processes returned checksum 1106626610; all six `gc_pauses` 
 
 The largest budgeted collector invocation was 1.346 ms in `gc_frames` and 1.783 ms in `gc_pauses`, against a requested 0.5 ms. Cumulative unbudgeted maxima were 13.553 ms and 9.971 ms, respectively, including explicit collections outside measured frames. These results do not establish a sub-millisecond collector or eliminate synchronous interruptions.
 
+## Pacing, sweep and slices
+
+These results are for the pacer, the slice changes and the sweep, on main at `346c7e52` against the same source with them. Elapsed time is the median of each process's median sample, and the change is the median of its ratio to the existing collector in the same round. p99.9 is the median across processes. Maximum pause is the longest budgeted slice in any process, from the `maxSlicePauseMs` counter.
+
+| Workload | Collector | Elapsed, ms | vs existing | p99.9, ms | Worst unit, ms | Maximum slice, ms | Peak RSS, MiB |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `gc_frames` | Existing | 217.6 | | 7.66 | 11.78 | | 127 |
+| `gc_frames` | Incremental at `346c7e52` | 289.0 | +36.5% | 1.06 | 4.72 | 3.17 | 134 |
+| `gc_frames` | Incremental now | 257.1 | +15.6% | 0.81 | 5.06 | 2.23 | 140 |
+| `gc_pauses` | Existing | 150.0 | | 4.98 | 8.62 | | 133 |
+| `gc_pauses` | Incremental at `346c7e52` | 259.4 | +78.3% | 2.84 | 6.33 | 4.43 | 133 |
+| `gc_pauses` | Incremental now | 160.5 | +9.0% | 0.87 | 4.29 | 3.26 | 134 |
+
+The harness collects between samples, and that restarts the count to the existing collector's periodic full reclaim, which comes every 15 collections. No sample reaches it, though an application that does not collect explicitly does. With those collections taken out of the harness:
+
+| Workload | Collector | Elapsed, ms | vs existing | p99.9, ms | Worst unit, ms | Maximum slice, ms | Peak RSS, MiB |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `gc_frames` | Existing | 225.6 | | 7.81 | 12.56 | | 129 |
+| `gc_frames` | Incremental at `346c7e52` | 300.1 | +33.6% | 1.06 | 4.08 | 3.88 | 134 |
+| `gc_frames` | Incremental now | 249.3 | +10.5% | 0.78 | 3.78 | 1.22 | 140 |
+| `gc_pauses` | Existing | 153.9 | | 5.33 | 11.49 | | 133 |
+| `gc_pauses` | Incremental at `346c7e52` | 278.1 | +78.0% | 2.79 | 6.91 | 5.55 | 132 |
+| `gc_pauses` | Incremental now | 164.9 | +5.1% | 0.86 | 3.92 | 2.53 | 134 |
+
+The same changes took the longest slice from 17.0 ms to 3.1 ms on a heap of a million entities and about 800 MiB, a `gc_frames` world with 8,000 frames per sample, where a full reclaim costs most. That workload and a port of another frame loop are not in the harness.
+
+Windows x64 as below, Haxe 4.3.7. Eight rounds of two warmups and ten samples with the harness as it is, and four rounds of two warmups and 24 samples without its collections, the order of the collectors rotating each round, on a machine 8 to 18% busy with other work. Checksums agreed in every round. The differences of a few percent between the two tables are within what a rebuild or the other load can move.
+
 ## Protocol
 
 - Windows x64, AMD Ryzen 9 9950X, Haxe 4.3.7 and MSVC 19.44.35213.

@@ -368,6 +368,7 @@ struct MarkChunk
 {
    enum { SIZE = 62 };
    enum { OBJ_ARRAY_JOB = -1 };
+   enum { RANGE_CHUNK_JOB = -2 };
 
    inline MarkChunk() : count(0), next(0) { }
 
@@ -381,6 +382,14 @@ struct MarkChunk
          hx::Object **arrayBase;
          int        arrayElements;
       };
+      #ifdef HXCPP_GC_INCREMENTAL
+      struct
+      {
+         hx::Object *rangeOwner;
+         IncrementalRangeScan rangeScan;
+         size_t     rangeStart;
+      };
+      #endif
    };
    MarkChunk  *next;
 
@@ -418,6 +427,7 @@ struct StackContext : public hx::ImmixAllocator
    std::vector<hx::IncrementalEntry> mIncrementalEntries;
    size_t mIncrementalRead = 0;
    unsigned int mIncrementalMutations = 0;
+   hx::Object *mIncrementalScopes[hx::IncrementalScopeDepth];
    #endif
    #ifdef HXCPP_STACK_IDS
       int  mThreadId;
