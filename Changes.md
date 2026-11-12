@@ -2,6 +2,7 @@
 libhxcpp 6.0.0 (unreleased)
 ------------------------------------------------------------
 
+* Fixed a native extension that includes hx/CFFI.h before hx/CFFIPrime.h, as SteamWrap does, failing to compile with hxs_encoding, hxs_utf16 and alloc_hxs_utf8 not declared: CFFI.h included first declares the CFFI API without HXCPP_PRIME, so without the Prime string functions that the ordinary wrapper of a DEFINE_PRIME function now uses. CFFIPrime.h declares them then
 * Made the collector's thread context on Linux a __thread pointer, read with one load from the thread pointer, instead of a call to pthread_getspecific each time an allocation leaves the inline path or a String or number is boxed. It was 3 to 4% of an OpenFL game's main thread. HXCPP_PTHREAD_FAST_TLS keeps pthread_getspecific (libhxcpp #429)
 * Fixed a call on a null Array<Dynamic> in cppia ending the process under HXCPP_CHECK_POINTER: push, contains, remove, indexOf, lastIndexOf, join, toString, sort, insert and unshift used the array without checking it, interpreted and under the JIT. They throw Null Object Reference, as a typed array's calls and the other Array<Dynamic> calls do
 * Fixed the 32-bit x86 collector missing live objects held only in EBP when frame pointers are omitted. It now captures EBP with the other callee-saved registers; the lost strings in the Linux 32 CFFI tests were one consequence (libhxcpp #430)
