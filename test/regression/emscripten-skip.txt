@@ -21,6 +21,7 @@ CppiaJitThrowNull: its host is the first --next section, which -D emscripten doe
 CppiaLazyJit: threads, and Emscripten has no cppia JIT
 CppiaModuleFree: threads
 CppiaModuleRetained: threads
+CppiaNullDynamicArray: its host is the first --next section, which -D emscripten does not reach, and it runs the script under the JIT too, and Emscripten has no cppia JIT
 CppiaStackSize: threads (std::thread, which needs a pthreads build)
 DateTimezoneCache: Emscripten takes the local zone from JavaScript and ignores TZ
 ExitWithBusyWorker: processes and threads
