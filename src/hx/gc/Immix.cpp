@@ -7203,7 +7203,16 @@ public:
    {
       int oldest = 0;
       for(int i=0;i<mAllBlocks.size();i++)
-         oldest = std::max(oldest, mAllBlocks[i]->maxStartAge());
+      {
+         BlockDataInfo *block = mAllBlocks[i];
+         // Runs between collections, while the zeroing thread may be
+         //  reclaiming or zeroing the block under this lock
+         int expected = 0;
+         while (!block->mZeroLock.compare_exchange_weak(expected, 1))
+            expected = 0;
+         oldest = std::max(oldest, block->maxStartAge());
+         block->mZeroLock = 0;
+      }
       return oldest;
    }
    #endif
