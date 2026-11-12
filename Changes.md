@@ -2,6 +2,7 @@
 libhxcpp 6.0.0 (unreleased)
 ------------------------------------------------------------
 
+* Fixed resize() and cpp.NativeArray.setSize() on an Array<Dynamic> under the cppia JIT evaluating the array expression twice, so a call in it ran twice and the array it returned the second time was the one resized. The JIT evaluates it once (libhxcpp #411)
 * Fixed indexOf and lastIndexOf on an Array<Dynamic> under the cppia JIT ignoring fromIndex: the JIT never generated it, so a call or exception in it was lost too. The search starts from it, as it does interpreted and in compiled code (libhxcpp #410)
 * Fixed reverse() and resize() on an Array<Dynamic> in interpreted cppia doing nothing: the interpreter had no case for them, and resize never evaluated its argument. They reverse and resize the array, as they do under the JIT and in compiled code (libhxcpp #409)
 * Made the collector's thread context on Linux a __thread pointer, read with one load from the thread pointer, instead of a call to pthread_getspecific each time an allocation leaves the inline path or a String or number is boxed. It was 3 to 4% of an OpenFL game's main thread. HXCPP_PTHREAD_FAST_TLS keeps pthread_getspecific (libhxcpp #429)

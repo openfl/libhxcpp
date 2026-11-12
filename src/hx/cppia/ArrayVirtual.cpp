@@ -778,23 +778,17 @@ struct ArrayBuiltinAny : public ArrayBuiltinBase
             }
             break;
 
+         // The array is thisVal, evaluated and checked above: evaluating it
+         //  again would run its side effects twice
          case af__SetSizeExact:
-            {
-               JitTemp thisVal(compiler,jtPointer);
-               thisExpr->genCode(compiler, thisVal, etObject);
-               args[0]->genCode(compiler, sJitArg1.as(jtInt), etInt);
-               compiler->callNative( (void *)arraySetSizeExact, thisVal, sJitArg1.as(jtInt));
-               break;
-            }
+            args[0]->genCode(compiler, sJitArg1.as(jtInt), etInt);
+            compiler->callNative( (void *)arraySetSizeExact, thisVal, sJitArg1.as(jtInt));
+            break;
 
          case afResize:
-            {
-               JitTemp thisVal(compiler,jtPointer);
-               thisExpr->genCode(compiler, thisVal, etObject);
-               args[0]->genCode(compiler, sJitArg1.as(jtInt), etInt);
-               compiler->callNative( (void *)arrayResize, thisVal, sJitArg1.as(jtInt));
-               break;
-            }
+            args[0]->genCode(compiler, sJitArg1.as(jtInt), etInt);
+            compiler->callNative( (void *)arrayResize, thisVal, sJitArg1.as(jtInt));
+            break;
 
          case afBlit:
             {
