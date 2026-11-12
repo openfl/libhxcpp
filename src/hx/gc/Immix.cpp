@@ -32,6 +32,16 @@
 #include <string>
 #include <stdlib.h>
 
+// glibc keeps the memory of a freed buffer in its heap, unless the buffer was
+//  mapped on its own, and it stops mapping buffers on their own up to the size
+//  of the largest one freed so far, 32 MB at most on 64 bits. The memory of the
+//  large buffers a collection frees then stays the process's, for the next
+//  allocation of a size that fits, which may never come
+#if defined(__GLIBC__) && !defined(__EMSCRIPTEN__)
+   #include <malloc.h>
+   #define HX_GC_TRIM_FREED
+#endif
+
 #if defined(__SANITIZE_ADDRESS__)
    #define HX_ADDRESS_SANITIZER
 #elif defined(__has_feature)
@@ -3840,6 +3850,11 @@ public:
 
 
 static const size_t sLargeAllocSpaceFloor = 40 << 20;
+#ifdef HX_GC_TRIM_FREED
+// The heap is trimmed once this much has been freed to it: a trim walks every
+//  free chunk of the heap, which is not worth it for less
+static const size_t sTrimFreedBytes = 16 << 20;
+#endif
 
 class GlobalAllocator *sGlobalAlloc = 0;
 
@@ -4223,6 +4238,37 @@ public:
       return bytes;
    }
 
+   // Counts memory handed to free(), for trimFreed
+   void noteFreed(size_t inBytes)
+   {
+      #ifdef HX_GC_TRIM_FREED
+      mFreedSinceTrim.fetch_add(inBytes, std::memory_order_relaxed);
+      #endif
+   }
+
+   bool trimDue()
+   {
+      #ifdef HX_GC_TRIM_FREED
+      return mFreedSinceTrim.load(std::memory_order_relaxed) >= sTrimFreedBytes;
+      #else
+      return false;
+      #endif
+   }
+
+   // Hands the free memory of the C heap back to the system once enough has
+   //  been freed to it. Not called while the other threads wait: the trim
+   //  takes time in the memory it gives back
+   void trimFreed()
+   {
+      #ifdef HX_GC_TRIM_FREED
+      if (trimDue())
+      {
+         mFreedSinceTrim.store(0, std::memory_order_relaxed);
+         malloc_trim(0);
+      }
+      #endif
+   }
+
    // A collection drops the recycle cache it found, and frees it once every
    //  thread runs again: freeing tens of thousands of buffers took tens of
    //  milliseconds while they all waited (libhxcpp #332). A thread of its
@@ -4231,7 +4277,8 @@ public:
    //  before it returns
    void releaseDropped(RecycleLists &ioDropped, bool inNow)
    {
-      if (ioDropped.empty() && !inNow)
+      // With nothing to free, the releaser still trims what the sweep freed
+      if (ioDropped.empty() && !inNow && !trimDue())
          return;
       #if !defined(HXCPP_SINGLE_THREADED_APP) && !defined(__EMSCRIPTEN__)
       if (!inNow)
@@ -4264,21 +4311,31 @@ public:
       }
       #endif
 
-      mDroppedBytes.fetch_sub(freeRecycle(ioDropped), std::memory_order_relaxed);
+      releaseBatch(ioDropped);
 
       #if !defined(HXCPP_SINGLE_THREADED_APP) && !defined(__EMSCRIPTEN__)
-      std::unique_lock<std::mutex> lock(mReleaseLock);
-      while(!mReleaseQueue.empty())
       {
-         RecycleLists waiting;
-         waiting.swap(mReleaseQueue.back());
-         mReleaseQueue.pop_back();
-         lock.unlock();
-         mDroppedBytes.fetch_sub(freeRecycle(waiting), std::memory_order_relaxed);
-         lock.lock();
+         std::unique_lock<std::mutex> lock(mReleaseLock);
+         while(!mReleaseQueue.empty())
+         {
+            RecycleLists waiting;
+            waiting.swap(mReleaseQueue.back());
+            mReleaseQueue.pop_back();
+            lock.unlock();
+            releaseBatch(waiting);
+            lock.lock();
+         }
+         mReleaseIdle.wait(lock, [this]() { return !mReleaseBusy; });
       }
-      mReleaseIdle.wait(lock, [this]() { return !mReleaseBusy; });
       #endif
+      trimFreed();
+   }
+
+   void releaseBatch(RecycleLists &ioBatch)
+   {
+      size_t bytes = freeRecycle(ioBatch);
+      mDroppedBytes.fetch_sub(bytes, std::memory_order_relaxed);
+      noteFreed(bytes);
    }
 
    #if !defined(HXCPP_SINGLE_THREADED_APP) && !defined(__EMSCRIPTEN__)
@@ -4295,7 +4352,8 @@ public:
          mReleaseQueue.pop_back();
          mReleaseBusy = true;
          lock.unlock();
-         mDroppedBytes.fetch_sub(freeRecycle(batch), std::memory_order_relaxed);
+         releaseBatch(batch);
+         trimFreed();
          lock.lock();
          mReleaseBusy = false;
          mReleaseIdle.notify_all();
@@ -5168,6 +5226,7 @@ public:
             #endif
 
             HxFreeGCBlock(g.alloc);
+            noteFreed(groupBytes);
             g.alloc = 0;
 
             groups++;
@@ -6754,6 +6813,7 @@ public:
             else
             {
                HxFree(blob);
+               noteFreed(size);
             }
 
             qeraseLarge(idx);
@@ -7628,6 +7688,10 @@ public:
    std::atomic_size_t mRecycleBytes;
    // The data bytes of dropped caches not freed yet
    std::atomic_size_t mDroppedBytes;
+   #ifdef HX_GC_TRIM_FREED
+   // Bytes freed to the C heap since it was last trimmed
+   std::atomic_size_t mFreedSinceTrim{0};
+   #endif
    #if !defined(HXCPP_SINGLE_THREADED_APP) && !defined(__EMSCRIPTEN__)
    std::mutex mReleaseLock;
    std::condition_variable mReleaseWake;
