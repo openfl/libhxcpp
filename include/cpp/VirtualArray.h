@@ -631,7 +631,8 @@ public:
    ::hx::Callable<::Dynamic()> keyValueIterator_dyn();
    ::hx::Callable<::String(::String)> join_dyn();
    ::hx::Callable<::Dynamic()> pop_dyn();
-   template<typename T>
+   // Haxe 5 asks for push_dyn() of an Array<T> with no argument
+   template<typename T = ::Dynamic>
    ::hx::Callable<int(T)> push_dyn()
    {
        struct _hx_virtualarray_push : public ::hx::AutoCallable_obj<int(T)>
@@ -646,6 +647,21 @@ public:
            int _hx_run(T in) override
            {
                return mThis->push(in);
+           }
+
+           // As the closures HX_VARRAY_FUNC makes: without __Mark the array
+           //  was collected while only the closure held it
+           void* __GetHandle() const override { return mThis.GetPtr(); }
+           void __Mark(::hx::MarkContext *__inCtx) override { HX_MARK_MEMBER(mThis); }
+#ifdef HXCPP_VISIT_ALLOCS
+           void __Visit(::hx::VisitContext *__inCtx) override { HX_VISIT_MEMBER(mThis); }
+#endif
+           int __Compare(const ::hx::Object* inRhs) const override
+           {
+               auto casted = dynamic_cast<const _hx_virtualarray_push *>(inRhs);
+               if (!casted) return 1;
+               if (mThis.GetPtr() != casted->mThis.GetPtr()) return -1;
+               return 0;
            }
        };
 

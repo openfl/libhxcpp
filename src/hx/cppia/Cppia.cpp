@@ -7015,6 +7015,10 @@ struct VarRef : public CppiaExpr
    const char *getName() HXCPP_OVERRIDE { return "VarRef"; }
    CppiaExpr *link(CppiaModule &inModule) HXCPP_OVERRIDE
    {
+      // Outside a function, as a var's initial value or a class's __init__
+      // body that is not a function, there is no frame to find a local in
+      if (!inModule.layout)
+         throw "Local variable outside a function";
       var = inModule.layout->findVar(varId);
       if (!var)
       {
@@ -7144,6 +7148,9 @@ struct RetVal : public CppiaVoidExpr
    {
       if (value)
       {
+         // There is no function to return a value from
+         if (!inModule.layout)
+            throw "Return outside a function";
          value = value->link(inModule);
          returnType = inModule.layout->returnType;
       }

@@ -61,12 +61,17 @@ void CaptureX86(RegisterCaptureBuffer &outBuffer)
    void *regEsi;
    void *regEdi;
    void *regEbx;
+   // EBP is another callee-saved general register when frame pointers are
+   // omitted. A live object may be held only there across a collection.
+   void *regEbp;
    asm ("mov %%esi, %0\n\t" : "=r" (regEsi) );
    asm ("mov %%edi, %0\n\t" : "=r" (regEdi) );
    asm ("mov %%ebx, %0\n\t" : "=r" (regEbx) );
+   asm ("mov %%ebp, %0\n\t" : "=r" (regEbp) );
    outBuffer.esi = regEsi;
    outBuffer.edi = regEdi;
    outBuffer.ebx = regEbx;
+   outBuffer.ebp = regEbp;
 }
 
 } // end namespace hx

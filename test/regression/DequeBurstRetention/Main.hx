@@ -3,7 +3,8 @@ import sys.thread.Deque;
 
 // A deque that drained after a burst of a million messages kept the
 // storage the burst grew it to, 8 MB on 64-bit, for as long as the deque
-// lived (libhxcpp #316)
+// lived (libhxcpp #316). Haxe 5's Deque is the std's, an Array that pop
+// shifts, so there this checks what the Array gives back as it drains
 class Main {
 	static inline var BURST = 1000000;
 

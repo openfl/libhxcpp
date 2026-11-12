@@ -2,4 +2,5 @@ direct methods kept: true
 adapted methods kept: true
 adapters still call: true
 string methods checked: true
+local functions released with live captures: true
 released with receivers: true

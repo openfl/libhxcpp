@@ -77,10 +77,39 @@ namespace hx
     template<class TReturn, class... TArgs>
     class HXCPP_EXTERN_CLASS_ATTRIBUTES AutoCallable_obj;
 
+#ifdef HXCPP_VISIT_ALLOCS
+    // Counts what a callable visits and keeps the object it found
+    struct CallableHandleVisitor : public VisitContext
+    {
+        hx::Object *object = nullptr;
+        int count = 0;
+
+        void visitObject(hx::Object **ioPtr) override { object = *ioPtr; count++; }
+        void visitAlloc(void **ioPtr) override { count++; }
+    };
+#endif
+
     template<class TReturn, class... TArgs>
     class HXCPP_EXTERN_CLASS_ATTRIBUTES AutoCallable_obj<TReturn(TArgs...)> : public ::hx::Callable_obj<TReturn(TArgs...)>
     {
         Dynamic __Run(const Array<Dynamic>& inArgs) override final;
+
+    public:
+        // Haxe 5 generates a member closure as a struct holding its receiver in
+        //  __this, with no __GetHandle, so weak references lost the closure
+        //  while its receiver lived. A callable that visits one object hands
+        //  that object back, as the closures of CreateMemberFunctionVar do.
+        //  Local functions return 0 through HX_LOCAL_FUNC_NO_HANDLE.
+        void* __GetHandle() const override
+        {
+#ifdef HXCPP_VISIT_ALLOCS
+            CallableHandleVisitor visitor;
+            const_cast<AutoCallable_obj*>(this)->__Visit(&visitor);
+            if (visitor.count == 1)
+                return visitor.object;
+#endif
+            return 0;
+        }
     };
 
     // ::hx::ObjectPtr overloads
@@ -112,6 +141,12 @@ namespace hx
 
         Callable(const ::cpp::Variant& inVariant)
             : Callable(Dynamic(inVariant.asObject())) {}
+
+        // A plain function, such as an extern function used as a value,
+        // through the function object that Dynamic makes of it
+        template<class TOtherReturn, class... TOtherArgs>
+        Callable(TOtherReturn (*inFunction)(TOtherArgs...), typename std::enable_if<IsFunctionValue<TOtherReturn, TOtherArgs...>::value, int>::type = 0)
+            : Callable(Dynamic(inFunction)) {}
 
         Callable(::cpp::Function<TReturn(TArgs...)> inFunction)
             : super(nullptr)
@@ -307,6 +342,11 @@ namespace hx
         Callable(const ::cpp::Variant& inVariant)
             : Callable(Dynamic(inVariant.asObject())) {}
 
+        // See the other Callable's
+        template<class TOtherReturn, class... TOtherArgs>
+        Callable(TOtherReturn (*inFunction)(TOtherArgs...), typename std::enable_if<IsFunctionValue<TOtherReturn, TOtherArgs...>::value, int>::type = 0)
+            : Callable(Dynamic(inFunction)) {}
+
         Callable(::cpp::Function<void(TArgs...)> inFunction)
             : super(nullptr)
         {
@@ -430,6 +470,77 @@ namespace hx
         }
     };
 #endif
+
+    // The function object for a plain function used as a value, made by the
+    // Dynamic constructor that takes one
+#if (HXCPP_API_LEVEL>=500)
+    // By value, as the function types Haxe generates take their arguments,
+    // so that a typed Callable takes this object as it is
+    template<class TReturn, class... TArgs>
+    struct StaticFunction_obj final : public AutoCallable_obj<TReturn(typename std::decay<TArgs>::type...)>
+    {
+        TReturn (*function)(TArgs...);
+
+        StaticFunction_obj(TReturn (*inFunction)(TArgs...)) : function(inFunction)
+        {
+            HX_OBJ_WB_NEW_MARKED_OBJECT(this);
+        }
+
+        TReturn HX_LOCAL_RUN(typename std::decay<TArgs>::type... args) override
+        {
+            return function(args...);
+        }
+
+        void *__GetHandle() const override
+        {
+            return reinterpret_cast<void *>(function);
+        }
+    };
+#else
+    template<std::size_t... I> struct IndexList { };
+    template<std::size_t N, std::size_t... I> struct MakeIndexList : MakeIndexList<N - 1, N - 1, I...> { };
+    template<std::size_t... I> struct MakeIndexList<0, I...> { typedef IndexList<I...> type; };
+
+    template<class TReturn, class... TArgs>
+    struct StaticFunction_obj : public hx::Object
+    {
+        TReturn (*function)(TArgs...);
+
+        StaticFunction_obj(TReturn (*inFunction)(TArgs...)) : function(inFunction)
+        {
+            HX_OBJ_WB_NEW_MARKED_OBJECT(this);
+        }
+
+        int __GetType() const HXCPP_OVERRIDE { return vtFunction; }
+        int __ArgCount() const HXCPP_OVERRIDE { return sizeof...(TArgs); }
+        void *__GetHandle() const HXCPP_OVERRIDE { return reinterpret_cast<void *>(function); }
+
+        // Dynamic calls of each arity reach here through hx::Object::__run
+        Dynamic __Run(const Array<Dynamic> &inArgs) HXCPP_OVERRIDE
+        {
+            return call(inArgs, typename MakeIndexList<sizeof...(TArgs)>::type(), std::is_void<TReturn>());
+        }
+
+        template<class TArray, std::size_t... I>
+        Dynamic call(const TArray &inArgs, IndexList<I...>, std::false_type)
+        {
+            return function(static_cast<TArgs>(inArgs[I])...);
+        }
+
+        template<class TArray, std::size_t... I>
+        Dynamic call(const TArray &inArgs, IndexList<I...>, std::true_type)
+        {
+            function(static_cast<TArgs>(inArgs[I])...);
+            return Dynamic();
+        }
+    };
+#endif
+
+    template<typename TReturn, typename... TArgs>
+    hx::Object *NewStaticFunction(TReturn (*inFunction)(TArgs...))
+    {
+        return inFunction ? new StaticFunction_obj<TReturn, TArgs...>(inFunction) : nullptr;
+    }
 }
 
 #endif

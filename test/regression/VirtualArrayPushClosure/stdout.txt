@@ -1,0 +1,1 @@
+push closures keep their arrays: true

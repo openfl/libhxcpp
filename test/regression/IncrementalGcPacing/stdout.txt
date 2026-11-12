@@ -1,0 +1,2 @@
+a cycle spends most of the free space: true
+allocation in a mutation scope needs no fallback: true

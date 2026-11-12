@@ -2,13 +2,14 @@
 #define HX_INCREMENTAL_API_H
 
 #ifdef HXCPP_GC_INCREMENTAL
-static void IncrementalAutomatic(hx::ImmixAllocator *inAlloc, bool inPressure)
+static void IncrementalAutomatic(hx::ImmixAllocator *inAlloc, bool inPressure, size_t inAllocated)
 {
    if (!sgInternalEnable)
       return;
-   hx::StackContext *ctx = static_cast<hx::StackContext *>(inAlloc);
-   if (ctx->mIncrementalMutations)
-      return;
+   // A slice can run inside a mutation scope, as one on another thread can: the
+   // allocation that brought it here is a safe point, and only finishing waits
+   // for the scope. An app whose allocation is mostly array storage would
+   // otherwise get no slices, and every collection would be a full stop.
    hx::IncrementalState &state = hx::IncrementalData();
    bool expected = false;
    if (!state.automaticRunning.compare_exchange_strong(expected, true, std::memory_order_relaxed))
@@ -20,7 +21,7 @@ static void IncrementalAutomatic(hx::ImmixAllocator *inAlloc, bool inPressure)
    } release{state};
    double now = hx::IncrementalNow();
    double due = state.nextAutomatic.load(std::memory_order_relaxed);
-   if (!inPressure && now < due)
+   if (!inPressure && now < due && !state.sliceDue(inAllocated, now))
       return;
    state.nextAutomatic.store(now + state.intervalMs.load() / 1000.0, std::memory_order_relaxed);
    double previous = hx::sIncrementalRequestMs;
@@ -35,6 +36,8 @@ static void IncrementalAutomatic(hx::ImmixAllocator *inAlloc, bool inPressure)
       throw;
    }
    hx::sIncrementalRequestMs = previous;
+   state.lastSliceAllocated.store(inAllocated, std::memory_order_relaxed);
+   state.lastSliceEnd.store(hx::IncrementalNow(), std::memory_order_relaxed);
 }
 #endif
 
@@ -104,19 +107,21 @@ Dynamic __hxcpp_gc_incremental_stats()
       sliceMax = state.maxSlicePauseMs;
       syncMax = state.maxSynchronousPauseMs;
    }
-   return hx::Anon_obj::Create(12)
-       ->setFixed(0, HX_CSTRING("cycles"), cycles)
-       ->setFixed(1, HX_CSTRING("pauses"), pauses)
-       ->setFixed(2, HX_CSTRING("fallbacks"), fallbacks)
-       ->setFixed(3, HX_CSTRING("totalPauseMs"), total)
-       ->setFixed(4, HX_CSTRING("maxPauseMs"), longest)
-       ->setFixed(5, HX_CSTRING("lastPauseMs"), last)
-       ->setFixed(6, HX_CSTRING("lastCycleSlices"), slices)
-       ->setFixed(7, HX_CSTRING("active"), hx::gIncrementalActive.load())
-       ->setFixed(8, HX_CSTRING("forcedFinishes"), forced)
-       ->setFixed(9, HX_CSTRING("requestedSlices"), requested)
-       ->setFixed(10, HX_CSTRING("maxSlicePauseMs"), sliceMax)
-       ->setFixed(11, HX_CSTRING("maxSynchronousPauseMs"), syncMax);
+   // Not fixed fields: a read by name searches those by hash, so they have to
+   // be set in hash order
+   return hx::Anon_obj::Create()
+       ->Add(HX_CSTRING("cycles"), cycles)
+       ->Add(HX_CSTRING("pauses"), pauses)
+       ->Add(HX_CSTRING("fallbacks"), fallbacks)
+       ->Add(HX_CSTRING("totalPauseMs"), total)
+       ->Add(HX_CSTRING("maxPauseMs"), longest)
+       ->Add(HX_CSTRING("lastPauseMs"), last)
+       ->Add(HX_CSTRING("lastCycleSlices"), slices)
+       ->Add(HX_CSTRING("active"), hx::gIncrementalActive.load())
+       ->Add(HX_CSTRING("forcedFinishes"), forced)
+       ->Add(HX_CSTRING("requestedSlices"), requested)
+       ->Add(HX_CSTRING("maxSlicePauseMs"), sliceMax)
+       ->Add(HX_CSTRING("maxSynchronousPauseMs"), syncMax);
 #else
    return hx::Anon_obj::Create(1)->setFixed(0, HX_CSTRING("active"), false);
 #endif
@@ -158,6 +163,18 @@ int __hxcpp_gc_incremental_test(int inOperation, hx::Object *inObject)
          return state.finishPending;
       case 8:
          return GetLocalAlloc()->allocBase && GetLocalAlloc()->spaceEnd > GetLocalAlloc()->spaceStart;
+      case 10:
+         return sGlobalAlloc->maxStartAge();
+      case 11:
+         return static_cast<int>(state.fullReclaims);
+      case 9:
+      {
+         int chunks = 0;
+         for (hx::MarkChunk *chunk = hx::sGlobalChunks.processList; chunk; chunk = chunk->next)
+            if (chunk->count == hx::MarkChunk::RANGE_CHUNK_JOB)
+               chunks++;
+         return chunks;
+      }
       default:
          return -1;
    }
