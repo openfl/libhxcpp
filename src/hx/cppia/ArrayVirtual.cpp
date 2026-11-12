@@ -26,13 +26,19 @@ static hx::Object * SLJIT_CALL arrayConcat(ArrayAnyImpl *inObj, hx::Object *inVa
 {
    return inObj->concat(Dynamic(inValue)).mPtr;
 }
+// These throw for a size or range the array cannot take: the exception becomes
+//  the script's pending one, which the code after the call checks
 static void SLJIT_CALL arraySetSizeExact(ArrayAnyImpl *inObj, int inSize)
 {
+   TRY_NATIVE
    inObj->__SetSizeExact(inSize);
+   CATCH_NATIVE
 }
 static void SLJIT_CALL arrayResize(ArrayAnyImpl *inObj, int inSize)
 {
+   TRY_NATIVE
    inObj->resize(inSize);
+   CATCH_NATIVE
 }
 
 
@@ -142,9 +148,11 @@ static void SLJIT_CALL arrayUnshiftString( ArrayAnyImpl *inArray, String *inVal)
 static void SLJIT_CALL runBlit( JitMultiArg *inArgs)
 {
     // this, inDestElement, inSourceArray, inSourceElement, inElementCount
+    TRY_NATIVE
     ArrayAnyImpl *dest = (ArrayAnyImpl *)inArgs[0].obj;
     ArrayAnyImpl *src = (ArrayAnyImpl *)inArgs[2].obj;
     dest->blit( inArgs[1].ival, src, inArgs[3].ival, inArgs[4].ival );
+    CATCH_NATIVE
 }
 
 
@@ -783,11 +791,13 @@ struct ArrayBuiltinAny : public ArrayBuiltinBase
          case af__SetSizeExact:
             args[0]->genCode(compiler, sJitArg1.as(jtInt), etInt);
             compiler->callNative( (void *)arraySetSizeExact, thisVal, sJitArg1.as(jtInt));
+            compiler->checkException();
             break;
 
          case afResize:
             args[0]->genCode(compiler, sJitArg1.as(jtInt), etInt);
             compiler->callNative( (void *)arrayResize, thisVal, sJitArg1.as(jtInt));
+            compiler->checkException();
             break;
 
          case afBlit:
@@ -802,6 +812,7 @@ struct ArrayBuiltinAny : public ArrayBuiltinBase
                args[2]->genCode(compiler, fargs.arg(3,jtInt), etInt);
                args[3]->genCode(compiler, fargs.arg(4,jtInt), etInt);
                compiler->callNative( (void *)runBlit, fargs );
+               compiler->checkException();
                break;
             }
 
