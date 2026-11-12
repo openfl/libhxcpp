@@ -43,6 +43,7 @@
  <flag value="-DHXCPP_SCRIPTABLE" if="scriptable" tag="haxe" />
  <flag value="-DHXCPP_CPPIA_STACK_SIZE=${HXCPP_CPPIA_STACK_SIZE}" if="HXCPP_CPPIA_STACK_SIZE" tag="haxe" />
  <flag value="-DHXCPP_SINGLE_THREADED_APP" if="HXCPP_SINGLE_THREADED_APP" tag="haxe" />
+ <flag value="-DHXCPP_PTHREAD_FAST_TLS" if="HXCPP_PTHREAD_FAST_TLS" tag="haxe" />
  <flag value='-DHX_SMART_STRINGS' if="hxcpp_smart_strings" tag="haxe" />
  <flag value='-DHXCPP_CATCH_SEGV' if="HXCPP_CATCH_SEGV" tag="haxe" />
  <flag value='-DHXCPP_API_LEVEL=${removeQuotes:hxcpp_api_level}' if="hxcpp_api_level" tag="haxe" />

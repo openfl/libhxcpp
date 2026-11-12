@@ -1,0 +1,2 @@
+define reaches the compiler: true
+each thread's total: 108890,108890,108890,108890
