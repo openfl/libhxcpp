@@ -81,6 +81,7 @@ ProcessPosixStartError: processes
 ProcessReapAfterClose: processes
 ProcessSigpipeHandler: processes
 ProcessWaitError: processes
+PthreadFastTls: threads
 RegexpConcurrentCollection: threads
 RegexpFailedSubjectRetention: threads (std::thread, which needs a pthreads build)
 RegexpNativeMemoryPressure: threads (std::thread, which needs a pthreads build)

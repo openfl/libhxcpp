@@ -41,6 +41,7 @@ Defines affecting how the code is compiled.  These can be on the command line wh
 | *HXCPP_GC_WATCH*        | An address, such as 0x100000200, whose header and mark the collector logs at each collection, and when the conservative scan finds it or a move takes it; usually with HXCPP_GC_FIXED_BLOCKS |
 | *HXCPP_GC_VERIFY*       | Check the heap's consistency around every collection and stop on the first error. Slow; for debugging the GC |
 | *HXCPP_GC_DEBUG_ALWAYS_MOVE* | Implies HXCPP_GC_MOVING and moves every movable object at each collection, to flush out native code that keeps raw pointers. Slow; for debugging |
+| *HXCPP_PTHREAD_FAST_TLS* | On Linux, read the collector's thread context with pthread_getspecific, as before 6.0, instead of from a __thread pointer |
 | *HXCPP_CATCH_SEGV*      | Turn a segmentation fault into a Haxe exception (a signal handler, or an SEH translator with MSVC), set up on each thread |
 | *HXCPP_SIGNAL_THROW*    | Convert memory errors to Haxe exceptions without extra code |
 | *HXCPP_STRICT_CASTS*    | Throw on a failed cast instead of producing null |
