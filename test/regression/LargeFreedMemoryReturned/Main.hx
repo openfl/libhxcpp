@@ -11,12 +11,22 @@ class Main {
 	static var kept:Array<Bytes> = [];
 	static var temporary:Array<Bytes>;
 
-	// Megabytes of the process in memory, or -1 where /proc does not tell
+	// Megabytes of the process in memory, or -1 where it cannot be measured:
+	// without /proc, and under ASan, whose allocator replaces glibc's and keeps
+	// freed memory in its quarantine
 	static function resident():Float {
-		if (Sys.systemName() != "Linux" || !sys.FileSystem.exists("/proc/self/statm"))
+		#if (HXCPP_SANITIZE == "address")
+		return -1;
+		#else
+		if (Sys.systemName() != "Linux" || !sys.FileSystem.exists("/proc/self/status"))
 			return -1;
-		var pages = Std.parseFloat(sys.io.File.getContent("/proc/self/statm").split(" ")[1]);
-		return pages * 4096 / MB;
+		// VmRSS is in kB whatever the page size, which is 16 or 64 KB on some arm64 kernels
+		for (line in sys.io.File.getContent("/proc/self/status").split("\n")) {
+			if (StringTools.startsWith(line, "VmRSS:"))
+				return Std.parseFloat(StringTools.trim(line.substr(6)).split(" ")[0]) / 1024;
+		}
+		return -1;
+		#end
 	}
 
 	// A small buffer that lives follows each large one, so that none of the
