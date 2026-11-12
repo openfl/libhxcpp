@@ -1,0 +1,10 @@
+--main Main
+-cpp bin
+-D scriptable
+--dce no
+-D HXCPP_CHECK_POINTER
+-D dll_export=bin/host_classes.info
+--next
+--main Script
+-cppia bin/script.cppia
+-D dll_import=bin/host_classes.info
