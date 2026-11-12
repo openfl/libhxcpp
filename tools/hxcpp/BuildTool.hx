@@ -688,7 +688,7 @@ class BuildTool
          } : null;
 
          Profile.push("compile");
-         var progress = new Progress(to_be_compiled.length);
+         var progress = new Progress(to_be_compiled.length, mDefines.exists("HXCPP_PROGRESS_PERCENT"));
          if (threadPool==null)
          {
             for(file in to_be_compiled)

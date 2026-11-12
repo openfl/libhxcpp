@@ -81,6 +81,7 @@ Other defines:
 | *HXCPP_QUIET*           | Print less output from the build tool |
 | *HXCPP_SILENT*          | Print only errors from the build tool |
 | *HXCPP_COMPILE_THREADS* | Number of files to compile at once (also read from the environment) |
+| *HXCPP_PROGRESS_PERCENT* | Show a group's progress as a percentage of its files, instead of a count |
 | *HXCPP_COMPILE_CACHE*   | Directory for the compile cache, usually set in the environment. See [CompileCache.md](../CompileCache.md) |
 | *HXCPP_TIMES*           | Show some basic profiling information |
 | *HXCPP_NEKO_BUILDTOOL*  | Force use of hxcpp.n, rather than compiled BuildTool.exe
