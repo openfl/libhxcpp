@@ -2,6 +2,7 @@
 libhxcpp 6.0.0 (unreleased)
 ------------------------------------------------------------
 
+* Fixed reverse() and resize() on an Array<Dynamic> in interpreted cppia doing nothing: the interpreter had no case for them, and resize never evaluated its argument. They reverse and resize the array, as they do under the JIT and in compiled code (libhxcpp #409)
 * Made the collector's thread context on Linux a __thread pointer, read with one load from the thread pointer, instead of a call to pthread_getspecific each time an allocation leaves the inline path or a String or number is boxed. It was 3 to 4% of an OpenFL game's main thread. HXCPP_PTHREAD_FAST_TLS keeps pthread_getspecific (libhxcpp #429)
 * Fixed a call on a null Array<Dynamic> in cppia ending the process under HXCPP_CHECK_POINTER: push, contains, remove, indexOf, lastIndexOf, join, toString, sort, insert and unshift used the array without checking it, interpreted and under the JIT. They throw Null Object Reference, as a typed array's calls and the other Array<Dynamic> calls do
 * Fixed the 32-bit x86 collector missing live objects held only in EBP when frame pointers are omitted. It now captures EBP with the other callee-saved registers; the lost strings in the Linux 32 CFFI tests were one consequence (libhxcpp #430)

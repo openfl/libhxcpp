@@ -261,7 +261,8 @@ struct ArrayBuiltinAny : public ArrayBuiltinBase
       if (FUNC==afJoin || FUNC==afToString)
          return Dynamic(runString(ctx)).mPtr;
 
-      if (FUNC==afSort || FUNC==afInsert || FUNC==afUnshift || FUNC==af__SetSizeExact || FUNC==afBlit)
+      if (FUNC==afSort || FUNC==afInsert || FUNC==afUnshift || FUNC==af__SetSizeExact || FUNC==afBlit ||
+          FUNC==afReverse || FUNC==afResize)
       {
          runVoid(ctx);
          return 0;
@@ -456,6 +457,24 @@ struct ArrayBuiltinAny : public ArrayBuiltinBase
          thisVal->__SetSizeExact(size);
          return;
       }
+      if (FUNC==afResize)
+      {
+         ArrayAnyImpl *thisVal = (ArrayAnyImpl *)thisExpr->runObject(ctx);
+         BCR_VCHECK;
+         CPPIA_CHECK(thisVal);
+         int size = args[0]->runInt(ctx);
+         BCR_VCHECK;
+         thisVal->CALL(resize)(size);
+         return;
+      }
+      if (FUNC==afReverse)
+      {
+         ArrayAnyImpl *thisVal = (ArrayAnyImpl *)thisExpr->runObject(ctx);
+         BCR_VCHECK;
+         CPPIA_CHECK(thisVal);
+         thisVal->CALL(reverse)();
+         return;
+      }
       if (FUNC==afBlit)
       {
          ArrayAnyImpl *thisVal = (ArrayAnyImpl *)thisExpr->runObject(ctx);
@@ -586,6 +605,8 @@ struct ArrayBuiltinAny : public ArrayBuiltinBase
          case afUnshift:
          case af__SetSizeExact:
          case afBlit:
+         case afReverse:
+         case afResize:
             return etVoid;
 
          case afPush:

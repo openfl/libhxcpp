@@ -1,0 +1,12 @@
+interpreted
+typed: 3,2
+reversed: 3,two,1
+shrunk: 3 calls=1
+grown: 3 3,null,null calls=2
+emptied: 0 calls=3
+jit
+typed: 3,2
+reversed: 3,two,1
+shrunk: 3 calls=1
+grown: 3 3,null,null calls=2
+emptied: 0 calls=3
