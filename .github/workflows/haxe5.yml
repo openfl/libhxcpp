@@ -24,8 +24,8 @@ concurrency:
   cancel-in-progress: true
 
 # Haxe 5 is not released, so its failures are warnings: with warn_only, a
-# failing step leaves its job green, and the warnings job below lists every
-# step that failed. Each failure still gets an issue, but it holds back
+# failing step leaves its job green, and the warnings job below lists the
+# jobs that had one. Each failure still gets an issue, but it holds back
 # neither a merge nor a release (CONTRIBUTING.md).
 jobs:
   # Haxe 5.0.0-preview.1 passes API level 500 but generates code for the level
@@ -70,6 +70,9 @@ jobs:
       scope: smoke
       bindir: MacArm64
 
+  # A step that fails with continue-on-error has the conclusion "success" in the
+  # jobs API, so the failures are read from each job's error annotations,
+  # where "Process completed with exit code" marks one failed step
   warnings:
     name: Haxe 5.0.0-preview.1 / warnings
     needs: [haxe5-preview-linux, haxe5-preview-windows, haxe5-preview-macos]
@@ -77,16 +80,27 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       actions: read
+      checks: read
     steps:
-      - name: list the steps that failed
+      - name: list the jobs with failed steps
         env:
           GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
         run: |
-          jobs="repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/attempts/${{ github.run_attempt }}/jobs"
-          gh api --paginate "$jobs" --jq '.jobs[] | .name as $job | .steps[]? | select(.conclusion == "failure") | "\($job): \(.name)"' > failed.txt
+          jobs="repos/$REPO/actions/runs/${{ github.run_id }}/attempts/${{ github.run_attempt }}/jobs"
+          gh api --paginate "$jobs" --jq '.jobs[] | select(.name | endswith("/ warnings") | not) | "\(.id)\t\(.name)"' > jobs.txt
+          : > failed.txt
+          while IFS=$'\t' read -r id name; do
+            gh api "repos/$REPO/check-runs/$id/annotations" \
+              --jq '.[] | select(.annotation_level == "failure") | .message | gsub("\n"; " ")' > errors.txt || continue
+            [ -s errors.txt ] || continue
+            steps=$(grep -c '^Process completed with exit code' errors.txt || true)
+            [ "$steps" = 0 ] || echo "$name: $steps step(s) failed" >> failed.txt
+            { grep -v '^Process completed with exit code' errors.txt || true; } | sed "s|^|$name: |" >> failed.txt
+          done < jobs.txt
           if [ -s failed.txt ]; then
             { echo "### Haxe 5.0.0-preview.1 failures (warnings)"; sed 's/^/- /' failed.txt; } >> "$GITHUB_STEP_SUMMARY"
-            while read -r line; do echo "::warning title=Haxe 5.0.0-preview.1::$line failed"; done < failed.txt
+            while read -r line; do echo "::warning title=Haxe 5.0.0-preview.1::$line"; done < failed.txt
           else
             echo "No Haxe 5.0.0-preview.1 step failed." >> "$GITHUB_STEP_SUMMARY"
           fi
