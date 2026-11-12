@@ -1,33 +1,37 @@
-// How many of a group's files have compiled, shown before each file as it starts
-class Progress {
+// How many of a group's files have compiled, shown before each file as it
+//  starts: a count, or with HXCPP_PROGRESS_PERCENT a percentage
+class Progress
+{
    var finished:Int;
    var total:Int;
-   var usePercent:Bool;
+   var percent:Bool;
 
-   public function new(inTotal:Int, usePercent:Bool = false) {
+   public function new(inTotal:Int, inPercent = false)
+   {
       finished = 0;
       total = inTotal;
-      this.usePercent = usePercent;
+      percent = inPercent;
    }
 
-   public function label():String {
-      if (usePercent) {
-         var percent = finished / total;
-         var pct = Std.int(percent * 1000) / 10;
-         var str = Std.string(pct);
-         if (Std.int(pct) == pct) {
-            str += ".0";
-         }
-         return "\x1b[1m[" + str + "%]\x1b[0m";
-      } else {
-         var done = Std.string(finished);
-         while (done.length < Std.string(total).length)
+   public function label():String
+   {
+      if (percent)
+      {
+         // In tenths, padded to the width of 100.0 so the file names line up
+         var tenths = total > 0 ? Std.int(finished * 1000 / total) : 1000;
+         var done = Std.int(tenths / 10) + "." + (tenths % 10);
+         while (done.length < 5)
             done = " " + done;
-         return "\x1b[1m[" + done + "/" + total + "]\x1b[0m";
+         return "\x1b[1m[" + done + "%]\x1b[0m";
       }
+      var done = Std.string(finished);
+      while (done.length < Std.string(total).length)
+         done = " " + done;
+      return "\x1b[1m[" + done + "/" + total + "]\x1b[0m";
    }
 
-   public function fileDone() {
+   public function fileDone()
+   {
       Log.lock();
       finished++;
       Log.unlock();
