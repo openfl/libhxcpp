@@ -1,0 +1,4 @@
+a wait no one signals runs out: true
+zero, negative and NaN waits return at once: true
+a signal ends the wait: true
+a wait past the cap still waits for the signal: true
