@@ -13,9 +13,16 @@ on:
         required: false
         type: string
         default: smoke
+      # A pull request: the core suites on Linux 64, Windows 64 and macOS arm64
+      # only. main runs everything once the change lands
+      pr:
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   Windows32:
+    if: ${{ !inputs.pr }}
     uses: ./.github/workflows/test.yml
     name: Windows 32
     with:
@@ -34,9 +41,11 @@ jobs:
       sep: \
       ext: .dll
       os: windows-latest
+      scope: ${{ inputs.pr && 'smoke' || 'full' }}
       stress: '["default generational verify", "generational-verify moving big-blocks", "always-move check-pointer", "big-generational big-verify nursery dynamic-size debug-level"]'
 
   MacOS64:
+    if: ${{ !inputs.pr }}
     uses: ./.github/workflows/test.yml
     name: macOS Intel
     with:
@@ -57,9 +66,11 @@ jobs:
       sep: /
       ext: .dylib
       os: macos-latest
+      scope: ${{ inputs.pr && 'smoke' || 'full' }}
       bindir: MacArm64
 
   Linux32:
+    if: ${{ !inputs.pr }}
     uses: ./.github/workflows/test.yml
     name: Linux 32
     with:
@@ -78,12 +89,13 @@ jobs:
       sep: /
       ext: .dso
       os: ubuntu-latest
+      scope: ${{ inputs.pr && 'smoke' || 'full' }}
       stress: '["default generational verify", "generational-verify moving big-blocks", "always-move check-pointer", "big-generational big-verify nursery dynamic-size debug-level"]'
       bindir: Linux64
 
   # Haxe 4.3.7 has no Linux arm64 build, so this runs with the nightly
   LinuxArm64:
-    if: inputs.haxe != '4.3.7'
+    if: inputs.haxe != '4.3.7' && !inputs.pr
     uses: ./.github/workflows/test.yml
     name: Linux arm64
     with:

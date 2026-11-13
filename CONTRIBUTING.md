@@ -45,6 +45,7 @@ Most of the collector's defines are not used by any default build, so code behin
 - A new or newly documented define comes with coverage: an entry in `test/gc-defines/check.sh` (or the equivalent build check for its area), a mode in the GC stress jobs in `.github/workflows/test.yml` when it changes how the collector runs, and a line in `docs/build_xml/Defines.md`.
 - A CI failure is fixed, or tracked as an issue and fixed, never merged around, even when `main` fails the same way.
 - The Haxe 5 preview workflow is the exception: Haxe 5 is not released, so its failures are warnings. Each still gets an issue, but it holds back neither a merge nor a release.
+- A pull request runs a smaller set: the quick checks, the sanitizers and the core suites on Linux 64, Windows 64 and macOS arm64. A push to `main` runs everything, Haxe 5 included, and what fails there after a merge is fixed or tracked the same way. To run everything before merging, run the main workflow on the branch from the Actions tab.
 
 ## Pull requests
 
