@@ -37,16 +37,21 @@ class Main {
 		return "[" + shown.join(",") + "]";
 	}
 
-	// Polls until the expected indexes are ready, as a datagram can take a
-	// moment to arrive: loopback delivers at once, but not before send returns
+	// Polls until the expected indexes are ready, as bytes can take a moment
+	// to arrive: loopback usually delivers at once, but not before send
+	// returns, and a macOS runner has held a datagram or a TCP segment back
+	// for more than two seconds, the bytes still in the sender's buffer and
+	// none in the receiver's (openfl/libhxcpp#431). A check that matches stops
+	// at once, so only a failing one waits the whole time.
+	static inline var patience = 10.0;
+
 	static function events(poll:Poll, expectRead:String, expectWrite = "[]"):String {
 		var got = "";
-		for (attempt in 0...50) {
+		var deadline = haxe.Timer.stamp() + patience;
+		do {
 			poll.events(0.02);
 			got = indexes(poll.readIndexes) + " " + indexes(poll.writeIndexes);
-			if (got == '$expectRead $expectWrite')
-				break;
-		}
+		} while (got != '$expectRead $expectWrite' && haxe.Timer.stamp() < deadline);
 		return got;
 	}
 
@@ -142,11 +147,10 @@ class Main {
 		// Poll.poll prepares and waits in one call
 		ping(sockets[7]);
 		var ready = [];
-		for (attempt in 0...50) {
+		var deadline = haxe.Timer.stamp() + patience;
+		do {
 			ready = poll.poll(cast sockets, 0.02);
-			if (ready.length > 0)
-				break;
-		}
+		} while (ready.length == 0 && haxe.Timer.stamp() < deadline);
 		Sys.println('poll: ${ready.length == 1 && ready[0] == cast sockets[7]}');
 		drain(sockets[7]);
 
