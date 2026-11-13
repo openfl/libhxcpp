@@ -161,25 +161,35 @@ int hx::thread::Thread_obj::id()
 	}
 }
 
-hx::thread::ThreadImpl_obj::ThreadImpl_obj(const int _id)
-	: scratch(std::numeric_limits<uint16_t>::max(), std::numeric_limits<uint16_t>::max())
-	, slots(0, 0)
-	, localSlots(0, 0)
-	, localGenerations(0, 0)
-	, id(_id)
-	, native(new Native())
+// An incremental slice can find the new object on this stack while one of
+// these is being allocated, and the cycle can end at the next allocation. The
+// mutation scope has that last stop scan the object again, so the arrays
+// stored after it was found are kept too.
+void hx::thread::ThreadImpl_obj::makeArrays()
 {
+	HX_INCREMENTAL_MUTATION(this);
+	scratch = Array<uint8_t>(std::numeric_limits<uint16_t>::max(), std::numeric_limits<uint16_t>::max());
+	slots = Array<Dynamic>(0, 0);
+	localSlots = Array<Dynamic>(0, 0);
+	localGenerations = Array<int>(0, 0);
+}
+
+hx::thread::ThreadImpl_obj::ThreadImpl_obj(const int _id)
+	: id(_id)
+	, native(nullptr)
+{
+	makeArrays();
+	native = new Native();
 	HX_OBJ_WB_NEW_MARKED_OBJECT(this);
 }
 
 hx::thread::ThreadImpl_obj::ThreadImpl_obj(const int _id, Thread_obj::CreateFunction _job, CountingSemaphore _semaphore)
-	: scratch(std::numeric_limits<uint16_t>::max(), std::numeric_limits<uint16_t>::max())
-	, slots(0, 0)
-	, localSlots(0, 0)
-	, localGenerations(0, 0)
-	, id(_id)
-	, native(new Native(_job, this, _semaphore))
+	: id(_id)
+	, native(nullptr)
 {
+	// Before the thread starts, which reads them
+	makeArrays();
+	native = new Native(_job, this, _semaphore);
 	HX_OBJ_WB_NEW_MARKED_OBJECT(this);
 }
 

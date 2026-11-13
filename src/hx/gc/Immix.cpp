@@ -20,6 +20,9 @@
 #ifdef HXCPP_GC_INCREMENTAL
 #include <chrono>
 #endif
+#ifdef HXCPP_GC_INCREMENTAL_VERIFY
+#include <typeinfo>
+#endif
 
 #ifdef __EMSCRIPTEN__
    #include <emscripten/stack.h>
@@ -2245,6 +2248,11 @@ public:
     bool incrementalOracle = false;
     std::unordered_map<void *,bool> oracleVisited;
     std::vector<Object *> oracleQueue;
+    // How the oracle first reached each allocation: the object whose members
+    //  it was walking, or the kind of root, for the report of an omission
+    Object *oracleParent = nullptr;
+    const char *oracleRoot = nullptr;
+    std::unordered_map<void *,std::pair<Object *,const char *> > oracleFrom;
     #endif
 
     #ifdef HX_GC_VERIFY_GENERATIONAL
@@ -2599,6 +2607,8 @@ bool IncrementalOracleMark(void *inPointer, bool inObject, MarkContext *inCtx)
    if (flags & HX_GC_CONST_ALLOC_BIT)
       return true;
    auto result = inCtx->oracleVisited.emplace(inPointer, inObject);
+   if (result.second)
+      inCtx->oracleFrom.emplace(inPointer, std::make_pair(inCtx->oracleParent, inCtx->oracleRoot));
    // A backing allocation can also have been encountered through an object
    // pointer. In that case its outgoing members still need the object walk.
    if (inObject && (flags & IMMIX_ALLOC_IS_CONTAINER) && (result.second || !result.first->second))
@@ -6149,8 +6159,10 @@ public:
    {
       hx::MarkContext oracle;
       oracle.incrementalOracle = true;
+      oracle.oracleRoot = "statics";
       hx::MarkClassStatics(&oracle);
       {
+         oracle.oracleRoot = "roots";
          std::lock_guard<std::mutex> lock(*hx::sGCRootLock);
          for (hx::Object **slot : *hx::sgRootSet)
             if (*slot)
@@ -6163,14 +6175,18 @@ public:
                   hx::MarkObjectAlloc(reinterpret_cast<hx::Object *>(ptr - entry.second), &oracle);
             }
       }
+      oracle.oracleRoot = "zombies";
       for (int i = 0; i < hx::sZombieList.size(); i++)
          hx::MarkObjectAlloc(hx::sZombieList[i], &oracle);
+      oracle.oracleRoot = "stacks";
       for (int i = 0; i < mLocalAllocs.size(); i++)
          MarkLocalAlloc(mLocalAllocs[i], &oracle);
+      oracle.oracleRoot = nullptr;
       while (!oracle.oracleQueue.empty())
       {
          hx::Object *object = oracle.oracleQueue.back();
          oracle.oracleQueue.pop_back();
+         oracle.oracleParent = object;
          object->__Mark(&oracle);
       }
       for (const auto &entry : oracle.oracleVisited)
@@ -6186,6 +6202,26 @@ public:
          if (!valid)
          {
             fprintf(stderr, "Incremental GC omitted reachable %s %p flags=%08x epoch=%08x rows=%u first=%u vtable=%p\n", entry.second ? "object" : "allocation", entry.first, flags, hx::gMarkID, rows, rows ? *row : 0, entry.second ? *static_cast<void **>(entry.first) : nullptr);
+            // The way the oracle reached it, back to a root
+            void *at = entry.first;
+            for (int depth = 0; depth < 64; depth++)
+            {
+               auto from = oracle.oracleFrom.find(at);
+               if (from == oracle.oracleFrom.end())
+                  break;
+               hx::Object *parent = from->second.first;
+               if (!parent)
+               {
+                  fprintf(stderr, "  from %s\n", from->second.second ? from->second.second : "?");
+                  break;
+               }
+               unsigned int pflags = reinterpret_cast<unsigned int *>(parent)[-1];
+               fprintf(stderr, "  held by %p flags=%08x %s %s\n", parent, pflags,
+                       (pflags & IMMIX_ALLOC_MARK_ID) == hx::gMarkID ? "marked" : "unmarked",
+                       typeid(*parent).name());
+               at = parent;
+            }
+            fprintf(stderr, "  type %s\n", entry.second ? typeid(*static_cast<hx::Object *>(entry.first)).name() : "(allocation)");
             fflush(stderr);
             abort();
          }
