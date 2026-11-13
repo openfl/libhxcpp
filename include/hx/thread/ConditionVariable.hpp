@@ -18,6 +18,8 @@ namespace hx
 			bool tryAcquire();
 			void release();
 			void wait();
+			// True when woken, false when the time ran out
+			bool timedWait(double seconds);
 			void signal();
 			void broadcast();
 

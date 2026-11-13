@@ -1,0 +1,4 @@
+invalid scalars are rejected by UTF8 encoding: true
+invalid scalars leave the output buffer unchanged: true
+UTF16 encoding rejects the same invalid scalars: true
+valid boundary scalars round trip: true

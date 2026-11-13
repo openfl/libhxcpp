@@ -50,7 +50,10 @@ struct Deque : public Array_obj<Dynamic>
 		}
 		else if (head > 64 && head >= length - head)
 		{
-			// Compact once the consumed prefix dominates - O(1) amortized
+			// Compact once the consumed prefix dominates - O(1) amortized.
+			// An incremental cycle may have scanned the slots the items move
+			// to and not those they come from, so it scans the queue again
+			HX_INCREMENTAL_MUTATION(this);
 			int remaining = length - head;
 			::memmove(items, items + head, remaining * sizeof(Dynamic));
 			::memset(items + remaining, 0, head * sizeof(Dynamic));
@@ -79,6 +82,8 @@ struct Deque : public Array_obj<Dynamic>
 	// building an n-deep queue that way was O(n^2) while holding the lock
 	void openFront()
 	{
+		// The items move, as for a compaction in popHead
+		HX_INCREMENTAL_MUTATION(this);
 		int count = length;
 		int gap = count >> 1;
 		if (gap < 16)

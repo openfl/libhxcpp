@@ -28,6 +28,8 @@ namespace hx
 			Array<Dynamic> localSlots;
 			Array<int> localGenerations;
 
+			void makeArrays();
+
 		public:
 			friend class Scratch;
 

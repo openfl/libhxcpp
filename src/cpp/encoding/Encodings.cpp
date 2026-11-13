@@ -5,6 +5,11 @@
 
 using namespace cpp::marshal;
 
+#if !defined(HX_SMART_STRINGS)
+// In String.cpp, beside _hx_utf8_to_utf16
+String _hx_utf8_replace_malformed(const unsigned char *ptr, int inUtf8Len);
+#endif
+
 bool cpp::encoding::Ascii::isEncoded(const String& string)
 {
     if (null() == string)
@@ -142,6 +147,17 @@ namespace
         return 0xFFFD;
     }
 #endif
+
+    // A code point that is not a Unicode scalar value, a surrogate or past
+    // U+10FFFF, has no UTF-8 or UTF-16 form. The UTF-16 encoder refused them
+    // and the UTF-8 one wrote invalid bytes
+    void checkScalar(char32_t codepoint)
+    {
+        if ((codepoint >= 0xD800 && codepoint < 0xE000) || codepoint > 0x10FFFF)
+        {
+            hx::Throw(HX_CSTRING("Invalid codepoint"));
+        }
+    }
 }
 
 int cpp::encoding::Utf8::getByteCount(const null&)
@@ -152,6 +168,8 @@ int cpp::encoding::Utf8::getByteCount(const null&)
 
 int cpp::encoding::Utf8::getByteCount(char32_t codepoint)
 {
+    checkScalar(codepoint);
+
     if (codepoint <= 0x7F)
     {
         return 1;
@@ -281,7 +299,8 @@ Array<uint8_t> cpp::encoding::Utf8::encode(const String& string)
 
     if (0 == string.length)
     {
-        return 0;
+        // An empty array: 0 would be a null one
+        return Array<uint8_t>(0, 0);
     }
 
     if (string.isAsciiEncoded())
@@ -297,8 +316,17 @@ Array<uint8_t> cpp::encoding::Utf8::encode(const String& string)
     }
 
 #if defined(HX_SMART_STRINGS)
-    // estimate the utf8 length with an upper bound
-    Array<uint8_t> out(string.length * 3, 0);
+    // Counted first: an array of three bytes a unit, which resize only made
+    //  shorter, kept that capacity as long as the bytes lived, three times
+    //  what a mostly ASCII string needs (libhxcpp #405)
+    auto bytes = getByteCount(string);
+
+    if (bytes > 0x7fffffff)
+    {
+        return hx::Throw(HX_CSTRING("String too long"));
+    }
+
+    Array<uint8_t> out(static_cast<int>(bytes), 0);
     View<uint8_t> buffer(out->Pointer(), out->length);
 
     auto units = string.raw_wptr();
@@ -310,8 +338,6 @@ Array<uint8_t> cpp::encoding::Utf8::encode(const String& string)
         k += encode(stringCodepoint(units, string.length, i), buffer.slice(k));
     }
 
-    out->resize(k);
-
     return out;
 #else
     return hx::Throw(HX_CSTRING("Unexpected encoding error"));
@@ -320,6 +346,9 @@ Array<uint8_t> cpp::encoding::Utf8::encode(const String& string)
 
 int cpp::encoding::Utf8::encode(char32_t codepoint, const cpp::marshal::View<uint8_t>& buffer)
 {
+    // Before anything is written
+    checkScalar(codepoint);
+
     if (codepoint <= 0x7F)
     {
         buffer[0] = static_cast<uint8_t>(codepoint);
@@ -383,42 +412,58 @@ String cpp::encoding::Utf8::decode(const cpp::marshal::View<uint8_t>& buffer)
     {
         return Ascii::decode(buffer);
     }
-#if defined(HX_SMART_STRINGS)
-    auto bytes  = utf16Units(buffer) * sizeof(char16_t);
-    auto exact  = static_cast<char16_t*>(::hx::InternalNew(bytes + sizeof(char16_t), false));
-    auto output = View<uint8_t>(reinterpret_cast<uint8_t*>(exact), bytes);
-    int64_t k   = 0;
-    int64_t i   = 0;
-
-    while (i < buffer.length)
+    if (buffer.length > 0x7fffffff)
     {
-        auto p = codepoint(buffer.slice(i));
-
-        i += getByteCount(p);
-        k += Utf16::encode(p, output.slice(k));
+        return hx::Throw(HX_CSTRING("String too long"));
     }
 
-    auto chars = static_cast<int>(k / sizeof(char16_t));
-
-    ((unsigned int*)exact)[-1] |= HX_GC_STRING_CHAR16_T;
-    exact[chars] = 0;
-
-    return String(exact, chars);
-#else
-    // The bytes are kept as they are, but malformed input still throws, as
-    // it does with smart strings. codepoint takes an encoded surrogate
-    // (ED A0 80 to ED BF BF), which Utf16::encode rejects there, so it is
-    // rejected here too
-    for (int64_t i = 0; i < buffer.length;)
+    // Malformed input decodes as Haxe 4's String::create and Bytes.toString
+    // decode it, each malformed sequence as one U+FFFD, since Haxe 5's
+    // Bytes.toString and getString come here. The strict decoder below
+    // throws for one, and is kept for valid input, which it decodes faster
+    auto ptr = static_cast<const unsigned char*>(buffer.ptr.ptr);
+    auto len = static_cast<int>(buffer.length);
+#if defined(HX_SMART_STRINGS)
+    try
     {
-        auto p = codepoint(buffer.slice(i));
+        auto bytes  = utf16Units(buffer) * sizeof(char16_t);
+        auto exact  = static_cast<char16_t*>(::hx::InternalNew(bytes + sizeof(char16_t), false));
+        auto output = View<uint8_t>(reinterpret_cast<uint8_t*>(exact), bytes);
+        int64_t k   = 0;
+        int64_t i   = 0;
 
-        if (0xD800 <= p && p < 0xE000)
+        while (i < buffer.length)
         {
-            hx::Throw(HX_CSTRING("Failed to read codepoint"));
+            auto p = codepoint(buffer.slice(i));
+
+            i += getByteCount(p);
+            k += Utf16::encode(p, output.slice(k));
         }
 
-        i += getByteCount(p);
+        auto chars = static_cast<int>(k / sizeof(char16_t));
+
+        ((unsigned int*)exact)[-1] |= HX_GC_STRING_CHAR16_T;
+        exact[chars] = 0;
+
+        return String(exact, chars);
+    }
+    catch (Dynamic&)
+    {
+        return _hx_utf8_to_utf16(ptr, len, false);
+    }
+#else
+    // The bytes are kept as they are when they are valid. codepoint takes an
+    // encoded surrogate (ED A0 80 to ED BF BF), which getByteCount refuses
+    try
+    {
+        for (int64_t i = 0; i < buffer.length;)
+        {
+            i += getByteCount(codepoint(buffer.slice(i)));
+        }
+    }
+    catch (Dynamic&)
+    {
+        return _hx_utf8_replace_malformed(ptr, len);
     }
 
     // +1 for the terminator - the allocation is not zeroed and hxcpp
@@ -557,6 +602,8 @@ int cpp::encoding::Utf16::getByteCount(const null&)
 
 int cpp::encoding::Utf16::getByteCount(char32_t codepoint)
 {
+    checkScalar(codepoint);
+
     return codepoint <= 0xFFFF ? 2 : 4;
 }
 
