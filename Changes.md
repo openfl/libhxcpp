@@ -2,6 +2,7 @@
 libhxcpp 6.0.0 (unreleased)
 ------------------------------------------------------------
 
+* Added timedWait to hx::thread::ConditionVariable, which Haxe 5's sys.thread.Condition.timedWait calls: with the Haxe nightly, every program that used Condition failed to compile. It returns true once a signal or broadcast came and false when the time ran out, and it waits out the wakeups MSVC's timed waits give just before the deadline with nothing signalled
 * Fixed an exception from blit, setSize or resize under the cppia JIT ending the process instead of reaching the script's catch, on typed arrays and on Array<Dynamic>: their native calls had no exception bridge. The script catches it, as it does interpreted and in compiled code (libhxcpp #404)
 * Fixed resize() and cpp.NativeArray.setSize() on an Array<Dynamic> under the cppia JIT evaluating the array expression twice, so a call in it ran twice and the array it returned the second time was the one resized. The JIT evaluates it once (libhxcpp #411)
 * Fixed indexOf and lastIndexOf on an Array<Dynamic> under the cppia JIT ignoring fromIndex: the JIT never generated it, so a call or exception in it was lost too. The search starts from it, as it does interpreted and in compiled code (libhxcpp #410)
