@@ -1,0 +1,4 @@
+ASCII buffer without terminator space is rejected without writes: true
+empty buffer without terminator space is rejected without writes: true
+UTF16 strings retain embedded NULs in UTF8 buffers: true
+buffers with room preserve ordinary text: true

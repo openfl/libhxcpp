@@ -1,0 +1,3 @@
+UTF16 construction stays inside the supplied view: true
+a complete surrogate pair is preserved: true
+a NUL terminator ends native string construction: true
