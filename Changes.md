@@ -2,7 +2,6 @@
 libhxcpp 6.0.0 (unreleased)
 ------------------------------------------------------------
 
-* Properly linked up iOS Simulator define for 3 LIBEXTRAs in finish-setup.xml (libhxcpp #432)
 * Added HXCPP_PROGRESS_PERCENT, which shows a group's compile progress as a percentage of its files, [42.5% ], instead of a count, [425/1000]
 * Fixed a program on Linux with glibc staying as large as its largest burst of large allocations, such as the files a game reads while it loads: glibc keeps a freed buffer's memory in its heap unless it had mapped the buffer on its own, and once a buffer mapped on its own has been freed it stops mapping those of that size or less, up to 32 MB. The memory of the large buffers a collection freed then stayed the process's. The collector now trims the C heap once 16 MB has been freed to it, on the thread that frees the buffers. A program that dropped 384 MB of 4 MB buffers stayed at 396 MB resident and now returns to 12 MB
 * Fixed a native extension that includes hx/CFFI.h before hx/CFFIPrime.h, as SteamWrap does, failing to compile with hxs_encoding, hxs_utf16 and alloc_hxs_utf8 not declared: CFFI.h included first declares the CFFI API without HXCPP_PRIME, so without the Prime string functions that the ordinary wrapper of a DEFINE_PRIME function now uses. CFFIPrime.h declares them then
