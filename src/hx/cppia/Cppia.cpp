@@ -2141,7 +2141,9 @@ struct CallStatic : public CppiaExpr
 
       if (!replace && type->haxeClass.mPtr)
       {
-         ScriptNamedFunction func = type->haxeBase->findStaticFunction(field);
+         // A host interface has a class but no script glue, and only a
+         //  malformed file calls a static on one
+         ScriptNamedFunction func = type->haxeBase ? type->haxeBase->findStaticFunction(field) : ScriptNamedFunction();
          if (func.signature)
          {
             //CPPIALOG(" found function %s\n", func.signature );
