@@ -1,0 +1,16 @@
+interpreted
+typed: 2 2
+omitted: 0 4
+from 2: 2 2
+negative: 4 2
+past the end: -1 4
+evaluated: 4 2 calls=2
+throwing fromIndex: bad index
+jit
+typed: 2 2
+omitted: 0 4
+from 2: 2 2
+negative: 4 2
+past the end: -1 4
+evaluated: 4 2 calls=2
+throwing fromIndex: bad index

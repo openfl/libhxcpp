@@ -26,13 +26,19 @@ static hx::Object * SLJIT_CALL arrayConcat(ArrayAnyImpl *inObj, hx::Object *inVa
 {
    return inObj->concat(Dynamic(inValue)).mPtr;
 }
+// These throw for a size or range the array cannot take: the exception becomes
+//  the script's pending one, which the code after the call checks
 static void SLJIT_CALL arraySetSizeExact(ArrayAnyImpl *inObj, int inSize)
 {
+   TRY_NATIVE
    inObj->__SetSizeExact(inSize);
+   CATCH_NATIVE
 }
 static void SLJIT_CALL arrayResize(ArrayAnyImpl *inObj, int inSize)
 {
+   TRY_NATIVE
    inObj->resize(inSize);
+   CATCH_NATIVE
 }
 
 
@@ -142,9 +148,11 @@ static void SLJIT_CALL arrayUnshiftString( ArrayAnyImpl *inArray, String *inVal)
 static void SLJIT_CALL runBlit( JitMultiArg *inArgs)
 {
     // this, inDestElement, inSourceArray, inSourceElement, inElementCount
+    TRY_NATIVE
     ArrayAnyImpl *dest = (ArrayAnyImpl *)inArgs[0].obj;
     ArrayAnyImpl *src = (ArrayAnyImpl *)inArgs[2].obj;
     dest->blit( inArgs[1].ival, src, inArgs[3].ival, inArgs[4].ival );
+    CATCH_NATIVE
 }
 
 
@@ -261,7 +269,8 @@ struct ArrayBuiltinAny : public ArrayBuiltinBase
       if (FUNC==afJoin || FUNC==afToString)
          return Dynamic(runString(ctx)).mPtr;
 
-      if (FUNC==afSort || FUNC==afInsert || FUNC==afUnshift || FUNC==af__SetSizeExact || FUNC==afBlit)
+      if (FUNC==afSort || FUNC==afInsert || FUNC==afUnshift || FUNC==af__SetSizeExact || FUNC==afBlit ||
+          FUNC==afReverse || FUNC==afResize)
       {
          runVoid(ctx);
          return 0;
@@ -456,6 +465,24 @@ struct ArrayBuiltinAny : public ArrayBuiltinBase
          thisVal->__SetSizeExact(size);
          return;
       }
+      if (FUNC==afResize)
+      {
+         ArrayAnyImpl *thisVal = (ArrayAnyImpl *)thisExpr->runObject(ctx);
+         BCR_VCHECK;
+         CPPIA_CHECK(thisVal);
+         int size = args[0]->runInt(ctx);
+         BCR_VCHECK;
+         thisVal->CALL(resize)(size);
+         return;
+      }
+      if (FUNC==afReverse)
+      {
+         ArrayAnyImpl *thisVal = (ArrayAnyImpl *)thisExpr->runObject(ctx);
+         BCR_VCHECK;
+         CPPIA_CHECK(thisVal);
+         thisVal->CALL(reverse)();
+         return;
+      }
       if (FUNC==afBlit)
       {
          ArrayAnyImpl *thisVal = (ArrayAnyImpl *)thisExpr->runObject(ctx);
@@ -586,6 +613,8 @@ struct ArrayBuiltinAny : public ArrayBuiltinBase
          case afUnshift:
          case af__SetSizeExact:
          case afBlit:
+         case afReverse:
+         case afResize:
             return etVoid;
 
          case afPush:
@@ -623,14 +652,14 @@ struct ArrayBuiltinAny : public ArrayBuiltinBase
       return 0;
    }
 
-   static int SLJIT_CALL runIndexOf( ArrayAnyImpl *inArray, hx::Object *inItem)
+   static int SLJIT_CALL runIndexOf( ArrayAnyImpl *inArray, hx::Object *inItem, hx::Object *inFrom)
    {
-      return inArray->indexOf(inItem);
+      return inArray->indexOf(inItem, inFrom);
    }
 
-   static int SLJIT_CALL runLastIndexOf( ArrayAnyImpl *inArray, hx::Object *inItem)
+   static int SLJIT_CALL runLastIndexOf( ArrayAnyImpl *inArray, hx::Object *inItem, hx::Object *inFrom)
    {
-      return inArray->lastIndexOf(inItem);
+      return inArray->lastIndexOf(inItem, inFrom);
    }
 
 
@@ -727,8 +756,11 @@ struct ArrayBuiltinAny : public ArrayBuiltinBase
          case afIndexOf:
          case afLastIndexOf:
             {
-            args[0]->genCode(compiler, sJitArg1.as(jtPointer), etObject);
-            compiler->callNative( (void *)(FUNC==afIndexOf ? runIndexOf : runLastIndexOf), thisVal, sJitArg1.as(jtPointer));
+            // The item, then fromIndex, which is null when the call leaves it out
+            JitTemp item(compiler,etObject);
+            args[0]->genCode(compiler, item, etObject);
+            args[1]->genCode(compiler, sJitArg2, etObject);
+            compiler->callNative( (void *)(FUNC==afIndexOf ? runIndexOf : runLastIndexOf), thisVal, item.as(jtPointer), sJitArg2.as(jtPointer));
             compiler->convertReturnReg(etInt, inDest, destType );
             }
             break;
@@ -754,23 +786,19 @@ struct ArrayBuiltinAny : public ArrayBuiltinBase
             }
             break;
 
+         // The array is thisVal, evaluated and checked above: evaluating it
+         //  again would run its side effects twice
          case af__SetSizeExact:
-            {
-               JitTemp thisVal(compiler,jtPointer);
-               thisExpr->genCode(compiler, thisVal, etObject);
-               args[0]->genCode(compiler, sJitArg1.as(jtInt), etInt);
-               compiler->callNative( (void *)arraySetSizeExact, thisVal, sJitArg1.as(jtInt));
-               break;
-            }
+            args[0]->genCode(compiler, sJitArg1.as(jtInt), etInt);
+            compiler->callNative( (void *)arraySetSizeExact, thisVal, sJitArg1.as(jtInt));
+            compiler->checkException();
+            break;
 
          case afResize:
-            {
-               JitTemp thisVal(compiler,jtPointer);
-               thisExpr->genCode(compiler, thisVal, etObject);
-               args[0]->genCode(compiler, sJitArg1.as(jtInt), etInt);
-               compiler->callNative( (void *)arrayResize, thisVal, sJitArg1.as(jtInt));
-               break;
-            }
+            args[0]->genCode(compiler, sJitArg1.as(jtInt), etInt);
+            compiler->callNative( (void *)arrayResize, thisVal, sJitArg1.as(jtInt));
+            compiler->checkException();
+            break;
 
          case afBlit:
             {
@@ -784,6 +812,7 @@ struct ArrayBuiltinAny : public ArrayBuiltinBase
                args[2]->genCode(compiler, fargs.arg(3,jtInt), etInt);
                args[3]->genCode(compiler, fargs.arg(4,jtInt), etInt);
                compiler->callNative( (void *)runBlit, fargs );
+               compiler->checkException();
                break;
             }
 
