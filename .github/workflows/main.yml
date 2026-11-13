@@ -23,6 +23,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || ((github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/release/')) && github.sha) || github.ref }}
   cancel-in-progress: true
 
+# A pull request runs the quick checks, the sanitizers and the core suites on
+# Linux 64, Windows 64 and macOS arm64. Pushes to main and release branches
+# run everything, and a failure there is fixed or tracked like any other
 jobs:
   check-headers:
     name: Check headers
@@ -55,6 +58,7 @@ jobs:
 
   check-msvc-llvm:
     name: Check MSVC builds with clang-cl
+    if: github.event_name != 'pull_request'
     runs-on: windows-latest
     steps:
     - name: checkout
@@ -75,6 +79,7 @@ jobs:
 
   check-android:
     name: Build for Android (${{ matrix.abi }})
+    if: github.event_name != 'pull_request'
     strategy:
       fail-fast: false
       matrix:
@@ -113,6 +118,7 @@ jobs:
 
   check-musl:
     name: Check Linux with musl
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     steps:
     - name: checkout
@@ -208,6 +214,7 @@ jobs:
   # a browser's event loop, workers or cross-origin isolation (libhxcpp #337).
   check-emscripten:
     name: Check Emscripten
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 120
     env:
@@ -270,6 +277,7 @@ jobs:
 
   check-pgo:
     name: Check HXCPP_PGO with ${{ matrix.name }}
+    if: github.event_name != 'pull_request'
     strategy:
       fail-fast: false
       matrix:
@@ -297,6 +305,7 @@ jobs:
 
   check-haxelib:
     name: Check installing with haxelib
+    if: github.event_name != 'pull_request'
     strategy:
       fail-fast: false
       matrix:
@@ -326,3 +335,4 @@ jobs:
     uses: ./.github/workflows/platforms.yml
     with:
       haxe: 4.3.7
+      pr: ${{ github.event_name == 'pull_request' }}

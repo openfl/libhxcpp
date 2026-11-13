@@ -1,13 +1,9 @@
 name: haxe 5 preview
+# Not on pull requests: its failures are only warnings, and main runs it once
+# a change lands
 on:
   push:
     branches: [main, 'release/**']
-    paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - 'LICENSE.txt'
-      - '.github/ISSUE_TEMPLATE/**'
-  pull_request:
     paths-ignore:
       - '**.md'
       - 'docs/**'

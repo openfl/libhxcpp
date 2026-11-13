@@ -1,0 +1,18 @@
+interpreted
+valid blit: ran, [7,1]
+blit: caught blit out of bounds, [7,1]
+setSize: caught Array allocation too large, [7,8]
+resize: caught Array allocation too large, [7,8]
+dynamic blit: caught blit out of bounds, [7,eight]
+dynamic setSize: caught Array allocation too large, [7,eight]
+dynamic resize: caught Array allocation too large, [7,eight]
+continued
+jit
+valid blit: ran, [7,1]
+blit: caught blit out of bounds, [7,1]
+setSize: caught Array allocation too large, [7,8]
+resize: caught Array allocation too large, [7,8]
+dynamic blit: caught blit out of bounds, [7,eight]
+dynamic setSize: caught Array allocation too large, [7,eight]
+dynamic resize: caught Array allocation too large, [7,eight]
+continued

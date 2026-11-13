@@ -99,6 +99,35 @@ static ArrayBase * SLJIT_CALL array_expand_size(ArrayBase *inArray, int inSize)
    return inArray;
 }
 
+// blit, __SetSizeExact and resize throw for a range or size the array cannot
+//  take, and the exception becomes the script's pending one, which the code
+//  after the call checks. They are ArrayBase's whatever the element type, so
+//  each is one function here: a copy for every element type and builtin, each
+//  with its own exception handling, would take more sections than MSVC's
+//  object file format allows.
+static void SLJIT_CALL array_set_size_exact(ArrayBase *inArray, int inSize)
+{
+   TRY_NATIVE
+   inArray->__SetSizeExact(inSize);
+   CATCH_NATIVE
+}
+
+static void SLJIT_CALL array_resize(ArrayBase *inArray, int inSize)
+{
+   TRY_NATIVE
+   inArray->resize(inSize);
+   CATCH_NATIVE
+}
+
+static void SLJIT_CALL array_blit(JitMultiArg *inArgs)
+{
+   // this, inDestElement, inSourceArray, inSourceElement, inElementCount
+   TRY_NATIVE
+   ArrayBase *dest = (ArrayBase *)inArgs[0].obj;
+   dest->Blit( inArgs[1].ival, (ArrayBase *)inArgs[2].obj, inArgs[3].ival, inArgs[4].ival );
+   CATCH_NATIVE
+}
+
 #endif
  
 
@@ -1245,16 +1274,6 @@ struct ArrayBuiltin : public ArrayBuiltinBase
       return inArray->keyValueIterator().mPtr;
    }
 
-   static void SLJIT_CALL runSetSizeExact( Array_obj<ELEM> *inArray, int size )
-   {
-      inArray->__SetSizeExact(size);
-   }
-
-   static void SLJIT_CALL runResize( Array_obj<ELEM> *inArray, int size )
-   {
-      inArray->resize(size);
-   }
-
 
    static void SLJIT_CALL runToString( Array_obj<ELEM> *inArray, String *outString )
    {
@@ -1266,14 +1285,6 @@ struct ArrayBuiltin : public ArrayBuiltinBase
    static hx::Object * SLJIT_CALL runCopy( Array_obj<ELEM> *inArray)
    {
       return inArray->copy().mPtr;
-   }
-
-   static void SLJIT_CALL runBlit( JitMultiArg *inArgs)
-   {
-       // this, inDestElement, inSourceArray, inSourceElement, inElementCount
-       Array_obj<ELEM> *dest = (Array_obj<ELEM> *)inArgs[0].obj;
-       Array_obj<ELEM> *src = (Array_obj<ELEM> *)inArgs[2].obj;
-       dest->blit( inArgs[1].ival, src, inArgs[3].ival, inArgs[4].ival );
    }
 
 
@@ -1891,7 +1902,8 @@ struct ArrayBuiltin : public ArrayBuiltinBase
                thisExpr->genCode(compiler, thisVal, etObject);
                genNullReferenceExceptionCheck(compiler, thisVal);
                args[0]->genCode(compiler, sJitArg1.as(jtInt), etInt);
-               compiler->callNative( (void *)runSetSizeExact, thisVal, sJitArg1.as(jtInt));
+               compiler->callNative( (void *)array_set_size_exact, thisVal, sJitArg1.as(jtInt));
+               compiler->checkException();
                break;
             }
 
@@ -1901,7 +1913,8 @@ struct ArrayBuiltin : public ArrayBuiltinBase
                thisExpr->genCode(compiler, thisVal, etObject);
                genNullReferenceExceptionCheck(compiler, thisVal);
                args[0]->genCode(compiler, sJitArg1.as(jtInt), etInt);
-               compiler->callNative( (void *)runResize, thisVal, sJitArg1.as(jtInt));
+               compiler->callNative( (void *)array_resize, thisVal, sJitArg1.as(jtInt));
+               compiler->checkException();
                break;
             }
 
@@ -1916,7 +1929,8 @@ struct ArrayBuiltin : public ArrayBuiltinBase
                args[1]->genCode(compiler, fargs.arg(2,jtPointer), etObject);
                args[2]->genCode(compiler, fargs.arg(3,jtInt), etInt);
                args[3]->genCode(compiler, fargs.arg(4,jtInt), etInt);
-               compiler->callNative( (void *)runBlit, fargs );
+               compiler->callNative( (void *)array_blit, fargs );
+               compiler->checkException();
                break;
             }
 
