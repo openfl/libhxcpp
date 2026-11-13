@@ -674,6 +674,59 @@ String ArrayBase::joinArray(Array_obj<String> *inArray, String inSeparator)
 }
 
 
+static inline int intDigits(int inValue)
+{
+   unsigned int u = inValue<0 ? (unsigned int)0 - (unsigned int)inValue : (unsigned int)inValue;
+   int digits = inValue<0 ? 2 : 1;
+   while(u>=10)
+   {
+      u /= 10;
+      digits++;
+   }
+   return digits;
+}
+
+// The digits go straight into the result, as String(int) writes them: a String
+//  for each element was an allocation for each value of more than one digit
+//  (libhxcpp #415)
+static String joinInts(ArrayBase *inBase, String inSeparator)
+{
+   int length = inBase->length;
+   const int *values = (const int *)inBase->GetBase();
+   long long total = (long long)(length-1) * inSeparator.length;
+   for(int i=0;i<length;i++)
+      total += intDigits(values[i]);
+   if (total > 0x7fffffff-8)
+      hx::Throw( HX_CSTRING("String too long") );
+   int len = (int)total;
+   char *buf = hx::NewString(len);
+
+   // A moving collection may have run for the allocation
+   values = (const int *)inBase->GetBase();
+   char *pos = buf;
+   for(int i=0;i<length;i++)
+   {
+      if (i && inSeparator.length)
+      {
+         memcpy(pos,inSeparator.raw_ptr(),inSeparator.length);
+         pos += inSeparator.length;
+      }
+      int value = values[i];
+      int digits = intDigits(value);
+      unsigned int u = value<0 ? (unsigned int)0 - (unsigned int)value : (unsigned int)value;
+      char *p = pos + digits;
+      do {
+         *--p = (char)('0' + (u % 10));
+         u /= 10;
+      } while (u);
+      if (value<0)
+         *--p = '-';
+      pos += digits;
+   }
+   buf[len] = '\0';
+   return String(buf,len);
+}
+
 // Per thread, as an anonymous object's is: a thread formatting a nested array
 //  must not use up the depth of another formatting its own
 static thread_local int _hx_toString_depth = 0;
@@ -684,6 +737,13 @@ String ArrayBase::joinArray(ArrayBase *inBase, String inSeparator)
    int length = inBase->length;
    if (length==0)
       return HX_CSTRING("");
+
+   #ifdef HX_SMART_STRINGS
+   if (inBase->getStoreType()==hx::arrayInt && !inSeparator.isUTF16Encoded())
+   #else
+   if (inBase->getStoreType()==hx::arrayInt)
+   #endif
+      return joinInts(inBase, inSeparator);
 
    Array<String> stringArray = Array_obj<String>::__new(length, length);
    _hx_toString_depth++;

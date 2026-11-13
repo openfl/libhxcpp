@@ -1,0 +1,3 @@
+Date.now preserves the simulated 2040 timestamp: true
+Date.now returns the simulated UTC year: true
+explicit post-2038 dates remain correct: true
