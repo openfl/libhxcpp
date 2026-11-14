@@ -1,5 +1,5 @@
 
-libhxcpp 6.0.0 (unreleased)
+libhxcpp 6.0.0-rc.2
 ------------------------------------------------------------
 
 * Added adoptInstances to a loaded cppia module: called with the module it replaces, before that one is released, it moves the live instances of each of the old module's classes onto the new class of the same name when the two lay out their fields the same way, so code reloaded into a running process reaches objects made before the reload. Calls on them run the new code, through interfaces and dynamic calls too, and Type.getClass gives the new class. It returns a row for each old class with live instances: how many moved, and for a class whose fields changed, which field differs. Bound methods and closures made before keep the old code. See docs/CppiaModuleRelease.md (libhxcpp #265)
