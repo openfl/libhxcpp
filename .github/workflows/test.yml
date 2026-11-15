@@ -536,14 +536,18 @@ jobs:
           haxe -D $HXCPP_ARCH_FLAG build.hxml -cpp export/cpp
           export/cpp/Main
       # Haxe 5 moved eventLoop under cross/ and runs every target's misc tests
-      # from tests/misc (HaxeFoundation/haxe#12759); Haxe 4 has the old layout
+      # from tests/misc (HaxeFoundation/haxe#12759); Haxe 4 has the old layout.
+      # Since HaxeFoundation/haxe#12820 its build-cpp.hxml names no target and
+      # Haxe's CI passes --cpp cpp; Haxe 4's still names it, and a second one fails
       - name: haxe event loop
         continue-on-error: ${{ inputs.warn_only }}
         if: ${{ !cancelled() && steps.haxe_tests.outcome == 'success' }}
         working-directory: haxe/tests/misc
         run: |
           if [ -d cross/eventLoop ]; then cd cross/eventLoop; else cd eventLoop; fi
-          haxe -D $HXCPP_ARCH_FLAG build-cpp.hxml
+          target=""
+          grep -q -- '-cpp' build-cpp.hxml || target="--cpp cpp"
+          haxe -D $HXCPP_ARCH_FLAG build-cpp.hxml $target
           cpp/Main
       - name: haxe misc
         continue-on-error: ${{ inputs.warn_only }}
