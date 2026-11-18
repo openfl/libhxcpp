@@ -7621,21 +7621,28 @@ public:
          return memUnmanaged;
       uintptr_t base = 0;
 
-      // Only the collector looks up while marking, with the list fixed, so once
-      // a collection has seen several candidates in range it sorts the bases
-      // and searches them instead of scanning the list for each. The old
-      // allocations' sorted bases are kept while they do not change, which a
-      // minor collection cannot do: sorting them again in each collection
-      // took longer than sweeping them did (libhxcpp #318).
-      if (!mLargeIndexReady && mLargeOld>64 && ++mLargeLookups>8)
+      // The list is fixed while marking, so once a collection has seen several
+      // candidates in range it sorts the bases and searches them instead of
+      // scanning the list for each. The old allocations' sorted bases are kept
+      // while they do not change, which a minor collection cannot do: sorting
+      // them again in each collection took longer than sweeping them did
+      // (libhxcpp #318). The marking threads look up too, for a CFFI abstract
+      // whose memory is marked conservatively, so one thread sorts, under
+      // mLargeIndexLock: two sorting one index at once crashed
+      if (!mLargeIndexReady.load(std::memory_order_acquire) && mLargeOld>64 &&
+          mLargeLookups.fetch_add(1, std::memory_order_relaxed)>=8)
       {
-         mLargeIndex.resize(mLargeOld);
-         for(int i=0;i<mLargeOld;i++)
-            mLargeIndex[i] = reinterpret_cast<uintptr_t>(mLargeList[i] + 2);
-         std::sort(mLargeIndex.begin(), mLargeIndex.end());
-         mLargeIndexReady = true;
+         std::lock_guard<std::mutex> lock(mLargeIndexLock);
+         if (!mLargeIndexReady.load(std::memory_order_relaxed))
+         {
+            mLargeIndex.resize(mLargeOld);
+            for(int i=0;i<mLargeOld;i++)
+               mLargeIndex[i] = reinterpret_cast<uintptr_t>(mLargeList[i] + 2);
+            std::sort(mLargeIndex.begin(), mLargeIndex.end());
+            mLargeIndexReady.store(true, std::memory_order_release);
+         }
       }
-      if (mLargeIndexReady)
+      if (mLargeIndexReady.load(std::memory_order_acquire))
          base = FindLarge(mLargeIndex, inPtr, reach);
       else
          for(int i=0;i<mLargeOld && !base;i++)
@@ -7650,15 +7657,20 @@ public:
 
       // Those made since the last collection, which change in each
       int young = mLargeList.size() - mLargeOld;
-      if (!mYoungLargeIndexReady && young>64 && ++mYoungLargeLookups>8)
+      if (!mYoungLargeIndexReady.load(std::memory_order_acquire) && young>64 &&
+          mYoungLargeLookups.fetch_add(1, std::memory_order_relaxed)>=8)
       {
-         mYoungLargeIndex.resize(young);
-         for(int i=0;i<young;i++)
-            mYoungLargeIndex[i] = reinterpret_cast<uintptr_t>(mLargeList[mLargeOld+i] + 2);
-         std::sort(mYoungLargeIndex.begin(), mYoungLargeIndex.end());
-         mYoungLargeIndexReady = true;
+         std::lock_guard<std::mutex> lock(mLargeIndexLock);
+         if (!mYoungLargeIndexReady.load(std::memory_order_relaxed))
+         {
+            mYoungLargeIndex.resize(young);
+            for(int i=0;i<young;i++)
+               mYoungLargeIndex[i] = reinterpret_cast<uintptr_t>(mLargeList[mLargeOld+i] + 2);
+            std::sort(mYoungLargeIndex.begin(), mYoungLargeIndex.end());
+            mYoungLargeIndexReady.store(true, std::memory_order_release);
+         }
       }
-      if (mYoungLargeIndexReady)
+      if (mYoungLargeIndexReady.load(std::memory_order_acquire))
          base = FindLarge(mYoungLargeIndex, inPtr, reach);
       else
          for(int i=mLargeOld;i<mLargeList.size() && !base;i++)
@@ -7697,14 +7709,16 @@ public:
    // An old allocation was released for the sweep to free
    bool mLargeOldReleased;
    // The sorted bases of mLargeList[0..mLargeOld), and of the rest
+   //  Marking threads build them, one at a time, under mLargeIndexLock
    std::vector<uintptr_t> mLargeIndex;
-   bool mLargeIndexReady = false;
-   int mLargeLookups = 0;
+   std::atomic<bool> mLargeIndexReady{false};
+   std::atomic<int> mLargeLookups{0};
    // The new survivors' bases, taken for the index before a full sweep
    std::vector<uintptr_t> mLargeIndexNew;
    std::vector<uintptr_t> mYoungLargeIndex;
-   bool mYoungLargeIndexReady = false;
-   int mYoungLargeLookups = 0;
+   std::atomic<bool> mYoungLargeIndexReady{false};
+   std::atomic<int> mYoungLargeLookups{0};
+   std::mutex mLargeIndexLock;
    size_t mTotalAfterLastCollect;
    size_t mAllBlocksCount;
    size_t mLiveBytes;
