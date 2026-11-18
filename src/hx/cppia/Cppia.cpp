@@ -3989,18 +3989,20 @@ void genSetter(CppiaCompiler *compiler, const JitVal &ioValue, ExprType exprType
             inExpr->genCode(compiler, sJitTemp0, etInt);
             compiler->mult(ioValue, sJitTemp0, ioValue,false);
          }
-         else
+         else if (exprType==etFloat)
          {
             inExpr->genCode(compiler, sJitTempF0, etFloat);
-            if (exprType==etFloat)
-               compiler->mult(ioValue, sJitTempF0, ioValue,true);
-            else
-            {
-               JitTemp fval(compiler, jtFloat);
-               compiler->convert(ioValue, exprType, fval, etFloat);
-               compiler->mult(sJitTempF0, sJitTempF0, fval, true);
-               compiler->convert(sJitTempF0, etFloat, ioValue, exprType);
-            }
+            compiler->mult(ioValue, sJitTempF0, ioValue,true);
+         }
+         else
+         {
+            // Convert the value first, as -= and /= do: the conversion is a
+            // native call, which may change every float scratch register
+            JitTemp fval(compiler, jtFloat);
+            compiler->convert(ioValue, exprType, fval, etFloat);
+            inExpr->genCode(compiler, sJitTempF0, etFloat);
+            compiler->mult(sJitTempF0, sJitTempF0, fval, true);
+            compiler->convert(sJitTempF0, etFloat, ioValue, exprType);
          }
          break;
 
