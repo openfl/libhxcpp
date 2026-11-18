@@ -94,7 +94,7 @@ public:
    }
 
    #ifdef CPPIA_JIT
-   static int SLJIT_CALL run(typename BuiltinArg<ARG0>::Native inArg0)
+   static int SLJIT_FUNC run(typename BuiltinArg<ARG0>::Native inArg0)
    {
       TRY_NATIVE
       return FUNC(BuiltinArg<ARG0>::get(inArg0));
@@ -143,7 +143,7 @@ public:
    }
 
    #ifdef CPPIA_JIT
-   static int SLJIT_CALL run(typename BuiltinArg<ARG0>::Native inArg0, typename BuiltinArg<ARG1>::Native inArg1)
+   static int SLJIT_FUNC run(typename BuiltinArg<ARG0>::Native inArg0, typename BuiltinArg<ARG1>::Native inArg1)
    {
       TRY_NATIVE
       return FUNC(BuiltinArg<ARG0>::get(inArg0), BuiltinArg<ARG1>::get(inArg1));
@@ -221,7 +221,7 @@ public:
    }
 
    #ifdef CPPIA_JIT
-   static void SLJIT_CALL run(typename BuiltinArg<ARG0>::Native inArg0, typename BuiltinArg<ARG1>::Native inArg1)
+   static void SLJIT_FUNC run(typename BuiltinArg<ARG0>::Native inArg0, typename BuiltinArg<ARG1>::Native inArg1)
    {
       TRY_NATIVE
       FUNC(BuiltinArg<ARG0>::get(inArg0), BuiltinArg<ARG1>::get(inArg1));
@@ -275,7 +275,7 @@ public:
    #ifdef CPPIA_JIT
    // Calls FUNC itself: the int setters share this class, and choosing a float
    // setter by the size of ARG2 stored their values as floats
-   static void SLJIT_CALL run(typename BuiltinArg<ARG0>::Native inArg0, typename BuiltinArg<ARG1>::Native inArg1, typename BuiltinArg<ARG2>::Native inArg2)
+   static void SLJIT_FUNC run(typename BuiltinArg<ARG0>::Native inArg0, typename BuiltinArg<ARG1>::Native inArg1, typename BuiltinArg<ARG2>::Native inArg2)
    {
       TRY_NATIVE
       FUNC(BuiltinArg<ARG0>::get(inArg0), BuiltinArg<ARG1>::get(inArg1), BuiltinArg<ARG2>::get(inArg2));
@@ -321,7 +321,7 @@ public:
       return  FUNC();
    }
    #ifdef CPPIA_JIT
-   static void SLJIT_CALL run(double *outResult)
+   static void SLJIT_FUNC run(double *outResult)
    {
       JitStore(outResult, FUNC());
    }
@@ -366,7 +366,7 @@ public:
    }
 
    #ifdef CPPIA_JIT
-   static void SLJIT_CALL run(typename BuiltinArg<ARG0>::Native inArg0, double *outResult)
+   static void SLJIT_FUNC run(typename BuiltinArg<ARG0>::Native inArg0, double *outResult)
    {
       TRY_NATIVE
       JitStore(outResult, (double)FUNC(BuiltinArg<ARG0>::get(inArg0)));
@@ -415,7 +415,7 @@ public:
    }
 
    #ifdef CPPIA_JIT
-   static void SLJIT_CALL run(typename BuiltinArg<ARG0>::Native inArg0, typename BuiltinArg<ARG1>::Native inArg1, double *outResult)
+   static void SLJIT_FUNC run(typename BuiltinArg<ARG0>::Native inArg0, typename BuiltinArg<ARG1>::Native inArg1, double *outResult)
    {
       TRY_NATIVE
       JitStore(outResult, (double)FUNC(BuiltinArg<ARG0>::get(inArg0), BuiltinArg<ARG1>::get(inArg1)));
@@ -501,7 +501,7 @@ public:
       return Dynamic(FUNC()).mPtr;
    }
    #ifdef CPPIA_JIT
-   static hx::Object * SLJIT_CALL run()
+   static hx::Object * SLJIT_FUNC run()
    {
       TRY_NATIVE
       return Dynamic(FUNC()).mPtr;
@@ -540,7 +540,7 @@ public:
    }
 
    #ifdef CPPIA_JIT
-   static hx::Object * SLJIT_CALL run(typename BuiltinArg<ARG0>::Native inArg0)
+   static hx::Object * SLJIT_FUNC run(typename BuiltinArg<ARG0>::Native inArg0)
    {
       TRY_NATIVE
       return FUNC(BuiltinArg<ARG0>::get(inArg0)).mPtr;

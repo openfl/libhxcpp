@@ -149,7 +149,7 @@ struct InterfaceAdapterExpr : public CppiaExpr
    // Compiled code calls a slot's compiled function directly, so the adapter
    // is compiled too: a call to the same native code. An exception cannot
    // unwind through compiled frames, so it is handed back in ctx->exception.
-   static void SLJIT_CALL runCompiled(CppiaCtx *ctx, InterfaceAdapterExpr *inAdapter)
+   static void SLJIT_FUNC runCompiled(CppiaCtx *ctx, InterfaceAdapterExpr *inAdapter)
    {
       TRY_NATIVE
          run(ctx, inAdapter);
@@ -242,7 +242,7 @@ struct CppiaEnumConstructor : public CppiaOwned<CppiaEnumConstructor>
    }
 
    #ifdef CPPIA_JIT
-   static EnumBase_obj * SLJIT_CALL createEnumBase( CppiaEnumConstructor *enumCtor)
+   static EnumBase_obj * SLJIT_FUNC createEnumBase( CppiaEnumConstructor *enumCtor)
    {
       EnumBase_obj *result = new ((int)enumCtor->args.size()*sizeof(cpp::Variant)) CppiaEnumBase(enumCtor->classInfo);
       result->_hx_setIdentity(enumCtor->name, enumCtor->index, enumCtor->args.size());
@@ -264,7 +264,7 @@ struct CppiaEnumConstructor : public CppiaOwned<CppiaEnumConstructor>
    }
 
    #ifdef HXCPP_GC_GENERATIONAL
-   static hx::Object * SLJIT_CALL rememberIfPromoted(hx::Object *inEnum)
+   static hx::Object * SLJIT_FUNC rememberIfPromoted(hx::Object *inEnum)
    {
       HX_OBJ_WB_NEW_MARKED_OBJECT(inEnum);
       return inEnum;
@@ -354,7 +354,7 @@ hx::Object *createEnumClosure(CppiaEnumConstructor &inContructor)
 
 
 #ifdef CPPIA_JIT
-void SLJIT_CALL createEnum(hx::Class_obj *inClass, String *inName, int inArgs)
+void SLJIT_FUNC createEnum(hx::Class_obj *inClass, String *inName, int inArgs)
 {
    StackContext *ctx = StackContext::getCurrent();
 

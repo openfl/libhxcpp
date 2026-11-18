@@ -93,7 +93,7 @@ CppiaExpr *ArrayBuiltinBase::link(CppiaModule &inData)
 template<typename ELEM>
 inline JitType elem4JitType() { return ExprTypeOf<ELEM>::value==etFloat ? jtFloat32 : jtAny; }
 
-static ArrayBase * SLJIT_CALL array_expand_size(ArrayBase *inArray, int inSize)
+static ArrayBase * SLJIT_FUNC array_expand_size(ArrayBase *inArray, int inSize)
 {
    TRY_NATIVE
    inArray->Realloc(inSize+1);
@@ -108,21 +108,21 @@ static ArrayBase * SLJIT_CALL array_expand_size(ArrayBase *inArray, int inSize)
 //  each is one function here: a copy for every element type and builtin, each
 //  with its own exception handling, would take more sections than MSVC's
 //  object file format allows.
-static void SLJIT_CALL array_set_size_exact(ArrayBase *inArray, int inSize)
+static void SLJIT_FUNC array_set_size_exact(ArrayBase *inArray, int inSize)
 {
    TRY_NATIVE
    inArray->__SetSizeExact(inSize);
    CATCH_NATIVE
 }
 
-static void SLJIT_CALL array_resize(ArrayBase *inArray, int inSize)
+static void SLJIT_FUNC array_resize(ArrayBase *inArray, int inSize)
 {
    TRY_NATIVE
    inArray->resize(inSize);
    CATCH_NATIVE
 }
 
-static void SLJIT_CALL array_blit(JitMultiArg *inArgs)
+static void SLJIT_FUNC array_blit(JitMultiArg *inArgs)
 {
    // this, inDestElement, inSourceArray, inSourceElement, inElementCount
    TRY_NATIVE
@@ -236,7 +236,7 @@ struct ArraySetter : public ArrayBuiltinBase
 
    #ifdef CPPIA_JIT
 
-   static void * SLJIT_CALL nativeRunInt(JitMultiArg *args)
+   static void * SLJIT_FUNC nativeRunInt(JitMultiArg *args)
    {
    TRY_NATIVE
       Array_obj<ELEM> *thisVal = reinterpret_cast<Array_obj<ELEM> *>(JitArg(args,0).obj);
@@ -252,7 +252,7 @@ struct ArraySetter : public ArrayBuiltinBase
    return 0;
 }
 
-   static void * SLJIT_CALL nativeRunFloat(JitMultiArg *args)
+   static void * SLJIT_FUNC nativeRunFloat(JitMultiArg *args)
    {
    TRY_NATIVE
       Array_obj<ELEM> *thisVal = reinterpret_cast<Array_obj<ELEM> *>(JitArg(args,0).obj);
@@ -268,7 +268,7 @@ struct ArraySetter : public ArrayBuiltinBase
    return 0;
 }
 
-   static void * SLJIT_CALL nativeRunObject(JitMultiArg *args)
+   static void * SLJIT_FUNC nativeRunObject(JitMultiArg *args)
    {
    TRY_NATIVE
       Array_obj<ELEM> *thisVal = reinterpret_cast<Array_obj<ELEM> *>(JitArg(args,0).obj);
@@ -284,7 +284,7 @@ struct ArraySetter : public ArrayBuiltinBase
    return 0;
 }
 
-   static void * SLJIT_CALL nativeRunString(JitMultiArg *args)
+   static void * SLJIT_FUNC nativeRunString(JitMultiArg *args)
    {
    TRY_NATIVE
       Array_obj<ELEM> *thisVal = reinterpret_cast<Array_obj<ELEM> *>(JitArg(args,0).obj);
@@ -493,7 +493,7 @@ struct ArraySetter : public ArrayBuiltinBase
 };
 
 #ifdef CPPIA_JIT
-static hx::Object *SLJIT_CALL objGetIndex(hx::Object *inArray, int inIndex)
+static hx::Object *SLJIT_FUNC objGetIndex(hx::Object *inArray, int inIndex)
 {
    return Dynamic(inArray->__GetItem(inIndex)).mPtr;
 }
@@ -1200,7 +1200,7 @@ struct ArrayBuiltin : public ArrayBuiltinBase
    }
 
    #ifdef CPPIA_JIT
-   static ArrayBase * SLJIT_CALL array_expand(ArrayBase *inArray)
+   static ArrayBase * SLJIT_FUNC array_expand(ArrayBase *inArray)
    {
       TRY_NATIVE
       inArray->Realloc( inArray->length + 1 );
@@ -1208,20 +1208,20 @@ struct ArrayBuiltin : public ArrayBuiltinBase
       CATCH_NATIVE
       return 0;
    }
-   static void SLJIT_CALL runSort( Array_obj<ELEM> *inArray, hx::Object *inFunc)
+   static void SLJIT_FUNC runSort( Array_obj<ELEM> *inArray, hx::Object *inFunc)
    {
       TRY_NATIVE
       inArray->sort( Dynamic(inFunc) );
       CATCH_NATIVE
    }
-   static void SLJIT_CALL runJoin( Array_obj<ELEM> *inArray, String *ioValue)
+   static void SLJIT_FUNC runJoin( Array_obj<ELEM> *inArray, String *ioValue)
    {
       TRY_NATIVE
       JitStore(ioValue, inArray->join( JitLoad(ioValue) ));
       CATCH_NATIVE
    }
 
-   static void SLJIT_CALL runElem( Array_obj<ELEM> *inArray, int inIndex)
+   static void SLJIT_FUNC runElem( Array_obj<ELEM> *inArray, int inIndex)
    {
    TRY_NATIVE
       ELEM &t = Array<ELEM>(inArray)[inIndex];
@@ -1233,7 +1233,7 @@ struct ArrayBuiltin : public ArrayBuiltinBase
    CATCH_NATIVE
 }
 
-   static int SLJIT_CALL runIntCrement( Array_obj<ELEM> *inArray, int inIndex)
+   static int SLJIT_FUNC runIntCrement( Array_obj<ELEM> *inArray, int inIndex)
    {
    TRY_NATIVE
       ELEM &t = Array<ELEM>(inArray)[inIndex];
@@ -1247,7 +1247,7 @@ struct ArrayBuiltin : public ArrayBuiltinBase
    return 0;
 }
 
-   static void SLJIT_CALL runFloatCrement( Array_obj<ELEM> *inArray, int inIndex, double *d)
+   static void SLJIT_FUNC runFloatCrement( Array_obj<ELEM> *inArray, int inIndex, double *d)
    {
    TRY_NATIVE
       ELEM &t = Array<ELEM>(inArray)[inIndex];
@@ -1259,7 +1259,7 @@ struct ArrayBuiltin : public ArrayBuiltinBase
    CATCH_NATIVE
 }
 
-   static hx::Object * SLJIT_CALL runObjCrement( Array_obj<ELEM> *inArray, int inIndex)
+   static hx::Object * SLJIT_FUNC runObjCrement( Array_obj<ELEM> *inArray, int inIndex)
    {
    TRY_NATIVE
       ELEM &t = Array<ELEM>(inArray)[inIndex];
@@ -1273,24 +1273,24 @@ struct ArrayBuiltin : public ArrayBuiltinBase
    return 0;
 }
 
-   static int SLJIT_CALL runContains( Array_obj<ELEM> *inArray, typename ExprBaseTypeOf<ELEM>::Base inBase)
+   static int SLJIT_FUNC runContains( Array_obj<ELEM> *inArray, typename ExprBaseTypeOf<ELEM>::Base inBase)
    {
       return inArray->contains(inBase);
    }
 
-   static int SLJIT_CALL runRemove( Array_obj<ELEM> *inArray, typename ExprBaseTypeOf<ELEM>::Base inBase)
+   static int SLJIT_FUNC runRemove( Array_obj<ELEM> *inArray, typename ExprBaseTypeOf<ELEM>::Base inBase)
    {
       return inArray->remove(inBase);
    }
 
 
-   static void SLJIT_CALL runUnshift( Array_obj<ELEM> *inArray, typename ExprBaseTypeOf<ELEM>::Base inBase)
+   static void SLJIT_FUNC runUnshift( Array_obj<ELEM> *inArray, typename ExprBaseTypeOf<ELEM>::Base inBase)
    {
       inArray->unshift(inBase);
    }
 
 
-   static int SLJIT_CALL runIndex( Array_obj<ELEM> *inArray, typename ExprBaseTypeOf<ELEM>::Base inBase, hx::Object *pos)
+   static int SLJIT_FUNC runIndex( Array_obj<ELEM> *inArray, typename ExprBaseTypeOf<ELEM>::Base inBase, hx::Object *pos)
    {
       if (FUNC==afIndexOf)
          return inArray->indexOf(inBase,pos);
@@ -1298,38 +1298,38 @@ struct ArrayBuiltin : public ArrayBuiltinBase
          return inArray->lastIndexOf(inBase,pos);
    }
 
-   static void SLJIT_CALL runInsert( Array_obj<ELEM> *inArray, int pos, typename ExprBaseTypeOf<ELEM>::Base inBase)
+   static void SLJIT_FUNC runInsert( Array_obj<ELEM> *inArray, int pos, typename ExprBaseTypeOf<ELEM>::Base inBase)
    {
       inArray->insert(pos, inBase);
    }
 
    // TODO - string
-   static hx::Object * SLJIT_CALL runShift( Array_obj<ELEM> *inArray )
+   static hx::Object * SLJIT_FUNC runShift( Array_obj<ELEM> *inArray )
    {
       return Dynamic(inArray->shift()).mPtr;
    }
 
-   static hx::Object * SLJIT_CALL runSlice( Array_obj<ELEM> *inArray, int pos, hx::Object *end )
+   static hx::Object * SLJIT_FUNC runSlice( Array_obj<ELEM> *inArray, int pos, hx::Object *end )
    {
       return inArray->slice(pos, end).mPtr;
    }
 
-   static hx::Object * SLJIT_CALL runSplice( Array_obj<ELEM> *inArray, int pos, int len )
+   static hx::Object * SLJIT_FUNC runSplice( Array_obj<ELEM> *inArray, int pos, int len )
    {
       return inArray->splice(pos, len).mPtr;
    }
 
-   static void SLJIT_CALL runRemoveRange( Array_obj<ELEM> *inArray, int pos, int len )
+   static void SLJIT_FUNC runRemoveRange( Array_obj<ELEM> *inArray, int pos, int len )
    {
       inArray->removeRange(pos, len);
    }
 
-   static void SLJIT_CALL runReverse( Array_obj<ELEM> *inArray )
+   static void SLJIT_FUNC runReverse( Array_obj<ELEM> *inArray )
    {
       inArray->reverse();
    }
 
-   static hx::Object *SLJIT_CALL runConcat( Array_obj<ELEM> *inArray, Array_obj<ELEM> *inOther )
+   static hx::Object *SLJIT_FUNC runConcat( Array_obj<ELEM> *inArray, Array_obj<ELEM> *inOther )
    {
       // A null array to append throws: the exception becomes the script's
       //  pending one, which the code after the call checks
@@ -1340,31 +1340,31 @@ struct ArrayBuiltin : public ArrayBuiltinBase
    }
 
 
-   static hx::Object *SLJIT_CALL runGetIteratator( Array_obj<ELEM> *inArray )
+   static hx::Object *SLJIT_FUNC runGetIteratator( Array_obj<ELEM> *inArray )
    {
       return inArray->iterator().mPtr;
    }
 
-   static hx::Object *SLJIT_CALL runGetKeyValueIteratator( Array_obj<ELEM> *inArray )
+   static hx::Object *SLJIT_FUNC runGetKeyValueIteratator( Array_obj<ELEM> *inArray )
    {
       return inArray->keyValueIterator().mPtr;
    }
 
 
-   static void SLJIT_CALL runToString( Array_obj<ELEM> *inArray, String *outString )
+   static void SLJIT_FUNC runToString( Array_obj<ELEM> *inArray, String *outString )
    {
       TRY_NATIVE
       JitStore(outString, inArray->toString());
       CATCH_NATIVE
    }
 
-   static hx::Object * SLJIT_CALL runCopy( Array_obj<ELEM> *inArray)
+   static hx::Object * SLJIT_FUNC runCopy( Array_obj<ELEM> *inArray)
    {
       return inArray->copy().mPtr;
    }
 
 
-   static hx::Object * SLJIT_CALL runProcess( Array_obj<ELEM> *inArray, hx::Object *inFunction)
+   static hx::Object * SLJIT_FUNC runProcess( Array_obj<ELEM> *inArray, hx::Object *inFunction)
    {
       TRY_NATIVE
       if (FUNC==afMap)

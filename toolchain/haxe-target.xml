@@ -149,12 +149,21 @@
   <depend name="${HXCPP}/src/hx/cppia/CppiaCompiler.h"  if="CPPIA_JIT" />
   <!-- included by CppiaCompiler.cpp -->
   <depend name="${HXCPP}/src/hx/cppia/sljit_src/sljitConfig.h" if="CPPIA_JIT" />
+  <depend name="${HXCPP}/src/hx/cppia/sljit_src/sljitConfigCPU.h" if="CPPIA_JIT" />
   <depend name="${HXCPP}/src/hx/cppia/sljit_src/sljitConfigInternal.h" if="CPPIA_JIT" />
   <depend name="${HXCPP}/src/hx/cppia/sljit_src/sljitLir.h" if="CPPIA_JIT" />
   <depend name="${HXCPP}/src/hx/cppia/sljit_src/sljitLir.c" if="CPPIA_JIT" />
   <depend name="${HXCPP}/src/hx/cppia/sljit_src/sljitUtils.c" if="CPPIA_JIT" />
-  <depend name="${HXCPP}/src/hx/cppia/sljit_src/sljitExecAllocator.c" if="CPPIA_JIT" />
-  <depend name="${HXCPP}/src/hx/cppia/sljit_src/sljitProtExecAllocator.c" if="CPPIA_JIT" />
+  <depend name="${HXCPP}/src/hx/cppia/sljit_src/sljitSerialize.c" if="CPPIA_JIT" />
+  <depend name="${HXCPP}/src/hx/cppia/sljit_src/allocator_src/sljitExecAllocatorCore.c" if="CPPIA_JIT" />
+  <depend name="${HXCPP}/src/hx/cppia/sljit_src/allocator_src/sljitExecAllocatorWindows.c" if="CPPIA_JIT" />
+  <depend name="${HXCPP}/src/hx/cppia/sljit_src/allocator_src/sljitExecAllocatorApple.c" if="CPPIA_JIT" />
+  <depend name="${HXCPP}/src/hx/cppia/sljit_src/allocator_src/sljitExecAllocatorFreeBSD.c" if="CPPIA_JIT" />
+  <depend name="${HXCPP}/src/hx/cppia/sljit_src/allocator_src/sljitExecAllocatorPosix.c" if="CPPIA_JIT" />
+  <depend name="${HXCPP}/src/hx/cppia/sljit_src/allocator_src/sljitProtExecAllocatorNetBSD.c" if="CPPIA_JIT" />
+  <depend name="${HXCPP}/src/hx/cppia/sljit_src/allocator_src/sljitProtExecAllocatorPosix.c" if="CPPIA_JIT" />
+  <depend name="${HXCPP}/src/hx/cppia/sljit_src/allocator_src/sljitWXExecAllocatorWindows.c" if="CPPIA_JIT" />
+  <depend name="${HXCPP}/src/hx/cppia/sljit_src/allocator_src/sljitWXExecAllocatorPosix.c" if="CPPIA_JIT" />
   <depend name="${HXCPP}/src/hx/cppia/sljit_src/sljitNativeX86_common.c" if="CPPIA_JIT" />
   <depend name="${HXCPP}/src/hx/cppia/sljit_src/sljitNativeX86_32.c" if="CPPIA_JIT" />
   <depend name="${HXCPP}/src/hx/cppia/sljit_src/sljitNativeX86_64.c" if="CPPIA_JIT" />
