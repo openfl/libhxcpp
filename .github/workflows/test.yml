@@ -53,7 +53,9 @@ jobs:
   core:
     runs-on: ${{ inputs.os }}
     name: core
-    timeout-minutes: 90
+    # The regression step builds about 300 tests one at a time: the job took
+    # 75 to 89 minutes on the slower runners with Haxe 4.3.7, more with Haxe 5
+    timeout-minutes: 150
     defaults:
       run:
         shell: bash
