@@ -114,6 +114,7 @@ SslSniName: sockets
 ThreadEndsAtExit: threads
 ThreadEndsAtExitDebugger: threads
 ThreadEndsWhileCollecting: threads
+ThreadScratchApi4: threads
 ThreadWaitTimeouts: threads
 TimerStampFirstCall: threads
 UncaughtNullException: processes (runs itself)

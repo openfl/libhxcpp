@@ -168,7 +168,10 @@ int hx::thread::Thread_obj::id()
 void hx::thread::ThreadImpl_obj::makeArrays()
 {
 	HX_INCREMENTAL_MUTATION(this);
+#if (HXCPP_API_LEVEL >= 500)
+	// Only hx::thread::Scratch, which Haxe 5 uses, reads it
 	scratch = Array<uint8_t>(std::numeric_limits<uint16_t>::max(), std::numeric_limits<uint16_t>::max());
+#endif
 	slots = Array<Dynamic>(0, 0);
 	localSlots = Array<Dynamic>(0, 0);
 	localGenerations = Array<int>(0, 0);
