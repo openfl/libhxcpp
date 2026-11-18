@@ -1692,9 +1692,10 @@ struct NewExpr : public CppiaDynamicExpr
       if (!type->cppiaClass && type->haxeClass.mPtr)
          constructor = type->haxeClass.mPtr->mConstructArgs;
 
-      // Nothing to construct: runObject and genCode would dereference the null cppiaClass.
-      // The module never runs: linking goes on to find anything else missing
-      if (!type->arrayType && !constructor && !type->cppiaClass)
+      // Nothing to construct: runObject and genCode would dereference the null cppiaClass,
+      // or a script interface's null haxeBase. The module never runs: linking goes on to
+      // find anything else missing
+      if (!type->arrayType && !constructor && (!type->cppiaClass || !type->cppiaClass->haxeBase))
          inModule.linkMiss(this, std::string("new ") + type->name.c_str());
 
       LinkExpressions(args,inModule);

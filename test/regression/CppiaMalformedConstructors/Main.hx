@@ -3,9 +3,10 @@
 // link to, which only a malformed cppia file asks for, and the loader read
 // through the null constructor. A constructor whose body is not a function,
 // as a malformed file can give, loaded, and a super call into it crashed the
-// loader the same way, and a new of its class crashed when it ran. Such files
-// fail to load now. Scripts whose classes take a constructor from above, from
-// a script class or from the host, still load and run.
+// loader the same way, and a new of its class crashed when it ran, as a new of
+// a script interface did. Such files fail to load now. Scripts whose classes
+// take a constructor from above, from a script class or from the host, still
+// load and run.
 class Main {
 	// Strings "new" and "main"; types Foo and Bar; Foo.main's body is the
 	// expression given
@@ -42,6 +43,7 @@ class Main {
 			check("super call into an interface with a constructor", withMain("CALLSUPERNEW 2 0", "INTERFACE 2 0 0 1 FUNCTION 1 0 0 0 0"));
 			check("super call into a constructor", withMain("CALLSUPERNEW 2 0", "CLASS 2 0 0 1 FUNCTION 1 0 0 0 0 0 0 FUN 0 0 0 0 BLOCK 0"));
 			check("new of a constructor that is a return", newBar("CLASS 2 0 0 1 FUNCTION 1 0 0 0 0 0 0 RETURN"));
+			check("new of an interface", newBar("INTERFACE 2 0 0 0"));
 			check("new of a class with no constructor", newBar("CLASS 2 0 0 0"));
 			check("new of a constructor", newBar("CLASS 2 0 0 1 FUNCTION 1 0 0 0 0 0 0 FUN 0 0 0 0 BLOCK 0"));
 			try {

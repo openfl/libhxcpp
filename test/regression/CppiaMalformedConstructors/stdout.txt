@@ -6,6 +6,7 @@ super call into a constructor that is a return threw: Constructor is not a funct
 super call into an interface with a constructor threw: Constructor is not a function
 super call into a constructor loaded and ran
 new of a constructor that is a return threw: Constructor is not a function
+new of an interface threw: Could not link new Bar
 new of a class with no constructor loaded and ran
 new of a constructor loaded and ran
 Top 1 then Bottom
@@ -19,6 +20,7 @@ super call into a constructor that is a return threw: Constructor is not a funct
 super call into an interface with a constructor threw: Constructor is not a function
 super call into a constructor loaded and ran
 new of a constructor that is a return threw: Constructor is not a function
+new of an interface threw: Could not link new Bar
 new of a class with no constructor loaded and ran
 new of a constructor loaded and ran
 Top 1 then Bottom
