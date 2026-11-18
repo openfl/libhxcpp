@@ -12,5 +12,10 @@ class Script {
 		// In an Array<Dynamic> literal the jit boxed these as Int
 		var row:Array<Dynamic> = [a.contains(1), a.remove(3), flags[0], flags[1] = false];
 		Sys.println(row + " " + [for (x in row) Std.isOfType(x, Bool)]);
+		// Array<Any> has builtins of its own, and the interpreter boxed these as Int
+		var any:Array<Any> = [1, "a", true];
+		var ac:Dynamic = any.contains("a");
+		var ar:Dynamic = any.remove(true);
+		Sys.println(Std.isOfType(ac, Bool) + " " + ac + " " + Std.isOfType(ar, Bool) + " " + ar + " " + any.contains(2));
 	}
 }

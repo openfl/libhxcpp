@@ -260,11 +260,11 @@ struct ArrayBuiltinAny : public ArrayBuiltinBase
 
    hx::Object *runObject(CppiaCtx *ctx) HXCPP_OVERRIDE
    {
-      if (FUNC==afPush || FUNC==afContains || FUNC==afRemove || FUNC==afIndexOf || FUNC==afLastIndexOf)
-         return Dynamic(runInt(ctx)).mPtr;
-
-      if (FUNC==afRemove)
+      if (FUNC==afContains || FUNC==afRemove)
          return Dynamic((bool)runInt(ctx)).mPtr;
+
+      if (FUNC==afPush || FUNC==afIndexOf || FUNC==afLastIndexOf)
+         return Dynamic(runInt(ctx)).mPtr;
 
       if (FUNC==afJoin || FUNC==afToString)
          return Dynamic(runString(ctx)).mPtr;
