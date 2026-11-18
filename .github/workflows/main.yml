@@ -265,6 +265,10 @@ jobs:
       if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
       run: timeout 1200 sh test/emscripten/exceptions/run.sh
 
+    - name: Rebuild with HXCPP_LINK_NO_EXCEPTIONS, without the compile cache
+      if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+      run: timeout 1200 sh test/emscripten/link_no_exceptions.sh
+
     - name: Run the Embind test
       if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
       run: timeout 600 sh test/emscripten/embind/run.sh

@@ -4,6 +4,7 @@ libhxcpp 6.0.0 (unreleased)
 
 * Fixed HXCPP_GC_INCREMENTAL failing to compile ("Incremental GC requires regenerated C++") with libhxcpp installed from a release, 6.0.0-rc.2 among them: the release workflow rewrote extraParams.hxml with the version and dropped its other line, the macro that turns on the generated write barriers the incremental collector needs. Only the version lines are rewritten now
 * Fixed a change of link flags or libraries alone leaving the program as it was: the build tool linked again only when an object or library file had changed, so -D HXCPP_LINK_STACK_SIZE, HXCPP_LINK_NO_MEMORY_GROWTH, HXCPP_LINK_NO_EMBIND or HXCPP_LINK_NODERAWFS on an Emscripten build, which change nothing that is compiled, or a flag or library added to a target in Build.xml, did nothing until the objects changed. The flags, libraries and library paths are now part of what a link is checked against, so each program links once more after updating
+* Fixed an Emscripten build failing to link (undefined symbol: __wasm_lpad_context) when -D HXCPP_LINK_NO_EXCEPTIONS was added to a project built before without it: the define also compiles without -fwasm-exceptions, but the build tool took every HXCPP_LINK_ define for a link option and compiled nothing again. It recompiles now, and once back without it
 
 libhxcpp 6.0.0-rc.2
 ------------------------------------------------------------

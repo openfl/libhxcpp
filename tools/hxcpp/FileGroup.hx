@@ -226,7 +226,8 @@ class FileGroup
       {
          // Haxe writes defines as they were given, so -D HXCPP_M64 arrives upper case
          var name = def.split("=")[0].toLowerCase();
-         if (name.indexOf("hxcpp_link")>=0)
+         // Emscripten compiles with -fwasm-exceptions unless HXCPP_LINK_NO_EXCEPTIONS
+         if (name.indexOf("hxcpp_link")>=0 && name!="hxcpp_link_no_exceptions")
          {
             // Only effects linking, not compiling
          }
