@@ -6499,8 +6499,14 @@ public:
       size_t freeFraggedRows = 0; 
       if (inFreeIsFragged)
       {
+         // The free blocks no allocation could use. Only a request of a line or
+         //  less moves mNextFreeBlockOfSize[0] on, so past it are also blocks
+         //  that bigger requests took and filled, whose rows marking counts:
+         //  counting their free rows from before as well made a heap of dead
+         //  objects look full, and its target doubled at every other collection
          for(int i=mNextFreeBlockOfSize[0]; i<mFreeBlocks.size(); i++)
-            freeFraggedRows += mFreeBlocks[i]->GetFreeRows();
+            if (!mFreeBlocks[i]->mOwned)
+               freeFraggedRows += mFreeBlocks[i]->GetFreeRows();
       }
 
       // Now all threads have mTopOfStack & mBottomOfStack set.
