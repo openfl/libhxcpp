@@ -9201,8 +9201,11 @@ unsigned int ObjectSizeSafe(void *inData)
    #ifdef HXCPP_GC_NURSERY
    if (!(header & 0xff000000))
    {
-      // Small object
-      if (header & 0x00ffffff)
+      // A small object has its size in the low 16 bits, and a large one 0
+      //  there, as MarkAllocUnchecked reads it. The flags above can be set
+      //  on either: a long string's hash slot made a large one look small,
+      //  with a size of 0
+      if (header & 0x0000ffff)
          return header & 0x0000ffff;
       // Large object
    }
