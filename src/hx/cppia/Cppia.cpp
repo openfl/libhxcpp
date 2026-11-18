@@ -8015,12 +8015,18 @@ struct OpNeg : public CppiaExpr
    {
       return - value->runInt(ctx);
    }
+   // An Int negated stays an Int: -0 is 0 and -(-2147483648) wraps, as in
+   // compiled code
    Float runFloat(CppiaCtx *ctx) HXCPP_OVERRIDE
    {
+      if (type==etInt)
+         return runInt(ctx);
       return - value->runFloat(ctx);
    }
    hx::Object *runObject(CppiaCtx *ctx) HXCPP_OVERRIDE
    {
+      if (type==etInt)
+         return Dynamic(runInt(ctx)).mPtr;
       return Dynamic(- value->runFloat(ctx)).mPtr;
    }
 
@@ -8031,6 +8037,12 @@ struct OpNeg : public CppiaExpr
       {
          value->genCode(compiler, sJitTemp0.as(jtInt), etInt);
          compiler->negate(inDest, sJitTemp0.as(jtInt) );
+      }
+      else if (type==etInt)
+      {
+         value->genCode(compiler, sJitTemp0.as(jtInt), etInt);
+         compiler->negate(sJitTemp0.as(jtInt), sJitTemp0.as(jtInt) );
+         compiler->convert(sJitTemp0, etInt, inDest, destType);
       }
       else
       {

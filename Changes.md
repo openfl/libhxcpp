@@ -23,6 +23,7 @@ libhxcpp 6.0.0 (unreleased)
 
 * Fixed a weak map's toString calling toString on keys the collector had already freed, and on whatever had taken their memory, which could crash: a collection during the walk, which allocates as it goes, unlinked the entries whose keys had died, and the walk went on from its entry's next, which still led to them. A weak map now holds its keys and values while a walk is on them, and lets them go at the next collection after it
 * Fixed *= and -= on an element of an Array<Int> under the cppia JIT giving -2147483648 when the result passed the Int range: the JIT did them in Float arithmetic and converted back, where compiled code and the interpreter wrap, so a hash kept in an array, h[i] *= 31, went wrong once it overflowed
+* Fixed cppia negating an Int as a Float wherever the result was not used as an Int, interpreted and under the JIT: -x with x = 0 printed as "-0", -(-2147483648) gave 2147483648 instead of wrapping, and Type.typeof gave TFloat, as Dynamic, in a String or as a Float
 
 libhxcpp 6.0.0-rc.2
 ------------------------------------------------------------
