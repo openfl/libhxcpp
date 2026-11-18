@@ -22,6 +22,7 @@ libhxcpp 6.0.0 (unreleased)
 * Fixed the collector freeing large buffers that the memory of a CFFI abstract made with create_abstract pointed to, and crashing: the collector sorts the large allocations into an index on the first lookups of a collection, and the marking threads, which mark an abstract's memory conservatively, could build it two at once. One thread builds it now. In a test holding 20,000 buffers through 8,000 abstracts, 10 to 14 collections in 16 lost buffers or the process crashed
 
 * Fixed a weak map's toString calling toString on keys the collector had already freed, and on whatever had taken their memory, which could crash: a collection during the walk, which allocates as it goes, unlinked the entries whose keys had died, and the walk went on from its entry's next, which still led to them. A weak map now holds its keys and values while a walk is on them, and lets them go at the next collection after it
+* Fixed *= and -= on an element of an Array<Int> under the cppia JIT giving -2147483648 when the result passed the Int range: the JIT did them in Float arithmetic and converted back, where compiled code and the interpreter wrap, so a hash kept in an array, h[i] *= 31, went wrong once it overflowed
 
 libhxcpp 6.0.0-rc.2
 ------------------------------------------------------------

@@ -1256,8 +1256,9 @@ struct NAME \
    void apply( T &ioVal, double val) { AssignDouble(ioVal, ValToFloat(ioVal) OP val); } \
    template<typename T> static \
    void apply( T &ioVal, String &val) { } \
+   /* The jit's Int array *= and -=, never /= */ \
    template<typename T> static \
-   void apply( T &ioVal, int &val) { } \
+   void apply( T &ioVal, int &val) { AssignInt(ioVal, ValToInt(ioVal) OP val); } \
    template<typename T> static \
    void apply( T &ioVal, Dynamic &val) { } \
 };

@@ -269,8 +269,14 @@ struct ArraySetter : public ArrayBuiltinBase
       switch((int)FUNC::op)
       {
          case aoMult:
-         case aoDiv:
          case aoSub:
+            // Int elements stay in Int arithmetic, which wraps as compiled
+            // code does: through a Float, a result past the Int range
+            // converted to -2147483648
+            rightHandType = elemType == etInt ? etInt : etFloat;
+            break;
+
+         case aoDiv:
          case aoMod:
             rightHandType = etFloat;
             break;
