@@ -26,6 +26,7 @@ libhxcpp 6.0.0 (unreleased)
 * Fixed cppia negating an Int as a Float wherever the result was not used as an Int, interpreted and under the JIT: -x with x = 0 printed as "-0", -(-2147483648) gave 2147483648 instead of wrapping, and Type.typeof gave TFloat, as Dynamic, in a String or as a Float
 * Fixed interpreted cppia giving contains and remove on an Array<Any> as an Int where they became Dynamic or a String: "" + a.contains(x) was "1" and Std.isOfType(a.remove(x), Bool) false. The fix for the typed arrays had missed Array<Any>'s builtins
 * Fixed concat with a null array under the cppia JIT ending the process where it throws Null Object Reference (with HXCPP_CHECK_POINTER, or HXCPP_CATCH_SEGV as the Cppia host has), on typed arrays and Array<Any>: the native call had no exception bridge. The script catches it, as it does interpreted
+* Fixed loading a cppia module crashing with HXCPP_GC_MOVING when a collection that moved objects came while the module was making its types: updating the loading module's pointers read the types not yet made
 
 libhxcpp 6.0.0-rc.2
 ------------------------------------------------------------

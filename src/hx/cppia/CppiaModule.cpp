@@ -308,7 +308,8 @@ void CppiaModule::visit(hx::VisitContext *__inCtx)
 {
    HX_VISIT_MEMBER(strings);
    for(int i=0;i<types.size();i++)
-      types[i]->visit(__inCtx);
+      if (types[i]) /* Not yet made while the module loads */
+         types[i]->visit(__inCtx);
    for(int i=0;i<markable.size();i++)
       markable[i]->visit(__inCtx);
    for(int i=0;i<classes.size();i++)
