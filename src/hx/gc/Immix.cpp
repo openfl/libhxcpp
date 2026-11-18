@@ -7982,6 +7982,18 @@ void MarkConservative(int *inBottom, int *inTop,hx::MarkContext *__inCtx)
    #endif
 }
 
+void MarkConservativePointer(void *inPtr,hx::MarkContext *__inCtx)
+{
+   void *word[1] = { inPtr };
+   // MarkConservative reads every pointer-sized word starting on an int in
+   //  the range, so this covers the one word and nothing past it
+   #ifdef HXCPP_STACK_UP
+   MarkConservative(reinterpret_cast<int *>(word + 1) - 1, reinterpret_cast<int *>(word) + 1, __inCtx);
+   #else
+   MarkConservative(reinterpret_cast<int *>(word), reinterpret_cast<int *>(word + 1), __inCtx);
+   #endif
+}
+
 } // namespace hx
 
 
