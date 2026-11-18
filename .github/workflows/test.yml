@@ -424,9 +424,23 @@ jobs:
               *) echo "::error::unknown gc stress mode $mode"; exit 1 ;;
             esac
             echo "::group::cppia module free: $mode"
-            if ! { haxe build.hxml $flags -D $HXCPP_ARCH_FLAG && bin/$bin > out.txt && diff <(tr -d '\r' < stdout.txt) <(tr -d '\r' < out.txt); }; then
+            code=0
+            if ! haxe build.hxml $flags -D $HXCPP_ARCH_FLAG; then
               failed="$failed $mode"
-              echo "::error::cppia module free failed: $mode"
+              echo "::error::cppia module free failed to build: $mode"
+            else
+              bin/$bin > out.txt || code=$?
+              if [ $code != 0 ]; then
+                failed="$failed $mode"
+                echo "::error::cppia module free exited with $code: $mode"
+                # It prints a line as each check passes, flushed, so the last
+                # line shows how far it got before a crash
+                echo "Its output:"
+                cat out.txt
+              elif ! diff <(tr -d '\r' < stdout.txt) <(tr -d '\r' < out.txt); then
+                failed="$failed $mode"
+                echo "::error::cppia module free printed the wrong output: $mode"
+              fi
             fi
             echo "::endgroup::"
           done
