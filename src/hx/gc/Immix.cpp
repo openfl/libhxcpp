@@ -8184,6 +8184,7 @@ public:
    void PopTopOfStack() { }
    void SetBottomOfStack(int *inBottom) { }
    void PauseForCollect() { }
+   void SafePoint() { }
    void EnterGCFreeZone() { }
    bool TryGCFreeZone() { return true; }
    bool TryExitGCFreeZone() { return false; }
@@ -8281,6 +8282,17 @@ public:
       mCollectDone.Wait();
       mPausedForCollect = false;
       #endif
+   }
+
+   // A thread in a GC-free zone is already safe: the collector does not wait
+   //  for it, and does not release it from PauseForCollect either
+   void SafePoint()
+   {
+      #ifndef HXCPP_SINGLE_THREADED_APP
+      if (mGCFreeZone)
+         return;
+      #endif
+      PauseForCollect();
    }
 
    void EnterGCFreeZone()
@@ -9593,10 +9605,13 @@ void __hxcpp_exit_gc_free_zone()
 }
 
 
+// The thread primitives' fast paths call this, and Mutex and Condition may be
+//  used from inside a zone: pausing there during a collection was "Bad
+//  Allocation while collecting", or waited for a release that never came
 void __hxcpp_gc_safe_point()
 {
     if (hx::gPauseForCollect)
-      hx::PauseForCollect();
+      GetLocalAlloc()->SafePoint();
 }
 
 //#define HXCPP_FORCE_OBJ_MAP
