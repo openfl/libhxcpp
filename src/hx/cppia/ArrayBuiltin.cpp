@@ -1266,7 +1266,12 @@ struct ArrayBuiltin : public ArrayBuiltinBase
 
    static hx::Object *SLJIT_CALL runConcat( Array_obj<ELEM> *inArray, Array_obj<ELEM> *inOther )
    {
+      // A null array to append throws: the exception becomes the script's
+      //  pending one, which the code after the call checks
+      TRY_NATIVE
       return inArray->concat(inOther).mPtr;
+      CATCH_NATIVE
+      return 0;
    }
 
 
@@ -1897,6 +1902,7 @@ struct ArrayBuiltin : public ArrayBuiltinBase
                genNullReferenceExceptionCheck(compiler, thisVal);
                args[0]->genCode(compiler, sJitArg1.as(jtPointer), etObject);
                compiler->callNative( (void *)runConcat, thisVal, sJitArg1.as(jtPointer));
+               compiler->checkException();
                compiler->convertReturnReg(etObject, inDest, destType);
                break;
             }

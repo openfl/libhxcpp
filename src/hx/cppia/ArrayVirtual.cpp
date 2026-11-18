@@ -24,7 +24,10 @@ static int SLJIT_CALL arrayRemove(ArrayAnyImpl *inObj, hx::Object *inValue)
 }
 static hx::Object * SLJIT_CALL arrayConcat(ArrayAnyImpl *inObj, hx::Object *inValue)
 {
+   TRY_NATIVE
    return inObj->concat(Dynamic(inValue)).mPtr;
+   CATCH_NATIVE
+   return 0;
 }
 // These throw for a size or range the array cannot take: the exception becomes
 //  the script's pending one, which the code after the call checks
@@ -782,6 +785,7 @@ struct ArrayBuiltinAny : public ArrayBuiltinBase
             {
             args[0]->genCode(compiler, sJitArg1, etObject);
             compiler->callNative( (void *)arrayConcat, thisVal, sJitArg1.as(jtPointer));
+            compiler->checkException();
             compiler->convertReturnReg(etObject, inDest, destType);
             }
             break;
