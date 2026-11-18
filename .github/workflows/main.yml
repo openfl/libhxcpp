@@ -324,6 +324,10 @@ jobs:
       # Git Bash on Windows
       shell: bash
 
+    - run: bash test/release_stamp/check.sh
+      name: What the release stamps into the package
+      shell: bash
+
 
   # The test suites on every platform with the stable Haxe; nightly.yml runs
   # them with the Haxe nightly build once a day

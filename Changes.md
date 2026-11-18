@@ -2,6 +2,8 @@
 libhxcpp 6.0.0 (unreleased)
 ------------------------------------------------------------
 
+* Fixed HXCPP_GC_INCREMENTAL failing to compile ("Incremental GC requires regenerated C++") with libhxcpp installed from a release, 6.0.0-rc.2 among them: the release workflow rewrote extraParams.hxml with the version and dropped its other line, the macro that turns on the generated write barriers the incremental collector needs. Only the version lines are rewritten now
+
 libhxcpp 6.0.0-rc.2
 ------------------------------------------------------------
 

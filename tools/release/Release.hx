@@ -98,8 +98,18 @@ class Release
       // that checks for hxcpp works the same whether it asked for hxcpp or libhxcpp.
       // A macro rather than -D lines: tools such as hxp take the line before a
       // library's -D line in `haxelib path` output as its path.
-      File.saveContent("extraParams.hxml", [for (name in ["libhxcpp", "hxcpp"])
-         '--macro haxe.macro.Compiler.define("$name","$version")\n'].join(""));
+      // Only those two lines are rewritten: the file's other lines, such as the
+      // incremental collector's configuration macro, ship as they are.
+      File.saveContent("extraParams.hxml", stampedExtraParams(File.getContent("extraParams.hxml"), version));
+   }
+
+   static final DEFINE_LINE = ~/^--macro haxe\.macro\.Compiler\.define\("(libhxcpp|hxcpp)",/;
+
+   static function stampedExtraParams(current:String, version:String):String
+   {
+      final defines = [for (name in ["libhxcpp", "hxcpp"]) '--macro haxe.macro.Compiler.define("$name","$version")'];
+      final kept = [for (line in current.replace("\r", "").split("\n")) if (line.trim() != "" && !DEFINE_LINE.match(line.trim())) line];
+      return defines.concat(kept).join("\n") + "\n";
    }
 
    // The first section of Changes.md: a heading line underlined with dashes,
