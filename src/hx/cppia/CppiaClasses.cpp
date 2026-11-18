@@ -1415,6 +1415,10 @@ void CppiaClassInfo::linkTypes()
    {
       if (staticFunctions[i]->name == "new")
       {
+         // A super call or a new runs it as a function, but a malformed file
+         //  can give a bare RETURN for its body, or an interface's no body
+         if (!staticFunctions[i]->funExpr)
+            throw "Constructor is not a function";
          newFunc = staticFunctions[i];
          staticFunctions.erase( staticFunctions.begin() + i);
       }
