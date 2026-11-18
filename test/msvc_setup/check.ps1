@@ -34,5 +34,28 @@ foreach ($script in "msvc-setup", "msvc64-setup", "msvc-arm64-setup", "msvc-winr
    }
 }
 ${env:ProgramFiles(x86)} = $realPf86
+
+# HXCPP_MSVC_VER names an install by its Common7\Tools folder, and the ARM64
+# script runs that install's vcvars script for the host. A stand-in install
+# whose vcvars scripts only say which one ran, named as Visual Studio names them
+$fake = "$work\fake vs"
+New-Item -ItemType Directory -Force "$fake\Common7\Tools", "$fake\VC\Auxiliary\Build" | Out-Null
+foreach ($name in "x86_amd64", "x86_arm64", "amd64_x86", "amd64_arm64") {
+   Set-Content -Encoding ascii "$fake\VC\Auxiliary\Build\vcvars$name.bat" "@set VCVARS_RAN=$name"
+}
+$env:HXCPP_MSVC = "$fake\Common7\Tools\"
+foreach ($case in @(@{ host = "x64"; expect = "amd64_arm64" }, @{ host = "x86"; expect = "x86_arm64" })) {
+   $env:msvc_host_arch = $case.host
+   $out = cmd /c "$root\toolchain\msvc-arm64-setup.bat" 2>&1 | Out-String
+   if ($out -match "(?m)^HXCPP_VARS" -and $out -match "(?m)^VCVARS_RAN=$($case.expect)\s*$") {
+      "ok   msvc-arm64-setup with HXCPP_MSVC on an $($case.host) host"
+   } else {
+      "FAIL msvc-arm64-setup with HXCPP_MSVC on an $($case.host) host: expected vcvars$($case.expect).bat"
+      $out -split "`r?`n" | Where-Object { $_ -match "^(Error|VCVARS_RAN|HXCPP_VARS)" }
+      $failures++
+   }
+}
+Remove-Item Env:HXCPP_MSVC
+
 Remove-Item -Recurse -Force $work
 exit $failures
