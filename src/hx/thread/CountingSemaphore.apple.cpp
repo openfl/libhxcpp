@@ -37,15 +37,14 @@ hx::thread::CountingSemaphore_obj::CountingSemaphore_obj(int value) : impl(new I
 
 void hx::thread::CountingSemaphore_obj::acquire()
 {
-	hx::EnterGCFreeZone();
+	// Keeps a zone the caller is in, as Mutex does
+	hx::AutoGCFreeZone zone;
 
 	if (0 != dispatch_semaphore_wait(impl->semaphore, DISPATCH_TIME_FOREVER))
 	{
-		hx::ExitGCFreeZone();
+		zone.close();
 		hx::Throw(HX_CSTRING("Failed to wait for semaphore"));
 	}
-
-	hx::ExitGCFreeZone();
 }
 
 void hx::thread::CountingSemaphore_obj::release()

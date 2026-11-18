@@ -34,6 +34,7 @@ FinalizersAcrossFreeZones: threads
 GcConcurrentCensus: threads (std::thread, which needs a pthreads build)
 GcFinalizerPromotion: threads (std::thread, which needs a pthreads build)
 GcFreeZoneNestedGuard: single-threaded Emscripten builds have no GC-free zones, so a guard enters none
+GcFreeZoneThreadWaits: threads
 GcHeapGrows: expects the desktop 20 MB working target; other platforms, Emscripten included, use 8 MB
 GcIdentityBurst: threads (std::thread, which needs a pthreads build)
 GcLargeInteriorRoot: threads (std::thread, which needs a pthreads build)
