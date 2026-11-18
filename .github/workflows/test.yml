@@ -224,6 +224,18 @@ jobs:
           rm -f prog.map
           haxelib run hxcpp Build.xml -DWANT_MAP
           test -f prog.map
+      - name: build tool fails again after a step after the link failed
+        continue-on-error: ${{ inputs.warn_only }}
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' && runner.os == 'Windows' }}
+        working-directory: test/link_flags
+        run: |
+          rm -rf obj prog.exe prog.exe.hash
+          for build in first second; do
+            if haxelib run hxcpp Build.xml -DmanifestFile=bad.manifest; then
+              echo "::error::the $build build with a bad manifest should have failed"
+              exit 1
+            fi
+          done
       - name: build tool lists the defines it reads
         continue-on-error: ${{ inputs.warn_only }}
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}

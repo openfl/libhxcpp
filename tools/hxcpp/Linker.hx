@@ -19,6 +19,8 @@ class Linker
    public var mExpandArchives:Bool;
    public var mRecreate:Bool;
    public var mLastOutName:String;
+   // The record of the last link this call made, or null when it linked nothing
+   public var mLastHashFile:String;
    public var mAddLibPath:String;
 
    public function new(inExe:String)
@@ -103,6 +105,7 @@ class Linker
       }
 
       mLastOutName = out_name;
+      mLastHashFile = null;
 
       var lastLib = "";
       var libs = new Array<String>();
@@ -307,6 +310,7 @@ class Linker
          }
 
          sys.io.File.saveContent(hashFile,md5);
+         mLastHashFile = hashFile;
          return out_name;
       }
 

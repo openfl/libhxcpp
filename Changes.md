@@ -7,6 +7,7 @@ libhxcpp 6.0.0 (unreleased)
 * Fixed an Emscripten build failing to link (undefined symbol: __wasm_lpad_context) when -D HXCPP_LINK_NO_EXCEPTIONS was added to a project built before without it: the define also compiles without -fwasm-exceptions, but the build tool took every HXCPP_LINK_ define for a link option and compiled nothing again. It recompiles now, and once back without it
 * Fixed `haxelib run hxcpp defines` failing with "Could not read" from any folder but tools/hxcpp: it opened the build tool's sources by name, relative to the caller's folder. It lists the defines the build tool reads again
 * Fixed an ARM64 Windows build with HXCPP_MSVC_VER naming the Visual Studio to use: on an x64 machine the setup looked for vcvarsx64_arm64.bat, which Visual Studio calls vcvarsamd64_arm64.bat, and stopped, and on an ARM64 machine it found the ARM64 script and then ran the x64 one, compiling for x64. It runs the ARM64 script for the host
+* Fixed a build whose strip or manifest step failed after the link succeeding when run again, with the output unstripped or without its manifest: the link was recorded as done before those steps ran, so the next build had nothing to do. A failure after the link now forgets it, and the next build links again
 
 libhxcpp 6.0.0-rc.2
 ------------------------------------------------------------
