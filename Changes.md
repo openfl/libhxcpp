@@ -17,6 +17,7 @@ libhxcpp 6.0.0 (unreleased)
 * Fixed a malformed cppia file whose constructor was a bare return or, in an interface, had no body loading and then crashing: a super call into it crashed the loader, and a new of its class crashed when it ran, through the constructor's missing function. It fails to load with "Constructor is not a function" (libhxcpp #257)
 * Fixed a malformed cppia file that makes a new instance of a script interface loading and then crashing when it ran, interpreted and under the JIT: an interface has no host base to make the object from. It fails to load with "Could not link new" and the interface's name, as for a type with nothing to construct (libhxcpp #257)
 * Fixed a malformed cppia file whose dynamic function was a bare return loading and then crashing, at the next collection after its class booted or when it was called, interpreted and under the JIT: its value was a closure of no function. It fails to load with "Dynamic function is not a function" (libhxcpp #257)
+* Fixed a weak map's toString calling toString on keys the collector had already freed, and on whatever had taken their memory, which could crash: a collection during the walk, which allocates as it goes, unlinked the entries whose keys had died, and the walk went on from its entry's next, which still led to them. A weak map now holds its keys and values while a walk is on them, and lets them go at the next collection after it
 
 libhxcpp 6.0.0-rc.2
 ------------------------------------------------------------
