@@ -200,15 +200,29 @@ void _hx_std_sys_sleep( double f )
       f = 0;
    hx::EnterGCFreeZone();
 #if defined(NEKO_WINDOWS)
-   Sleep((DWORD)(f * 1000));
+   // Sleep takes a DWORD of milliseconds, and 0xffffffff is INFINITE. A longer
+   //  sleep, infinity included, converted to a short one or none, so it goes in
+   //  parts that fit
+   double ms = f * 1000;
+   while (ms >= 4294967294.0)
+   {
+      Sleep(4294967294u);
+      ms -= 4294967294.0;
+   }
+   Sleep((DWORD)ms);
 #elif defined(EPPC)
 //TODO: Implement sys_sleep for EPPC
 #else
+   // In parts of up to 1e9 seconds, which fit an int: a longer sleep, infinity
+   //  included, overflowed the conversion and returned at once
+   do
    {
+      double part = f < 1e9 ? f : 1e9;
+      f -= part;
       struct timespec t;
       struct timespec tmp;
-      t.tv_sec = (int)(f);
-      t.tv_nsec = (int)(((f) - t.tv_sec) * 1e9);
+      t.tv_sec = (int)(part);
+      t.tv_nsec = (int)((part - t.tv_sec) * 1e9);
       while( nanosleep(&t,&tmp) == -1 )
       {
          if( errno != EINTR )
@@ -219,6 +233,7 @@ void _hx_std_sys_sleep( double f )
          t = tmp;
       }
    }
+   while (f > 0);
 #endif
    hx::ExitGCFreeZone();
 }
