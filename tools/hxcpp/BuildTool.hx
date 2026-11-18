@@ -1867,7 +1867,7 @@ class BuildTool
             var allDefines = new Map<String,Bool>();
             for(file in FileSystem.readDirectory(dir))
                if (file.endsWith(".hx"))
-                  for(line in sys.io.File.getContent(file).split("\n"))
+                  for(line in sys.io.File.getContent('$dir/$file').split("\n"))
                      if (defineMatch.match(line))
                         allDefines.set(defineMatch.matched(1),true);
             for(key in allDefines.keys())
