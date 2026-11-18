@@ -1,2 +1,3 @@
 project/thirdparty/*/** linguist-vendored
 *.sh text eol=lf
+src/hx/cppia/sljit_src/** linguist-vendored
