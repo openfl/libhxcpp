@@ -100,6 +100,7 @@ SocketIpv6Accept: sockets
 SocketIpv6ConcurrentFormat: threads (std::thread, which needs a pthreads build)
 SocketLibraryHandle: sockets
 SocketReadAhead: sockets
+SocketSelectLongTimeout: sockets
 SocketTinyTimeout: sockets
 SqliteNativeMemoryPressure: threads (std::thread, which needs a pthreads build)
 SqliteResultConnectionLifetime: threads (std::thread, which needs a pthreads build)
