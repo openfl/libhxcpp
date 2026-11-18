@@ -1,0 +1,4 @@
+--main Main
+-cpp bin
+-D scriptable
+--dce no

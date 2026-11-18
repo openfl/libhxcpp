@@ -1,0 +1,10 @@
+interpreted
+static dynamic function that is a return threw: Error reading file Dynamic function is not a function, line 1, char 75
+dynamic function that is a return threw: Error reading file Dynamic function is not a function, line 1, char 75
+static dynamic function loaded and ran
+dynamic function loaded and ran
+jit
+static dynamic function that is a return threw: Error reading file Dynamic function is not a function, line 1, char 75
+dynamic function that is a return threw: Error reading file Dynamic function is not a function, line 1, char 75
+static dynamic function loaded and ran
+dynamic function loaded and ran

@@ -16,6 +16,7 @@ libhxcpp 6.0.0 (unreleased)
 * Fixed a malformed cppia file that calls the super constructor of a class with no constructor, in it or in a script class above it, crashing the loader, which read the constructor through a null pointer. It fails to load with "Super constructor call on a class with no constructor". The fuzz job found it (libhxcpp #257)
 * Fixed a malformed cppia file whose constructor was a bare return or, in an interface, had no body loading and then crashing: a super call into it crashed the loader, and a new of its class crashed when it ran, through the constructor's missing function. It fails to load with "Constructor is not a function" (libhxcpp #257)
 * Fixed a malformed cppia file that makes a new instance of a script interface loading and then crashing when it ran, interpreted and under the JIT: an interface has no host base to make the object from. It fails to load with "Could not link new" and the interface's name, as for a type with nothing to construct (libhxcpp #257)
+* Fixed a malformed cppia file whose dynamic function was a bare return loading and then crashing, at the next collection after its class booted or when it was called, interpreted and under the JIT: its value was a closure of no function. It fails to load with "Dynamic function is not a function" (libhxcpp #257)
 
 libhxcpp 6.0.0-rc.2
 ------------------------------------------------------------

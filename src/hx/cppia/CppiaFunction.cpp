@@ -1176,6 +1176,10 @@ void CppiaFunction::load(CppiaStream &stream,bool inExpectBody)
       funExpr = dynamic_cast<ScriptCallable *>(body);
       if (!funExpr && name!="__init__" && std::string(body->getName())!="RetVal")
          throw "Function body is not a function";
+      // A dynamic function's value is a closure of the function, made as its
+      //  class boots or an instance is made, so it cannot be abstract
+      if (!funExpr && isDynamic)
+         throw "Dynamic function is not a function";
    }
    stream.module->creatingFunction = 0;
 }
