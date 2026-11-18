@@ -611,8 +611,12 @@ class Fuzz {
 				Type.getEnumName(e) + "." + Type.enumConstructor(v) + "(" + [for (p in Type.enumParameters(v)) canon(p, depth + 1)].join(",") + ")";
 			case TClass(String): haxe.Json.stringify(v);
 			case TClass(Array): "[" + [for (x in (v : Array<Dynamic>)) canon(x, depth + 1)].join(",") + "]";
-			// The std's cpp Date keeps seconds, so a fraction of a millisecond drifts
-			case TClass(Date): "Date(" + Math.round((v : Date).getTime()) + ")";
+			// The std's cpp Date keeps seconds, so a fraction of a millisecond
+			// drifts, and past 2^53 ms, where a millisecond is less than a step
+			// between doubles, so do whole milliseconds
+			case TClass(Date):
+				var t = (v : Date).getTime();
+				Math.abs(t) >= 9007199254740992.0 ? "Date(beyond 2^53 ms)" : "Date(" + Math.round(t) + ")";
 			case TClass(haxe.io.Bytes): "Bytes(" + (v : Bytes).toHex() + ")";
 			case TClass(List): "List(" + [for (x in (v : List<Dynamic>)) canon(x, depth + 1)].join(",") + ")";
 			case TClass(c) if (Std.isOfType(v, haxe.Constraints.IMap)):
