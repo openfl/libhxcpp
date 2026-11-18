@@ -130,7 +130,10 @@ class Linker
       var v18Added = false;
       var isOutOfDateLibs = false;
 
-      var md5 = Md5.encode(inObjs.join(";"));
+      // The objects, and what the command does with them: a flag or library
+      //  added or removed relinks, as a changed object does
+      var md5 = Md5.encode(inObjs.join(";") + "|" + mFlags.concat(inTarget.mFlags).join(" ") + "|" +
+            libs.join(";") + "|" + inTarget.mLibPaths.join(";"));
       if (!FileSystem.exists(hashFile) || sys.io.File.getContent(hashFile)!=md5)
          isOutOfDateLibs = true;
 

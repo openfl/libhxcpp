@@ -215,6 +215,15 @@ jobs:
           haxelib run hxcpp Build.xml
           test "$(tr -d '\r' < out/kept.txt)" = old
           test "$(tr -d '\r' < out/replaced.txt)" = new
+      - name: build tool links again when a link flag changes
+        continue-on-error: ${{ inputs.warn_only }}
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        working-directory: test/link_flags
+        run: |
+          haxelib run hxcpp Build.xml
+          rm -f prog.map
+          haxelib run hxcpp Build.xml -DWANT_MAP
+          test -f prog.map
       - name: build tool rejects file names that differ only in case
         continue-on-error: ${{ inputs.warn_only }}
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}

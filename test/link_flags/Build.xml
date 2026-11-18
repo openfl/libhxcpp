@@ -1,0 +1,14 @@
+<xml>
+  <!-- WANT_MAP adds a link flag that writes prog.map and changes nothing else,
+       so a build with it after one without must link again -->
+  <files id="main">
+    <file name="main.cpp"/>
+  </files>
+
+  <target id="default" output="prog" tool="linker" toolid="exe">
+    <files id="main"/>
+    <flag value="-map:prog.map" if="WANT_MAP isMsvc"/>
+    <flag value="-Wl,-Map,prog.map" if="WANT_MAP linux"/>
+    <flag value="-Wl,-map,prog.map" if="WANT_MAP macos"/>
+  </target>
+</xml>
