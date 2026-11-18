@@ -3530,6 +3530,11 @@ struct CallMember : public CppiaExpr
 
       if (type->cppiaClass)
       {
+         // Haxe only calls a constructor a class has or inherits, and a script
+         //  class without one has its script super class's, so only a
+         //  malformed file calls one where neither has any
+         if (!type->cppiaClass->newFunc)
+            throw "Super constructor call on a class with no constructor";
          //CPPIALOG("Using cppia super %p %p\n", type->cppiaClass->newFunc, type->cppiaClass->newFunc->funExpr);
          CppiaExpr *replace = new CallFunExpr( this, 0, (ScriptCallable*)type->cppiaClass->newFunc->funExpr, args, true );
          replace->link(inModule);
