@@ -408,6 +408,13 @@ struct EnumField : public CppiaDynamicExpr
          if (!type->cppiaClass->isEnum)
             throw "Field of non-enum";
          value = type->cppiaClass->findEnum(fieldId);
+         // Was a null value, dereferenced when used or compiled
+         if (!value)
+            throw "Unknown enum constructor";
+         // A call with arguments to a constructor that takes others; none
+         //  is the constructor as a function
+         if (args.size() && args.size()!=value->args.size())
+            throw "Bad enum arg count";
       }
       else
       {
@@ -851,6 +858,15 @@ void CppiaClassInfo::dump()
    dumpVars("Static dyns",staticDynamicFunctions);
 }
 
+int CppiaClassInfo::mostEnumArgs()
+{
+   size_t most = 0;
+   for(size_t i=0;i<enumConstructors.size();i++)
+      if (enumConstructors[i]->args.size()>most)
+         most = enumConstructors[i]->args.size();
+   return (int)most;
+}
+
 CppiaEnumConstructor *CppiaClassInfo::findEnum(int inFieldId)
 {
    for(int i=0;i<enumConstructors.size();i++)
@@ -969,6 +985,10 @@ bool CppiaClassInfo::load(CppiaStream &inStream)
 
     if (isNew)
     {
+       // A second class with one type id overwrote the first's, and wrote
+       //  outside the vtable made for it
+       if (cppia.types[typeId]->cppiaClass)
+          throw "Duplicate class";
        cppia.types[typeId]->cppiaClass = this;
     }
     else

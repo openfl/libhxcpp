@@ -24,6 +24,7 @@ CppiaHostMismatch: its host is the first --next section, which -D emscripten doe
 CppiaJitBuiltins: threads
 CppiaJitThrowNull: its host is the first --next section, which -D emscripten does not reach
 CppiaLazyJit: threads, and Emscripten has no cppia JIT
+CppiaMalformedLoads: compares the cppia JIT, which Emscripten has not
 CppiaModuleFree: threads
 CppiaModuleRetained: threads
 CppiaNullDynamicArray: its host is the first --next section, which -D emscripten does not reach, and it runs the script under the JIT too, and Emscripten has no cppia JIT
