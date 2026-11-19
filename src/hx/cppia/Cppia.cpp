@@ -5829,7 +5829,7 @@ struct DynamicArrayI : public CppiaDynamicExpr
          index->genCode(compiler, sJitTemp1, etInt);
          if (destType==etVoid || destType==etNull)
          {
-            compiler->callNative( crement==coPostInc || crement==coPostInc ? (void *)incItem : (void *)decItem,
+            compiler->callNative( crement==coPostInc || crement==coPreInc ? (void *)incItem : (void *)decItem,
                obj, sJitTemp1.as(jtInt) );
          }
          else

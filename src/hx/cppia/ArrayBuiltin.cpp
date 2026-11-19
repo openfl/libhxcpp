@@ -288,6 +288,9 @@ struct ArraySetter : public ArrayBuiltinBase
          case aoShr:
          case aoUShr:
             rightHandType = etInt;
+            // Fell through to the element's type, so on an Array<Null<Int>>
+            //  these did nothing under the JIT
+            break;
 
          default:
             rightHandType = elemType;
@@ -693,7 +696,8 @@ struct ArrayBuiltin : public ArrayBuiltinBase
          return result;
       }
 
-      if (FUNC==afPush)
+      // indexOf and lastIndexOf used as a Float returned 0 without running
+      if (FUNC==afPush || FUNC==afIndexOf || FUNC==afLastIndexOf)
          return runInt(ctx);
       return 0.0;
    }
@@ -980,8 +984,13 @@ struct ArrayBuiltin : public ArrayBuiltinBase
          runInt(ctx);
 
       if (FUNC==afConcat || FUNC==afCopy || FUNC==afReverse || FUNC==afSplice || FUNC==afSlice ||
-           FUNC==afMap || FUNC==afFilter)
+           FUNC==afMap || FUNC==afFilter || FUNC==afIterator || FUNC==afKeyValueIterator)
          runObject(ctx);
+
+      // Statements too: they run the receiver and each element's toString,
+      //  which were skipped, as the JIT and the other targets do not
+      if (FUNC==afJoin || FUNC==afToString)
+         runString(ctx);
 
       if (FUNC==afReverse)
       {
@@ -1550,8 +1559,17 @@ struct ArrayBuiltin : public ArrayBuiltinBase
                   // Check length..
                   JumpId lengthOk = compiler->compare( cmpI_LESS, sJitTemp0.as(jtInt),
                                                      sJitTemp1.star(jtInt, ArrayBase::lengthOffset()) );
-                  // Out of bounds - return null / zero
-                  compiler->returnNull(inDest, destType);
+                  // Out of bounds - the element type's zero, as the interpreter
+                  //  and the other targets read it: an Int array's read as a
+                  //  String was "null", not "0"
+                  ExprType outElemType = (ExprType)ExprTypeOf<ELEM>::value;
+                  if ((outElemType==etInt || outElemType==etFloat) && (destType==etString || destType==etObject))
+                  {
+                     compiler->move(sJitTemp2.as(jtInt), (int)0);
+                     compiler->convert(sJitTemp2.as(jtInt), etInt, inDest, destType, isBoolElem());
+                  }
+                  else
+                     compiler->returnNull(inDest, destType);
                   writtenNull = compiler->jump();
 
 
