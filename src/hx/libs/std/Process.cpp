@@ -201,6 +201,9 @@ struct vprocess : public hx::Object
    // begun: see PipeCall
    std::atomic<int> pipeCalls;
    std::atomic<bool> closing;
+   // The same for the writes to stdin alone, which stdin_close cancels
+   std::atomic<int> stdinCalls;
+   std::atomic<bool> stdinClosing;
    #define HANDLE_INIT 0
 #else
    int oread;
@@ -221,6 +224,8 @@ struct vprocess : public hx::Object
       #ifdef NEKO_WINDOWS
       pipeCalls = 0;
       closing = false;
+      stdinCalls = 0;
+      stdinClosing = false;
       #else
       reaped = false;
       exitStatus = 0;
@@ -309,12 +314,20 @@ struct PipeCall
 {
    vprocess *process;
    HANDLE handle;
-   PipeCall(vprocess *inProcess, HANDLE inHandle) : process(inProcess)
+   bool stdinWrite;
+   PipeCall(vprocess *inProcess, HANDLE inHandle, bool inStdinWrite=false) : process(inProcess), stdinWrite(inStdinWrite)
    {
       process->pipeCalls++;
-      handle = process->closing ? 0 : inHandle;
+      if (stdinWrite)
+         process->stdinCalls++;
+      handle = process->closing || (stdinWrite && process->stdinClosing) ? 0 : inHandle;
    }
-   ~PipeCall() { process->pipeCalls--; }
+   ~PipeCall()
+   {
+      if (stdinWrite)
+         process->stdinCalls--;
+      process->pipeCalls--;
+   }
 };
 #endif
 
@@ -903,7 +916,7 @@ int _hx_std_process_stdin_write( Dynamic handle, Array<unsigned char> buf, int p
    DWORD nbytes =0;
    bool written;
    {
-      PipeCall call(p, p->iwrite);
+      PipeCall call(p, p->iwrite, true);
       written = call.handle && WriteFile(call.handle,src+pos,len,&nbytes,0);
    }
    if( !written )
@@ -938,7 +951,20 @@ void _hx_std_process_stdin_close( Dynamic handle )
 
    #ifdef NEKO_WINDOWS
    if ( p->iwrite )
+   {
+      // CloseHandle waits for a WriteFile in progress on the pipe in another
+      //  thread, for as long as the child does not read, so the writes are
+      //  refused and cancelled first, as destroy does for all the pipes. It
+      //  waits in a zone, so a collection meanwhile need not wait for it
+      hx::AutoGCFreeZone zone;
+      p->stdinClosing = true;
+      for(int spins=0; p->stdinCalls>0; spins++)
+      {
+         CancelIoEx(p->iwrite, 0);
+         Sleep(spins<10 ? 0 : 1);
+      }
       CloseHandle(p->iwrite);
+   }
    #else
    if( p->iwrite!=-1 )
       do_close(p->iwrite);

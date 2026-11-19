@@ -1,0 +1,3 @@
+write: child said collected
+println: child said collected
+trace: child said collected
