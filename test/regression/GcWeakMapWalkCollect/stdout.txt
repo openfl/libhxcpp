@@ -1,0 +1,2 @@
+walk reached 0 dead keys and 0 other objects
+keys collected after the walk: true

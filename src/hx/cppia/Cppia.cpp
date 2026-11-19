@@ -740,7 +740,7 @@ static void SLJIT_CALL callLazy(CppiaCtx *ctx, ScriptCallable *function)
    function->compileLazy();
    CATCH_NATIVE
    if (!ctx->exception)
-      function->compiled(ctx);
+      function->getCompiled()(ctx);
 }
 
 // Calls the compiled code in inCode, or when that is null, compiles the function in
@@ -770,9 +770,9 @@ void genFunctionCall(ScriptCallable *function, CppiaCompiler *compiler,
       compiler->add( sJitCtxFrame, sJitFrame, JitVal(framePos) );
 
       // Compiled yet
-      if (function->compiled)
+      if (CppiaFunc code = function->getCompiled())
       {
-         compiler->call( JitVal( (void *)(function->compiled)), sJitCtx );
+         compiler->call( JitVal( (void *)code), sJitCtx );
       }
       else if (function->lazy)
       {
@@ -1692,9 +1692,10 @@ struct NewExpr : public CppiaDynamicExpr
       if (!type->cppiaClass && type->haxeClass.mPtr)
          constructor = type->haxeClass.mPtr->mConstructArgs;
 
-      // Nothing to construct: runObject and genCode would dereference the null cppiaClass.
-      // The module never runs: linking goes on to find anything else missing
-      if (!type->arrayType && !constructor && !type->cppiaClass)
+      // Nothing to construct: runObject and genCode would dereference the null cppiaClass,
+      // or a script interface's null haxeBase. The module never runs: linking goes on to
+      // find anything else missing
+      if (!type->arrayType && !constructor && (!type->cppiaClass || !type->cppiaClass->haxeBase))
          inModule.linkMiss(this, std::string("new ") + type->name.c_str());
 
       LinkExpressions(args,inModule);
@@ -3530,6 +3531,11 @@ struct CallMember : public CppiaExpr
 
       if (type->cppiaClass)
       {
+         // Haxe only calls a constructor a class has or inherits, and a script
+         //  class without one has its script super class's, so only a
+         //  malformed file calls one where neither has any
+         if (!type->cppiaClass->newFunc)
+            throw "Super constructor call on a class with no constructor";
          //CPPIALOG("Using cppia super %p %p\n", type->cppiaClass->newFunc, type->cppiaClass->newFunc->funExpr);
          CppiaExpr *replace = new CallFunExpr( this, 0, (ScriptCallable*)type->cppiaClass->newFunc->funExpr, args, true );
          replace->link(inModule);
@@ -3983,18 +3989,20 @@ void genSetter(CppiaCompiler *compiler, const JitVal &ioValue, ExprType exprType
             inExpr->genCode(compiler, sJitTemp0, etInt);
             compiler->mult(ioValue, sJitTemp0, ioValue,false);
          }
-         else
+         else if (exprType==etFloat)
          {
             inExpr->genCode(compiler, sJitTempF0, etFloat);
-            if (exprType==etFloat)
-               compiler->mult(ioValue, sJitTempF0, ioValue,true);
-            else
-            {
-               JitTemp fval(compiler, jtFloat);
-               compiler->convert(ioValue, exprType, fval, etFloat);
-               compiler->mult(sJitTempF0, sJitTempF0, fval, true);
-               compiler->convert(sJitTempF0, etFloat, ioValue, exprType);
-            }
+            compiler->mult(ioValue, sJitTempF0, ioValue,true);
+         }
+         else
+         {
+            // Convert the value first, as -= and /= do: the conversion is a
+            // native call, which may change every float scratch register
+            JitTemp fval(compiler, jtFloat);
+            compiler->convert(ioValue, exprType, fval, etFloat);
+            inExpr->genCode(compiler, sJitTempF0, etFloat);
+            compiler->mult(sJitTempF0, sJitTempF0, fval, true);
+            compiler->convert(sJitTempF0, etFloat, ioValue, exprType);
          }
          break;
 
@@ -8009,12 +8017,18 @@ struct OpNeg : public CppiaExpr
    {
       return - value->runInt(ctx);
    }
+   // An Int negated stays an Int: -0 is 0 and -(-2147483648) wraps, as in
+   // compiled code
    Float runFloat(CppiaCtx *ctx) HXCPP_OVERRIDE
    {
+      if (type==etInt)
+         return runInt(ctx);
       return - value->runFloat(ctx);
    }
    hx::Object *runObject(CppiaCtx *ctx) HXCPP_OVERRIDE
    {
+      if (type==etInt)
+         return Dynamic(runInt(ctx)).mPtr;
       return Dynamic(- value->runFloat(ctx)).mPtr;
    }
 
@@ -8025,6 +8039,12 @@ struct OpNeg : public CppiaExpr
       {
          value->genCode(compiler, sJitTemp0.as(jtInt), etInt);
          compiler->negate(inDest, sJitTemp0.as(jtInt) );
+      }
+      else if (type==etInt)
+      {
+         value->genCode(compiler, sJitTemp0.as(jtInt), etInt);
+         compiler->negate(sJitTemp0.as(jtInt), sJitTemp0.as(jtInt) );
+         compiler->convert(sJitTemp0, etInt, inDest, destType);
       }
       else
       {

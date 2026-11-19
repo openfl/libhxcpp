@@ -1,0 +1,6 @@
+Lock.wait with a timeout: the caller's zone was kept
+Lock.wait: the caller's zone was kept
+Semaphore.tryAcquire with a timeout: the caller's zone was kept
+Semaphore.acquire: the caller's zone was kept
+Deque.pop: the caller's zone was kept
+collection works afterwards

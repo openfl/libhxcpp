@@ -1,0 +1,5 @@
+Sys.sleep(4294967.3) still sleeping after 0.3 s: true
+Sys.sleep(3000000000) still sleeping after 0.3 s: true
+Sys.sleep(Infinity) still sleeping after 0.3 s: true
+Sys.sleep(0.05) took at least 0.05 s: true
+zero, negative and NaN return

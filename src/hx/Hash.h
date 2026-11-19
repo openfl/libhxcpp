@@ -937,10 +937,21 @@ struct Hash : public HashBase< typename ELEMENT::Key >
    }
 
 
+   // A weak map holds its keys and values while a walk is on them. A
+   //  collection the walk allocated for, as toString does, unlinked the
+   //  entries whose keys died, and the walk went on from its entry's next,
+   //  which still led to them, to keys already freed. The map is marked again
+   //  where a collection might otherwise skip it: an old map in a minor
+   //  collection, or one an incremental cycle has already scanned
    struct AutoWalk
    {
       Hash *hash;
-      AutoWalk(Hash *inHash) : hash(inHash) { hash->walks++; }
+      AutoWalk(Hash *inHash) : hash(inHash)
+      {
+         hash->walks++;
+         if (Element::WeakKeys)
+            HX_OBJ_WB_PESSIMISTIC_GET(hash);
+      }
       ~AutoWalk() { hash->walks--; }
    };
 
@@ -1104,14 +1115,16 @@ struct Hash : public HashBase< typename ELEMENT::Key >
 
 
    // Mark ...
+   // inStrong marks the keys and values of a weak map too: see AutoWalk
    struct HashMarker
    {
       hx::MarkContext *__inCtx;
-      HashMarker(hx::MarkContext *ctx) : __inCtx(ctx) { }
+      bool strong;
+      HashMarker(hx::MarkContext *ctx, bool inStrong) : __inCtx(ctx), strong(!Hash::Element::WeakKeys || inStrong) { }
       void operator()(typename Hash::Element *inElem)
       {
          HX_MARK_ARRAY(inElem);
-         if (!Hash::Element::WeakKeys)
+         if (strong)
          {
             HX_MARK_MEMBER(inElem->key);
             HX_MARK_MEMBER(inElem->value);
@@ -1127,14 +1140,14 @@ struct Hash : public HashBase< typename ELEMENT::Key >
       if (size > 256 && hx::IncrementalRange(this,IncrementalScan,__inCtx)) return;
       #endif
 
-      HashMarker marker(__inCtx);
+      HashMarker marker(__inCtx, walks!=0);
       iterateBuckets(marker);
    }
 
    #ifdef HXCPP_GC_INCREMENTAL
    static bool IncrementalScan(hx::Object *inOwner, size_t &ioBucket, size_t &ioItem, hx::MarkContext *__inCtx) {
       Hash *hash = static_cast<Hash *>(inOwner);
-      HashMarker marker(__inCtx);
+      HashMarker marker(__inCtx, hash->walks!=0);
       Element *element = reinterpret_cast<Element *>(ioItem);
       unsigned int work = 0;
       while (ioBucket < static_cast<size_t>(hash->bucketCount) && work < 256) {

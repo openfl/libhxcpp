@@ -131,9 +131,9 @@ struct Deque : public Array_obj<Dynamic>
 			__hxcpp_gc_safe_point();
 		if (!inMutex.TryLock())
 		{
-			hx::EnterGCFreeZone();
+			// Keeps a zone the caller is in, as Mutex does
+			hx::AutoGCFreeZone zone;
 			inMutex.Lock();
-			hx::ExitGCFreeZone();
 		}
 	}
 
@@ -165,9 +165,10 @@ struct Deque : public Array_obj<Dynamic>
 			{
 				mSemaphore.Reset();
 				mMutex.Unlock();
-				hx::EnterGCFreeZone();
-				mSemaphore.Wait();
-				hx::ExitGCFreeZone();
+				{
+					hx::AutoGCFreeZone zone;
+					mSemaphore.Wait();
+				}
 				lockFor(mMutex);
 			}
 		}
@@ -204,10 +205,9 @@ struct Deque : public Array_obj<Dynamic>
 		lockFor(mSemaphore.mMutex);
 		if (inBlock && !hasItems())
 		{
-			hx::EnterGCFreeZone();
+			hx::AutoGCFreeZone zone;
 			while(!hasItems())
 				mSemaphore.QWait();
-			hx::ExitGCFreeZone();
 		}
 		Dynamic result = popHead();
 		if (hasItems())
@@ -459,12 +459,12 @@ public:
 					return false;
 			}
 
-			hx::EnterGCFreeZone();
+			// Keeps a zone the caller is in, as Mutex does
+			hx::AutoGCFreeZone zone;
 			if (inTimeout<0)
 				mNotEmpty.Wait( );
 			else
 				mNotEmpty.WaitSeconds(wait);
-			hx::ExitGCFreeZone();
 		}
 	}
 	void Release()

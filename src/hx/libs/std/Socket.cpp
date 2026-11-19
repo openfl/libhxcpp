@@ -1302,6 +1302,12 @@ static void make_array_result_inplace(Array<Dynamic> a, fd_set *tmp)
 static struct timeval *init_timeval( double f, struct timeval *t ) {
    if (f<0)
       return 0;
+   // The int conversions below overflowed past 2^31 seconds, and select
+   //  returned at once with nothing ready: the wait is capped. macOS'
+   //  select fails with EINVAL past 1e8 seconds, so that is the cap
+   //  everywhere (over three years). NaN waits for nothing
+   if (!(f < 1e8))
+      f = f == f ? 1e8 : 0;
    t->tv_usec = (int)(  (f - (int)f ) * 1000000 );
    t->tv_sec = (int)f;
    return t;

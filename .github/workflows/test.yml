@@ -215,6 +215,34 @@ jobs:
           haxelib run hxcpp Build.xml
           test "$(tr -d '\r' < out/kept.txt)" = old
           test "$(tr -d '\r' < out/replaced.txt)" = new
+      - name: build tool links again when a link flag changes
+        continue-on-error: ${{ inputs.warn_only }}
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        working-directory: test/link_flags
+        run: |
+          haxelib run hxcpp Build.xml
+          rm -f prog.map
+          haxelib run hxcpp Build.xml -DWANT_MAP
+          test -f prog.map
+      - name: build tool fails again after a step after the link failed
+        continue-on-error: ${{ inputs.warn_only }}
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' && runner.os == 'Windows' }}
+        working-directory: test/link_flags
+        run: |
+          rm -rf obj prog.exe prog.exe.hash
+          for build in first second; do
+            if haxelib run hxcpp Build.xml -DmanifestFile=bad.manifest; then
+              echo "::error::the $build build with a bad manifest should have failed"
+              exit 1
+            fi
+          done
+      - name: build tool lists the defines it reads
+        continue-on-error: ${{ inputs.warn_only }}
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        working-directory: test/link_flags
+        run: |
+          haxelib run hxcpp defines > defines.txt
+          grep -qx HXCPP_COMPILE_CACHE defines.txt
       - name: build tool rejects file names that differ only in case
         continue-on-error: ${{ inputs.warn_only }}
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
@@ -467,7 +495,7 @@ jobs:
         working-directory: test/regression
         run: |
           failed=""
-          for test in GcMutationRoots GcContainerMutation IncrementalGcSlices IncrementalGcContainers IncrementalGcArrayChunks IncrementalGcDequeMoves IncrementalGcPacing IncrementalGcStartSweep IncrementalGcStats IncrementalGcFinishBoundary IncrementalGcVerifier IncrementalWindowsHeaders GcWeakMapChain GenerationalFinalizerLifecycle GenerationalLargeBufferLifecycle; do
+          for test in GcMutationRoots GcContainerMutation IncrementalGcSlices IncrementalGcContainers IncrementalGcArrayChunks IncrementalGcDequeMoves IncrementalGcPacing IncrementalGcStartSweep IncrementalGcStats IncrementalGcFinishBoundary IncrementalGcVerifier IncrementalWindowsHeaders GcWeakMapChain GcWeakMapWalkCollect GenerationalFinalizerLifecycle GenerationalLargeBufferLifecycle; do
             echo "::group::incremental gc: $test"
             # The lifecycle fixtures' hxml selects generational mode; compile
             # the same Main with incremental mode here instead.

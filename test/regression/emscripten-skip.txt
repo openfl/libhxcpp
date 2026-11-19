@@ -34,6 +34,7 @@ FinalizersAcrossFreeZones: threads
 GcConcurrentCensus: threads (std::thread, which needs a pthreads build)
 GcFinalizerPromotion: threads (std::thread, which needs a pthreads build)
 GcFreeZoneNestedGuard: single-threaded Emscripten builds have no GC-free zones, so a guard enters none
+GcFreeZoneThreadWaits: threads
 GcHeapGrows: expects the desktop 20 MB working target; other platforms, Emscripten included, use 8 MB
 GcIdentityBurst: threads (std::thread, which needs a pthreads build)
 GcLargeInteriorRoot: threads (std::thread, which needs a pthreads build)
@@ -91,12 +92,15 @@ RegexpNativeMemoryPressure: threads (std::thread, which needs a pthreads build)
 RegexpObsoleteSubject: threads (std::thread, which needs a pthreads build)
 RegisterHeldRoots: threads
 RootWalkRace: threads (std::thread, which needs a pthreads build)
+SafePointInGcFreeZone: threads
 SemaphoreLoopCollect: threads
+SleepLongDuration: threads
 SocketEmptyBytes: sockets
 SocketIpv6Accept: sockets
 SocketIpv6ConcurrentFormat: threads (std::thread, which needs a pthreads build)
 SocketLibraryHandle: sockets
 SocketReadAhead: sockets
+SocketSelectLongTimeout: sockets
 SocketTinyTimeout: sockets
 SqliteNativeMemoryPressure: threads (std::thread, which needs a pthreads build)
 SqliteResultConnectionLifetime: threads (std::thread, which needs a pthreads build)
@@ -110,6 +114,7 @@ SslSniName: sockets
 ThreadEndsAtExit: threads
 ThreadEndsAtExitDebugger: threads
 ThreadEndsWhileCollecting: threads
+ThreadScratchApi4: threads
 ThreadWaitTimeouts: threads
 TimerStampFirstCall: threads
 UncaughtNullException: processes (runs itself)

@@ -240,7 +240,7 @@ static unsigned char *scriptableBase(unsigned char *inStack, int stackSize,
 static bool isJitted(const ScriptCallable *inFunc)
 {
    #ifdef CPPIA_JIT
-   return inFunc->compiled!=0;
+   return inFunc->getCompiled()!=0;
    #else
    return false;
    #endif
@@ -584,14 +584,18 @@ void ScriptCallable::runFunction(CppiaCtx *ctx)
 {
 
    #ifdef CPPIA_JIT
-   if (lazy && !compiled)
+   CppiaFunc code = getCompiled();
+   if (lazy && !code)
+   {
       compileLazy();
-   if (compiled)
+      code = getCompiled();
+   }
+   if (code)
    {
       {
       AutoFrame frame(ctx);
       //printf("Running compiled code...\n");
-      compiled(ctx);
+      code(ctx);
       //printf("Done.\n");
       }
       if (ctx->exception)
@@ -635,14 +639,18 @@ void ScriptCallable::runFunction(CppiaCtx *ctx)
 void ScriptCallable::runFunctionClosure(CppiaCtx *ctx)
 {
    #ifdef CPPIA_JIT
-   if (lazy && !compiled)
+   CppiaFunc code = getCompiled();
+   if (lazy && !code)
+   {
       compileLazy();
-   if (compiled)
+      code = getCompiled();
+   }
+   if (code)
    {
       {
       AutoFrame frame(ctx);
       //printf("Running compiled code...\n");
-      compiled(ctx);
+      code(ctx);
       //printf("Done.\n");
       }
       if (ctx->exception)
@@ -810,9 +818,8 @@ void ScriptCallable::compile()
 
       CppiaFunc code = compiler->finishGeneration();
       // Another thread can find the code through compiled as soon as it is set
-      std::atomic_thread_fence(std::memory_order_release);
-      compiled = code;
       ownsCompiled = true;
+      setCompiled(code);
 
       delete compiler;
    }
@@ -900,13 +907,17 @@ public:
       }
 
       #ifdef CPPIA_JIT
-      if (function->lazy && !function->compiled)
+      CppiaFunc code = function->getCompiled();
+      if (function->lazy && !code)
+      {
          function->compileLazy();
-      if (function->compiled)
+         code = function->getCompiled();
+      }
+      if (code)
       {
          {
          AutoFrame frame(ctx);
-         function->compiled(ctx);
+         code(ctx);
          }
          if (ctx->exception)
          {
@@ -1176,6 +1187,10 @@ void CppiaFunction::load(CppiaStream &stream,bool inExpectBody)
       funExpr = dynamic_cast<ScriptCallable *>(body);
       if (!funExpr && name!="__init__" && std::string(body->getName())!="RetVal")
          throw "Function body is not a function";
+      // A dynamic function's value is a closure of the function, made as its
+      //  class boots or an instance is made, so it cannot be abstract
+      if (!funExpr && isDynamic)
+         throw "Dynamic function is not a function";
    }
    stream.module->creatingFunction = 0;
 }

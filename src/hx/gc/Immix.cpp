@@ -6499,8 +6499,14 @@ public:
       size_t freeFraggedRows = 0; 
       if (inFreeIsFragged)
       {
+         // The free blocks no allocation could use. Only a request of a line or
+         //  less moves mNextFreeBlockOfSize[0] on, so past it are also blocks
+         //  that bigger requests took and filled, whose rows marking counts:
+         //  counting their free rows from before as well made a heap of dead
+         //  objects look full, and its target doubled at every other collection
          for(int i=mNextFreeBlockOfSize[0]; i<mFreeBlocks.size(); i++)
-            freeFraggedRows += mFreeBlocks[i]->GetFreeRows();
+            if (!mFreeBlocks[i]->mOwned)
+               freeFraggedRows += mFreeBlocks[i]->GetFreeRows();
       }
 
       // Now all threads have mTopOfStack & mBottomOfStack set.
@@ -7621,21 +7627,28 @@ public:
          return memUnmanaged;
       uintptr_t base = 0;
 
-      // Only the collector looks up while marking, with the list fixed, so once
-      // a collection has seen several candidates in range it sorts the bases
-      // and searches them instead of scanning the list for each. The old
-      // allocations' sorted bases are kept while they do not change, which a
-      // minor collection cannot do: sorting them again in each collection
-      // took longer than sweeping them did (libhxcpp #318).
-      if (!mLargeIndexReady && mLargeOld>64 && ++mLargeLookups>8)
+      // The list is fixed while marking, so once a collection has seen several
+      // candidates in range it sorts the bases and searches them instead of
+      // scanning the list for each. The old allocations' sorted bases are kept
+      // while they do not change, which a minor collection cannot do: sorting
+      // them again in each collection took longer than sweeping them did
+      // (libhxcpp #318). The marking threads look up too, for a CFFI abstract
+      // whose memory is marked conservatively, so one thread sorts, under
+      // mLargeIndexLock: two sorting one index at once crashed
+      if (!mLargeIndexReady.load(std::memory_order_acquire) && mLargeOld>64 &&
+          mLargeLookups.fetch_add(1, std::memory_order_relaxed)>=8)
       {
-         mLargeIndex.resize(mLargeOld);
-         for(int i=0;i<mLargeOld;i++)
-            mLargeIndex[i] = reinterpret_cast<uintptr_t>(mLargeList[i] + 2);
-         std::sort(mLargeIndex.begin(), mLargeIndex.end());
-         mLargeIndexReady = true;
+         std::lock_guard<std::mutex> lock(mLargeIndexLock);
+         if (!mLargeIndexReady.load(std::memory_order_relaxed))
+         {
+            mLargeIndex.resize(mLargeOld);
+            for(int i=0;i<mLargeOld;i++)
+               mLargeIndex[i] = reinterpret_cast<uintptr_t>(mLargeList[i] + 2);
+            std::sort(mLargeIndex.begin(), mLargeIndex.end());
+            mLargeIndexReady.store(true, std::memory_order_release);
+         }
       }
-      if (mLargeIndexReady)
+      if (mLargeIndexReady.load(std::memory_order_acquire))
          base = FindLarge(mLargeIndex, inPtr, reach);
       else
          for(int i=0;i<mLargeOld && !base;i++)
@@ -7650,15 +7663,20 @@ public:
 
       // Those made since the last collection, which change in each
       int young = mLargeList.size() - mLargeOld;
-      if (!mYoungLargeIndexReady && young>64 && ++mYoungLargeLookups>8)
+      if (!mYoungLargeIndexReady.load(std::memory_order_acquire) && young>64 &&
+          mYoungLargeLookups.fetch_add(1, std::memory_order_relaxed)>=8)
       {
-         mYoungLargeIndex.resize(young);
-         for(int i=0;i<young;i++)
-            mYoungLargeIndex[i] = reinterpret_cast<uintptr_t>(mLargeList[mLargeOld+i] + 2);
-         std::sort(mYoungLargeIndex.begin(), mYoungLargeIndex.end());
-         mYoungLargeIndexReady = true;
+         std::lock_guard<std::mutex> lock(mLargeIndexLock);
+         if (!mYoungLargeIndexReady.load(std::memory_order_relaxed))
+         {
+            mYoungLargeIndex.resize(young);
+            for(int i=0;i<young;i++)
+               mYoungLargeIndex[i] = reinterpret_cast<uintptr_t>(mLargeList[mLargeOld+i] + 2);
+            std::sort(mYoungLargeIndex.begin(), mYoungLargeIndex.end());
+            mYoungLargeIndexReady.store(true, std::memory_order_release);
+         }
       }
-      if (mYoungLargeIndexReady)
+      if (mYoungLargeIndexReady.load(std::memory_order_acquire))
          base = FindLarge(mYoungLargeIndex, inPtr, reach);
       else
          for(int i=mLargeOld;i<mLargeList.size() && !base;i++)
@@ -7697,14 +7715,16 @@ public:
    // An old allocation was released for the sweep to free
    bool mLargeOldReleased;
    // The sorted bases of mLargeList[0..mLargeOld), and of the rest
+   //  Marking threads build them, one at a time, under mLargeIndexLock
    std::vector<uintptr_t> mLargeIndex;
-   bool mLargeIndexReady = false;
-   int mLargeLookups = 0;
+   std::atomic<bool> mLargeIndexReady{false};
+   std::atomic<int> mLargeLookups{0};
    // The new survivors' bases, taken for the index before a full sweep
    std::vector<uintptr_t> mLargeIndexNew;
    std::vector<uintptr_t> mYoungLargeIndex;
-   bool mYoungLargeIndexReady = false;
-   int mYoungLargeLookups = 0;
+   std::atomic<bool> mYoungLargeIndexReady{false};
+   std::atomic<int> mYoungLargeLookups{0};
+   std::mutex mLargeIndexLock;
    size_t mTotalAfterLastCollect;
    size_t mAllBlocksCount;
    size_t mLiveBytes;
@@ -7962,6 +7982,18 @@ void MarkConservative(int *inBottom, int *inTop,hx::MarkContext *__inCtx)
    #endif
 }
 
+void MarkConservativePointer(void *inPtr,hx::MarkContext *__inCtx)
+{
+   void *word[1] = { inPtr };
+   // MarkConservative reads every pointer-sized word starting on an int in
+   //  the range, so this covers the one word and nothing past it
+   #ifdef HXCPP_STACK_UP
+   MarkConservative(reinterpret_cast<int *>(word + 1) - 1, reinterpret_cast<int *>(word) + 1, __inCtx);
+   #else
+   MarkConservative(reinterpret_cast<int *>(word), reinterpret_cast<int *>(word + 1), __inCtx);
+   #endif
+}
+
 } // namespace hx
 
 
@@ -8184,6 +8216,7 @@ public:
    void PopTopOfStack() { }
    void SetBottomOfStack(int *inBottom) { }
    void PauseForCollect() { }
+   void SafePoint() { }
    void EnterGCFreeZone() { }
    bool TryGCFreeZone() { return true; }
    bool TryExitGCFreeZone() { return false; }
@@ -8281,6 +8314,17 @@ public:
       mCollectDone.Wait();
       mPausedForCollect = false;
       #endif
+   }
+
+   // A thread in a GC-free zone is already safe: the collector does not wait
+   //  for it, and does not release it from PauseForCollect either
+   void SafePoint()
+   {
+      #ifndef HXCPP_SINGLE_THREADED_APP
+      if (mGCFreeZone)
+         return;
+      #endif
+      PauseForCollect();
    }
 
    void EnterGCFreeZone()
@@ -9175,8 +9219,11 @@ unsigned int ObjectSizeSafe(void *inData)
    #ifdef HXCPP_GC_NURSERY
    if (!(header & 0xff000000))
    {
-      // Small object
-      if (header & 0x00ffffff)
+      // A small object has its size in the low 16 bits, and a large one 0
+      //  there, as MarkAllocUnchecked reads it. The flags above can be set
+      //  on either: a long string's hash slot made a large one look small,
+      //  with a size of 0
+      if (header & 0x0000ffff)
          return header & 0x0000ffff;
       // Large object
    }
@@ -9593,10 +9640,13 @@ void __hxcpp_exit_gc_free_zone()
 }
 
 
+// The thread primitives' fast paths call this, and Mutex and Condition may be
+//  used from inside a zone: pausing there during a collection was "Bad
+//  Allocation while collecting", or waited for a release that never came
 void __hxcpp_gc_safe_point()
 {
     if (hx::gPauseForCollect)
-      hx::PauseForCollect();
+      GetLocalAlloc()->SafePoint();
 }
 
 //#define HXCPP_FORCE_OBJ_MAP

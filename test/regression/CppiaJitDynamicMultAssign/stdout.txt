@@ -1,0 +1,12 @@
+int 15
+float 7
+call 15
+field 10
+array 42
+binary 15
+int 15
+float 7
+call 15
+field 10
+array 42
+binary 15

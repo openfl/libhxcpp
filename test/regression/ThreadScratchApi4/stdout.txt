@@ -1,0 +1,1 @@
+each running thread holds less than 16 KB: true

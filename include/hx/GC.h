@@ -202,6 +202,9 @@ bool IsWeakRefValid(const HX_CHAR *inPtr);
 //  that points to real, active objects.
 void MarkConservative(int *inBottom, int *inTop,hx::MarkContext *__inCtx);
 
+// Keeps what a cpp.Pointer points into, as a pointer on the stack would
+void MarkConservativePointer(void *inPtr,hx::MarkContext *__inCtx);
+
 
 // Create/Remove a root.
 // All statics are explicitly registered - this saves adding the whole data segment

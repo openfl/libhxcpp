@@ -1,0 +1,10 @@
+interpreted
+ints: caught Null Object Reference
+strings: caught Null Object Reference
+any: caught Null Object Reference
+valid: [1,2,3] [1,b,true]
+jit
+ints: caught Null Object Reference
+strings: caught Null Object Reference
+any: caught Null Object Reference
+valid: [1,2,3] [1,b,true]

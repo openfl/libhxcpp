@@ -424,17 +424,23 @@ class Fuzz {
 		var zero = 0;
 		while (zero < rest.length && rest.get(zero) != 0)
 			zero++;
-		var pattern = rest.getString(0, zero);
+		// PCRE2 gives up on a match after its match limit of steps from one
+		// start, and the EReg throws. Its default, 10 million, takes seconds
+		// under the sanitizers, and a pattern that backtracks through every way
+		// to split the subject, such as "(\D+)*x", reaches it. Split, replace
+		// and map match again after each match, so one input can reach it
+		// several times, or take nearly that long at several starts. The
+		// pattern lowers it to 100,000 steps: a pattern that does not backtrack
+		// takes a few steps a character, and "^(a|b)*c$" over a subject of
+		// max_len, 4096 bytes, needs fewer than 20,000. A limit in the input's
+		// own pattern can only lower it further
+		var pattern = "(*LIMIT_MATCH=100000)" + rest.getString(0, zero);
 		var subject = zero < rest.length ? rest.getString(zero + 1, rest.length - zero - 1) : "";
 		var r:EReg = attempt(() -> new EReg(pattern, opts));
 		if (r == null)
 			return;
 		var matched:Null<Bool> = attempt(() -> r.match(subject));
-		// PCRE2 gives up on a match after its match limit, 10 million steps
-		// from one start, and the EReg throws. A pattern such as "(\D+)*x"
-		// backtracks through every way to split the subject, so each call over
-		// the subject below would run to the limit again: five of them took
-		// 12 seconds under the sanitizers
+		// A match that reached the limit would mostly reach it again below
 		if (matched == null)
 			return;
 		if (matched) {
@@ -605,8 +611,12 @@ class Fuzz {
 				Type.getEnumName(e) + "." + Type.enumConstructor(v) + "(" + [for (p in Type.enumParameters(v)) canon(p, depth + 1)].join(",") + ")";
 			case TClass(String): haxe.Json.stringify(v);
 			case TClass(Array): "[" + [for (x in (v : Array<Dynamic>)) canon(x, depth + 1)].join(",") + "]";
-			// The std's cpp Date keeps seconds, so a fraction of a millisecond drifts
-			case TClass(Date): "Date(" + Math.round((v : Date).getTime()) + ")";
+			// The std's cpp Date keeps seconds, so a fraction of a millisecond
+			// drifts, and past 2^53 ms, where a millisecond is less than a step
+			// between doubles, so do whole milliseconds
+			case TClass(Date):
+				var t = (v : Date).getTime();
+				Math.abs(t) >= 9007199254740992.0 ? "Date(beyond 2^53 ms)" : "Date(" + Math.round(t) + ")";
 			case TClass(haxe.io.Bytes): "Bytes(" + (v : Bytes).toHex() + ")";
 			case TClass(List): "List(" + [for (x in (v : List<Dynamic>)) canon(x, depth + 1)].join(",") + ")";
 			case TClass(c) if (Std.isOfType(v, haxe.Constraints.IMap)):

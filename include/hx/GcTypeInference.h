@@ -35,6 +35,14 @@ template<> inline void MarkMember<cpp::Variant>(cpp::Variant &outT,hx::MarkConte
 {
    outT.mark(__inCtx);
 }
+// A cpp.Pointer field into the GC heap keeps what it points into. Haxe 4's
+//  haxe.atomic.AtomicInt is one into an array nothing else holds, which was
+//  freed under it (HaxeFoundation/hxcpp#1225)
+template<typename T> inline void MarkMember(cpp::Pointer<T> &outT,hx::MarkContext *__inCtx)
+{
+   if (outT.ptr)
+      hx::MarkConservativePointer((void *)outT.ptr,__inCtx);
+}
 template<typename T> inline void MarkMember(hx::Native<T> &outT,hx::MarkContext *__inCtx)
 {
    if (outT.ptr)

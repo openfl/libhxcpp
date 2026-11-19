@@ -19,6 +19,8 @@ class Linker
    public var mExpandArchives:Bool;
    public var mRecreate:Bool;
    public var mLastOutName:String;
+   // The record of the last link this call made, or null when it linked nothing
+   public var mLastHashFile:String;
    public var mAddLibPath:String;
 
    public function new(inExe:String)
@@ -103,6 +105,7 @@ class Linker
       }
 
       mLastOutName = out_name;
+      mLastHashFile = null;
 
       var lastLib = "";
       var libs = new Array<String>();
@@ -130,7 +133,10 @@ class Linker
       var v18Added = false;
       var isOutOfDateLibs = false;
 
-      var md5 = Md5.encode(inObjs.join(";"));
+      // The objects, and what the command does with them: a flag or library
+      //  added or removed relinks, as a changed object does
+      var md5 = Md5.encode(inObjs.join(";") + "|" + mFlags.concat(inTarget.mFlags).join(" ") + "|" +
+            libs.join(";") + "|" + inTarget.mLibPaths.join(";"));
       if (!FileSystem.exists(hashFile) || sys.io.File.getContent(hashFile)!=md5)
          isOutOfDateLibs = true;
 
@@ -304,6 +310,7 @@ class Linker
          }
 
          sys.io.File.saveContent(hashFile,md5);
+         mLastHashFile = hashFile;
          return out_name;
       }
 

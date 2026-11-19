@@ -39,15 +39,14 @@ void hx::thread::CountingSemaphore_obj::acquire()
 	if (NO_ERROR == WaitForSingleObject(impl->semaphore, 0))
 		return;
 
-	hx::EnterGCFreeZone();
+	// Keeps a zone the caller is in, as Mutex does
+	hx::AutoGCFreeZone zone;
 
 	if (NO_ERROR != WaitForSingleObject(impl->semaphore, INFINITE))
 	{
-		hx::ExitGCFreeZone();
+		zone.close();
 		hx::Throw(HX_CSTRING("Failed to wait for semaphore"));
 	}
-
-	hx::ExitGCFreeZone();
 }
 
 void hx::thread::CountingSemaphore_obj::release()
@@ -85,18 +84,16 @@ bool hx::thread::CountingSemaphore_obj::tryAcquire(Null<double> timeout)
 		return hx::Throw(HX_CSTRING("Failed to wait for semaphore"));
 	}
 
-	hx::EnterGCFreeZone();
+	hx::AutoGCFreeZone zone;
 
 	switch (WaitForSingleObject(impl->semaphore, waitMs))
 	{
 	case NO_ERROR:
-		hx::ExitGCFreeZone();
 		return true;
 	case WAIT_TIMEOUT:
-		hx::ExitGCFreeZone();
 		return false;
 	default:
-		hx::ExitGCFreeZone();
+		zone.close();
 		return hx::Throw(HX_CSTRING("Failed to wait for semaphore"));
 	}
 }

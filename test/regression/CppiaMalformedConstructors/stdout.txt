@@ -1,0 +1,29 @@
+HostBase 0
+interpreted
+super call into a class with no constructor threw: Super constructor call on a class with no constructor
+super call into an interface threw: Super constructor call on a class with no constructor
+super call into a constructor that is a return threw: Constructor is not a function
+super call into an interface with a constructor threw: Constructor is not a function
+super call into a constructor loaded and ran
+new of a constructor that is a return threw: Constructor is not a function
+new of an interface threw: Could not link new Bar
+new of a class with no constructor loaded and ran
+new of a constructor loaded and ran
+Top 1 then Bottom
+Top 3
+HostBase 2 then HostBottom
+HostBase 4
+jit
+super call into a class with no constructor threw: Super constructor call on a class with no constructor
+super call into an interface threw: Super constructor call on a class with no constructor
+super call into a constructor that is a return threw: Constructor is not a function
+super call into an interface with a constructor threw: Constructor is not a function
+super call into a constructor loaded and ran
+new of a constructor that is a return threw: Constructor is not a function
+new of an interface threw: Could not link new Bar
+new of a class with no constructor loaded and ran
+new of a constructor loaded and ran
+Top 1 then Bottom
+Top 3
+HostBase 2 then HostBottom
+HostBase 4

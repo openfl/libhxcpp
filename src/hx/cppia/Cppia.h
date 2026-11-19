@@ -4,6 +4,7 @@
 #include <hx/Scriptable.h>
 #include <hx/GC.h>
 #include <unordered_set>
+#include <atomic>
 #include <stdio.h>
 #include <vector>
 #include <string>
@@ -347,6 +348,27 @@ struct ScriptCallable : public CppiaDynamicExpr
 
 
    #ifdef CPPIA_JIT
+   // A lazy function's compiled is set under the compile lock while other threads
+   //  may be calling it, so it is read with acquire and set with release
+   inline CppiaFunc getCompiled() const
+   {
+      #if defined(__GNUC__) || defined(__clang__)
+      return __atomic_load_n(&compiled, __ATOMIC_ACQUIRE);
+      #else
+      CppiaFunc result = *(CppiaFunc const volatile *)&compiled;
+      std::atomic_thread_fence(std::memory_order_acquire);
+      return result;
+      #endif
+   }
+   inline void setCompiled(CppiaFunc inCode)
+   {
+      #if defined(__GNUC__) || defined(__clang__)
+      __atomic_store_n(&compiled, inCode, __ATOMIC_RELEASE);
+      #else
+      std::atomic_thread_fence(std::memory_order_release);
+      *(CppiaFunc volatile *)&compiled = inCode;
+      #endif
+   }
    void compile();
    void compileLazy();
    void genDefaults(CppiaCompiler *compiler);
@@ -1256,8 +1278,9 @@ struct NAME \
    void apply( T &ioVal, double val) { AssignDouble(ioVal, ValToFloat(ioVal) OP val); } \
    template<typename T> static \
    void apply( T &ioVal, String &val) { } \
+   /* The jit's Int array *= and -=, never /= */ \
    template<typename T> static \
-   void apply( T &ioVal, int &val) { } \
+   void apply( T &ioVal, int &val) { AssignInt(ioVal, ValToInt(ioVal) OP val); } \
    template<typename T> static \
    void apply( T &ioVal, Dynamic &val) { } \
 };

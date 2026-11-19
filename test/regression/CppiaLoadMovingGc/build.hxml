@@ -1,0 +1,11 @@
+--main Script
+-cppia bin/script.cppia
+--next
+--main Main
+-cpp bin
+-debug
+-D DEBUGSUFFIX=
+-D scriptable
+--dce no
+-D HXCPP_GC_MOVING
+-D HXCPP_GC_DEBUG_ALWAYS_MOVE

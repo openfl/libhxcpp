@@ -46,7 +46,8 @@ void hx::thread::CountingSemaphore_obj::acquire()
 	if (0 == sem_trywait(&impl->semaphore))
 		return;
 
-	hx::EnterGCFreeZone();
+	// Keeps a zone the caller is in, as Mutex does
+	hx::AutoGCFreeZone zone;
 
 	// sem_wait is never restarted after a caught signal, regardless of
 	// SA_RESTART - retry on EINTR rather than throwing spuriously
@@ -59,11 +60,9 @@ void hx::thread::CountingSemaphore_obj::acquire()
 
 	if (0 != r)
 	{
-		hx::ExitGCFreeZone();
+		zone.close();
 		hx::Throw(HX_CSTRING("Failed to wait on semaphore"));
 	}
-
-	hx::ExitGCFreeZone();
 }
 
 void hx::thread::CountingSemaphore_obj::release()
@@ -93,7 +92,7 @@ bool hx::thread::CountingSemaphore_obj::tryAcquire(Null<double> timeout)
 	}
 	else
 	{
-		hx::EnterGCFreeZone();
+		hx::AutoGCFreeZone zone;
 
 		struct timespec t;
 		#ifdef HX_SEM_CLOCKWAIT
@@ -118,12 +117,11 @@ bool hx::thread::CountingSemaphore_obj::tryAcquire(Null<double> timeout)
 
 		if (0 == r)
 		{
-			hx::ExitGCFreeZone();
 			return true;
 		}
 		else
 		{
-			hx::ExitGCFreeZone();
+			zone.close();
 			if (error == ETIMEDOUT)
 			{
 				return false;

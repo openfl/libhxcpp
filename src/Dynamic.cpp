@@ -212,7 +212,7 @@ public:
 class PointerData : public hx::Object
 {
 public:
-   inline void *operator new( size_t inSize, hx::NewObjectType inAlloc=NewObjAlloc,const char *inName="cpp.Pointer")
+   inline void *operator new( size_t inSize, hx::NewObjectType inAlloc=NewObjContainer,const char *inName="cpp.Pointer")
       { return hx::Object::operator new(inSize,inAlloc,inName); }
 
    PointerData(void *inValue) : mValue(inValue) {};
@@ -238,6 +238,13 @@ public:
       return mValue < r ? -1 : mValue==r ? 0 : 1;
    }
 
+   // A boxed pointer into the GC heap keeps what it points into, as a
+   //  cpp.Pointer field does: a script's haxe.atomic.AtomicInt is one
+   void __Mark(hx::MarkContext *__inCtx) HXCPP_OVERRIDE
+   {
+      if (mValue)
+         hx::MarkConservativePointer(mValue,__inCtx);
+   }
 
    void *mValue;
 };
