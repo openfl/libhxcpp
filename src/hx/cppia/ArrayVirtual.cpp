@@ -206,6 +206,41 @@ struct ArrayBuiltinAny : public ArrayBuiltinBase
    }
    const char *getName() HXCPP_OVERRIDE { return gArrayFuncNames[FUNC]; }
 
+   // a[i] op= val and ++ and --, for the interpreter and the JIT alike
+   static Dynamic applyAssign(Dynamic orig, Dynamic val)
+   {
+      switch(OP)
+      {
+         case aoAdd: return orig + val;
+         case aoMult: return orig * val;
+         case aoDiv: return orig / val;
+         case aoSub: return orig - val;
+         case aoAnd: return orig->__ToInt() & val->__ToInt();
+         case aoOr: return orig->__ToInt() | val->__ToInt();
+         case aoXOr: return orig->__ToInt() ^ val->__ToInt();
+         case aoShl: return orig->__ToInt() << val->__ToInt();
+         case aoShr: return orig->__ToInt() >> val->__ToInt();
+         case aoUShr: return hx::UShr(orig,val);
+         case aoMod: return orig % val;
+         default: return val;
+      }
+   }
+
+   static Dynamic applyCrement(ArrayAnyImpl *thisVal, int i)
+   {
+      if (OP==coPreInc)
+         return thisVal->__SetItem(i, thisVal->__GetItem(i) + 1);
+      if (OP==coPreDec)
+         return thisVal->__SetItem(i, thisVal->__GetItem(i) - 1);
+
+      Dynamic result = thisVal->__GetItem(i);
+      if (OP==coPostDec)
+         thisVal->__SetItem(i, thisVal->__GetItem(i) - 1);
+      if (OP==coPostInc)
+         thisVal->__SetItem(i, thisVal->__GetItem(i) + 1);
+      return result;
+   }
+
    int  runInt(CppiaCtx *ctx) HXCPP_OVERRIDE
    {
       if (FUNC==afPush)
@@ -336,62 +371,14 @@ struct ArrayBuiltinAny : public ArrayBuiltinBase
 
          Dynamic val = args[1]->runObject(ctx);
          BCR_CHECK;
-         switch(OP)
-         {
-            case aoSet: break;
-
-            case aoAdd:
-               val = orig + val;
-               break;
-            case aoMult:
-               val = orig * val;
-               break;
-            case aoDiv:
-               val = orig / val;
-               break;
-            case aoSub:
-               val = orig - val;
-               break;
-            case aoAnd:
-               val = orig->__ToInt() & val->__ToInt();
-               break;
-            case aoOr:
-               val = orig->__ToInt() | val->__ToInt();
-               break;
-            case aoXOr:
-               val = orig->__ToInt() ^ val->__ToInt();
-               break;
-            case aoShl:
-               val = orig->__ToInt() << val->__ToInt();
-               break;
-            case aoShr:
-               val = orig->__ToInt() >> val->__ToInt();
-               break;
-            case aoUShr:
-               val = hx::UShr(orig,val);
-               break;
-            case aoMod:
-               val = orig % val;
-               break;
-            default: ;
-         }
+         val = applyAssign(orig, val);
          return thisVal->__SetItem(i,val).mPtr;
       }
       if (FUNC==af__crement)
       {
          int i = args[0]->runInt(ctx);
          BCR_CHECK;
-         if (OP==coPreInc)
-            return thisVal->__SetItem(i, thisVal->__GetItem(i) + 1).mPtr;
-         if (OP==coPreDec)
-            return thisVal->__SetItem(i, thisVal->__GetItem(i) - 1).mPtr;
-
-         Dynamic result = thisVal->__GetItem(i);
-         if (OP==coPostDec)
-            thisVal->__SetItem(i, thisVal->__GetItem(i) - 1);
-         if (OP==coPostInc)
-            thisVal->__SetItem(i, thisVal->__GetItem(i) + 1);
-         return result.mPtr;
+         return applyCrement(thisVal, i).mPtr;
       }
 
       if (FUNC==afPop)
@@ -696,6 +683,49 @@ struct ArrayBuiltinAny : public ArrayBuiltinBase
    }
 
 
+   // Compound assignment, ++ and --, insert and toString, which the JIT did
+   //  not compile: a[i] op= val stored val alone, and the others did nothing
+   //  (libhxcpp #468). They work as the interpreter does
+   static hx::Object * SLJIT_CALL runAssign(ArrayAnyImpl *inArray, int inIndex, hx::Object *inValue)
+   {
+      TRY_NATIVE
+      Dynamic orig = inArray->__GetItem(inIndex);
+      if (!orig.mPtr)
+         NullReference("Object", false);
+      return inArray->__SetItem(inIndex, applyAssign(orig, Dynamic(inValue))).mPtr;
+      CATCH_NATIVE
+      return 0;
+   }
+
+   static hx::Object * SLJIT_CALL runCrement(ArrayAnyImpl *inArray, int inIndex)
+   {
+      TRY_NATIVE
+      return applyCrement(inArray, inIndex).mPtr;
+      CATCH_NATIVE
+      return 0;
+   }
+
+   static void SLJIT_CALL runInsert(ArrayAnyImpl *inArray, hx::Object *inPos, hx::Object *inValue)
+   {
+      TRY_NATIVE
+      inArray->CALL(insert)(Dynamic(inPos), Dynamic(inValue));
+      CATCH_NATIVE
+   }
+
+   static void SLJIT_CALL runToString(ArrayAnyImpl *inArray, String *outValue)
+   {
+      TRY_NATIVE
+      JitStore(outValue, inArray->toString());
+      CATCH_NATIVE
+   }
+
+   // A Bool goes in boxed, as a Bool: the Int paths stored it as an Int
+   static ExprType anyStoreType(CppiaExpr *inValue)
+   {
+      ExprType type = inValue->getType();
+      return type==etInt && inValue->isBoolInt() ? etObject : type;
+   }
+
    void genCode(CppiaCompiler *compiler, const JitVal &inDest, ExprType destType) HXCPP_OVERRIDE
    {
       JitTemp thisVal(compiler,etObject);
@@ -856,7 +886,16 @@ struct ArrayBuiltinAny : public ArrayBuiltinBase
                JitTemp index(compiler,etInt);
                args[0]->genCode(compiler, index, etInt);
 
-               switch(args[1]->getType())
+               if (OP!=aoSet)
+               {
+                  args[1]->genCode(compiler, sJitArg2.as(jtPointer), etObject);
+                  compiler->callNative( (void *)runAssign, thisVal, index, sJitArg2.as(jtPointer));
+                  compiler->checkException();
+                  compiler->convertReturnReg(etObject, inDest, destType);
+                  break;
+               }
+
+               switch(anyStoreType(args[1]))
                {
                   case etInt:
                      args[1]->genCode(compiler, sJitArg2.as(jtInt), etInt);
@@ -897,7 +936,7 @@ struct ArrayBuiltinAny : public ArrayBuiltinBase
 
          case afPush:
             {
-               switch(args[0]->getType())
+               switch(anyStoreType(args[0]))
                {
                   case etInt:
                      args[0]->genCode(compiler, sJitArg1.as(jtInt), etInt);
@@ -934,7 +973,7 @@ struct ArrayBuiltinAny : public ArrayBuiltinBase
 
          case afUnshift:
             {
-               switch(args[0]->getType())
+               switch(anyStoreType(args[0]))
                {
                   case etInt:
                      args[0]->genCode(compiler, sJitArg1.as(jtInt), etInt);
@@ -969,6 +1008,35 @@ struct ArrayBuiltinAny : public ArrayBuiltinBase
 
 
 
+
+         case af__crement:
+            {
+               JitTemp index(compiler,etInt);
+               args[0]->genCode(compiler, index, etInt);
+               compiler->callNative( (void *)runCrement, thisVal, index);
+               compiler->checkException();
+               compiler->convertReturnReg(etObject, inDest, destType);
+            }
+            break;
+
+         case afInsert:
+            {
+               JitTemp pos(compiler,jtPointer);
+               args[0]->genCode(compiler, pos, etObject);
+               args[1]->genCode(compiler, sJitArg2.as(jtPointer), etObject);
+               compiler->callNative( (void *)runInsert, thisVal, pos, sJitArg2.as(jtPointer));
+               compiler->checkException();
+            }
+            break;
+
+         case afToString:
+            {
+               JitTemp result(compiler,jtString);
+               compiler->callNative( (void *)runToString, thisVal, result);
+               compiler->checkException();
+               compiler->convert(result, etString, inDest, destType);
+            }
+            break;
 
          default:
             compiler->traceStrings("Unknown ArrayBuiltinAny:", getName() );
