@@ -545,6 +545,31 @@ public:
 typedef ImmixAllocator GcAllocator;
 typedef ImmixAllocator Ctx;
 
+// An object's mark byte, as the generational write barrier reads it. A
+//  barrier on another thread may be setting the remembered bit in it at the
+//  same time, which plain accesses made a data race, though either value read
+//  is handled. A relaxed load is a plain byte load where it compiles to one
+inline unsigned char BarrierMarkByte(const void *inObj)
+{
+   const unsigned char *mark = reinterpret_cast<const unsigned char *>(inObj) + HX_ENDIAN_MARK_ID_BYTE;
+   #if defined(__GNUC__) || defined(__clang__)
+   return __atomic_load_n(mark, __ATOMIC_RELAXED);
+   #else
+   return *reinterpret_cast<const volatile unsigned char *>(mark);
+   #endif
+}
+
+// Sets the remembered bit, which is all a mutator changes in a mark byte
+inline void BarrierRemember(const void *inObj)
+{
+   unsigned char *mark = const_cast<unsigned char *>(reinterpret_cast<const unsigned char *>(inObj)) + HX_ENDIAN_MARK_ID_BYTE;
+   #if defined(__GNUC__) || defined(__clang__)
+   __atomic_fetch_or(mark, (unsigned char)HX_GC_REMEMBERED, __ATOMIC_RELAXED);
+   #else
+   *reinterpret_cast<volatile unsigned char *>(mark) |= HX_GC_REMEMBERED;
+   #endif
+}
+
 
 #if defined(HXCPP_GC_INCREMENTAL)
   #define HX_OBJ_WB_CTX(obj,value,ctx) { const void *_hx_inc_value = value; if (_hx_inc_value && ::hx::gIncrementalActive.load(std::memory_order_relaxed)) { ::hx::Object *_hx_inc_owner = obj; if (!_hx_inc_owner || reinterpret_cast<unsigned char *>(_hx_inc_owner)[HX_ENDIAN_MARK_ID_BYTE] == ::hx::gByteMarkID) ::hx::IncrementalRemember(_hx_inc_owner,_hx_inc_value,ctx); } }
@@ -552,20 +577,18 @@ typedef ImmixAllocator Ctx;
   #define HX_OBJ_WB_NEW_MARKED_OBJECT(obj) HX_OBJ_WB_PESSIMISTIC_CTX(obj,HX_CTX_GET)
 #elif defined(HXCPP_GC_GENERATIONAL)
   #define HX_OBJ_WB_CTX(obj,value,ctx) { \
-        unsigned char &mark =  ((unsigned char *)(obj))[ HX_ENDIAN_MARK_ID_BYTE]; \
-        if (mark == ::hx::gByteMarkID && value && !((unsigned char *)(value))[ HX_ENDIAN_MARK_ID_BYTE  ] ) { \
-            mark|=HX_GC_REMEMBERED; \
+        if (::hx::BarrierMarkByte(obj) == ::hx::gByteMarkID && value && !::hx::BarrierMarkByte(value) ) { \
+            ::hx::BarrierRemember(obj); \
             ctx->pushReferrer(obj); \
      } }
   #define HX_OBJ_WB_PESSIMISTIC_CTX(obj,ctx) { \
-     unsigned char &mark =  ((unsigned char *)(obj))[ HX_ENDIAN_MARK_ID_BYTE]; \
-     if (mark == ::hx::gByteMarkID)  { \
-        mark|=HX_GC_REMEMBERED; \
+     if (::hx::BarrierMarkByte(obj) == ::hx::gByteMarkID)  { \
+        ::hx::BarrierRemember(obj); \
         ctx->pushReferrer(obj); \
      } }
   // I'm not sure if this will ever trigger...
   #define HX_OBJ_WB_NEW_MARKED_OBJECT(obj) { \
-     if (((unsigned char *)(obj))[ HX_ENDIAN_MARK_ID_BYTE]==::hx::gByteMarkID) ::hx::NewMarkedObject(obj); \
+     if (::hx::BarrierMarkByte(obj)==::hx::gByteMarkID) ::hx::NewMarkedObject(obj); \
   }
 #else
   #define HX_OBJ_WB_CTX(obj,value,ctx)
@@ -579,8 +602,7 @@ typedef ImmixAllocator Ctx;
 #elif defined(HXCPP_GC_GENERATIONAL)
   // Storing a young value in an old array: see ArrayYoungStore
   #define HX_ARRAY_WB(array,index,value) { \
-        unsigned char mark =  ((unsigned char *)(array))[ HX_ENDIAN_MARK_ID_BYTE]; \
-        if (mark == ::hx::gByteMarkID && value && !((unsigned char *)(value))[ HX_ENDIAN_MARK_ID_BYTE  ] ) \
+        if (::hx::BarrierMarkByte(array) == ::hx::gByteMarkID && value && !::hx::BarrierMarkByte(value) ) \
            ::hx::ArrayYoungStore(array, value, _hx_ctx); \
      }
 #else
