@@ -42,6 +42,11 @@ static std::vector<uintptr_t> gNow;
 static int gPartial = 0;
 static void recordOld(hx::Object *o) { gOld.push_back(~(uintptr_t)o); }
 static void recordNow(hx::Object *o) { gNow.push_back(~(uintptr_t)o); }
+// Reads headers in blocks the collector may be zeroing on its own thread, on
+//  purpose, which ThreadSanitizer would report
+#if defined(__GNUC__) || defined(__clang__)
+__attribute__((noinline, no_sanitize("thread")))
+#endif
 static unsigned int headerAt(uintptr_t p) { return ((unsigned int *)p)[-1]; }
 // The moved-out addresses in blocks that kept some of their objects
 static int pickStale()
