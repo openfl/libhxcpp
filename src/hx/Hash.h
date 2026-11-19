@@ -840,7 +840,7 @@ struct Hash : public HashBase< typename ELEMENT::Key >
 
    static inline bool IsNursery(const void *inPtr)
    {
-      return inPtr && !(((unsigned char *)inPtr)[ HX_ENDIAN_MARK_ID_BYTE]);
+      return inPtr && !hx::BarrierMarkByte(inPtr);
    }
 
    #ifdef HXCPP_GC_GENERATIONAL
@@ -858,12 +858,11 @@ struct Hash : public HashBase< typename ELEMENT::Key >
          if (inC) hx::IncrementalRemember(this,inC,HX_CTX_GET);
       }
       #else
-      unsigned char &mark =  ((unsigned char *)(this))[ HX_ENDIAN_MARK_ID_BYTE];
-      if (mark == hx::gByteMarkID && (IsNursery(inA) || IsNursery(inB) || IsNursery(inC)) )
+      if (hx::BarrierMarkByte(this) == hx::gByteMarkID && (IsNursery(inA) || IsNursery(inB) || IsNursery(inC)) )
       {
          if (Element::WeakKeys)
          {
-            mark|=HX_GC_REMEMBERED;
+            hx::BarrierRemember(this);
             (HX_CTX_GET)->pushReferrer(this);
          }
          else

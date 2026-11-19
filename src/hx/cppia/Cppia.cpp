@@ -4147,8 +4147,7 @@ inline static void * getPointerFrom(String *s) { return (void *)s->raw_ptr(); }
 #if defined(HXCPP_GC_GENERATIONAL) && defined(CPPIA_JIT)
 static void SLJIT_CALL pushWriteBarrier(hx::StackContext *inCtx, hx::Object *inObj)
 {
-   unsigned char &mark =  ((unsigned char *)(inObj))[ HX_ENDIAN_MARK_ID_BYTE];
-   mark|=HX_GC_REMEMBERED;
+   hx::BarrierRemember(inObj);
    inCtx->pushReferrer(inObj);
 }
 
