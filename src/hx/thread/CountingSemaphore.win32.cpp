@@ -59,9 +59,11 @@ void hx::thread::CountingSemaphore_obj::release()
 
 bool hx::thread::CountingSemaphore_obj::tryAcquire(Null<double> timeout)
 {
-	// A negative timeout waits with no limit, as __hxcpp_lock_wait does: Haxe 5's
-	// Lock.wait() passes -1 when it is given no timeout. NaN still returns at once.
-	if (timeout.Default(0) < 0)
+	// -1 waits with no limit: Haxe 5.0.0-preview.1's Lock.wait() passes it when
+	// given no timeout. Any other negative timeout has run out already, as in
+	// tryAcquire(deadline - now), and returns at once like 0, as does NaN; it
+	// waited for ever before (libhxcpp #461)
+	if (timeout.Default(0) == -1)
 	{
 		acquire();
 		return true;
