@@ -40,11 +40,13 @@ class Main {
 	static function main() {
 		untyped __cpp__("startWatchdog(60)");
 		var empty = new Semaphore(0);
-		var full = new Semaphore(2);
+		var full = new Semaphore(3);
 
-		// A negative timeout waits with no limit, which Haxe 5's Lock.wait() relies on
+		// -1 waits with no limit, which Haxe 5.0.0-preview.1's Lock.wait() relies on
 		releaseLater(() -> empty.release());
-		check("semaphore negative", attempt(() -> empty.tryAcquire(-0.5) && full.tryAcquire(-0.5)));
+		check("semaphore minus one", attempt(() -> empty.tryAcquire(-1) && full.tryAcquire(-1)));
+		// Any other negative timeout has run out, and returns at once (libhxcpp #461)
+		check("semaphore negative", attempt(() -> !empty.tryAcquire(-0.5) && full.tryAcquire(-0.5)));
 		check("semaphore nan", attempt(() -> !empty.tryAcquire(Math.NaN) && full.tryAcquire(Math.NaN)));
 
 		var huge = true;
