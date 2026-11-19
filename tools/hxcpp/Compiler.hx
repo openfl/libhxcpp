@@ -275,7 +275,9 @@ class Compiler
          args = args.concat(mCPPFlags);
       }
 
-      if (isRc || inFile.getTags()!=inFile.mGroup.getTags())
+      // The precompiled header is built with the group's standard, and a file
+      //  with its own cannot use it: MSVC and clang both refuse (libhxcpp #472)
+      if (isRc || inFile.getTags()!=inFile.mGroup.getTags() || inFile.mCxxStandard!=inFile.mGroup.mCxxStandard)
          allowPch = false;
 
       if (inFile.mGroup.isPrecompiled() && allowPch)
@@ -471,9 +473,16 @@ class Compiler
                cleanTmp(tmpFile);
                if (err!=0)
                {
-                  if (FileSystem.exists(obj_name))
-                     FileSystem.deleteFile(obj_name);
+                  // The error first: when the delete threw, as it does for a
+                  //  read-only object or one another process has open, it was
+                  //  lost, and the old object was linked (libhxcpp #471)
                   BuildTool.setThreadError(err);
+                  try
+                  {
+                     if (FileSystem.exists(obj_name))
+                        FileSystem.deleteFile(obj_name);
+                  }
+                  catch(e:Dynamic) { }
                }
                else
                   inProgress.fileDone();

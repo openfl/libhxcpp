@@ -44,6 +44,11 @@ jobs:
           include
       name: Check public headers
 
+    # Every header hxcpp.h and the runtime include must be in haxe-target.xml's
+    # depend lists, or editing it rebuilds nothing (libhxcpp #469)
+    - name: Check the build tool's depend lists
+      run: python3 tools/check-depends.py
+
   check-gc-defines:
     name: Check GC defines
     runs-on: ubuntu-latest

@@ -93,6 +93,22 @@ class CompileCache
       return dir + "/" + hash.substr(2) + inExt;
    }
 
+   // Sizing the cache stats every file in it, which took seconds once it held
+   //  tens of thousands, and ran before every build, even one with nothing to
+   //  compile (libhxcpp #473). Once in ten minutes keeps it near its limit
+   public static function dueForTrim():Bool
+   {
+      var stamp = compileCache + "/.trimmed";
+      try
+      {
+         if (FileSystem.exists(stamp) && Date.now().getTime() - FileSystem.stat(stamp).mtime.getTime() < 10 * 60 * 1000.0)
+            return false;
+         sys.io.File.saveContent(stamp, "");
+      }
+      catch(e:Dynamic) { }
+      return true;
+   }
+
    public static function clear(inDays:Int,inMB:Int,inLogInfo:Bool,inProject:String)
    {
       try
