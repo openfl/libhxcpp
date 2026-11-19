@@ -118,6 +118,9 @@ class BuildTool
         inIncludePath:Array<String>, inDirtyList:Array<String> )
    {
       mDefines = inDefines;
+      // Read once the arguments and Options.txt are in, not only from the
+      //  environment
+      exitOnThreadError = exitOnThreadError || inDefines.exists("HXCPP_EXIT_ON_ERROR");
       mFileGroups = new FileGroups();
       mCompiler = null;
       mStripper = null;
