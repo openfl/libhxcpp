@@ -2745,7 +2745,9 @@ static void SLJIT_CALL addVariantObject( cpp::Variant *ioVar, hx::Object *inValu
 
 static void SLJIT_CALL addVariantInt( cpp::Variant *ioVar, int inValue )
 {
+   TRY_NATIVE
    JitStore(ioVar, JitLoad(ioVar) + inValue);
+   CATCH_NATIVE
 }
 
 
@@ -2759,58 +2761,80 @@ static void SLJIT_CALL addVariantString( cpp::Variant *ioVar, String *inValue )
 
 static void SLJIT_CALL addVariantFloat( cpp::Variant *ioVar, double *inValue )
 {
+   TRY_NATIVE
    JitStore(ioVar, JitLoad(ioVar) + JitLoad(inValue));
+   CATCH_NATIVE
 }
 
 static void SLJIT_CALL subVariantFloat( cpp::Variant *ioVar, double *inValue )
 {
+   TRY_NATIVE
    JitStore(ioVar, JitLoad(ioVar) - JitLoad(inValue));
+   CATCH_NATIVE
 }
 
 static void SLJIT_CALL divVariantFloat( cpp::Variant *ioVar, double *inValue )
 {
+   TRY_NATIVE
    JitStore(ioVar, JitLoad(ioVar) / JitLoad(inValue));
+   CATCH_NATIVE
 }
 
 static void SLJIT_CALL multVariantFloat( cpp::Variant *ioVar, double *inValue )
 {
+   TRY_NATIVE
    JitStore(ioVar, JitLoad(ioVar) * JitLoad(inValue));
+   CATCH_NATIVE
 }
 
 static void SLJIT_CALL modVariantFloat( cpp::Variant *ioVar, double *inValue )
 {
+   TRY_NATIVE
    JitStore(ioVar, hx::Mod(JitLoad(ioVar),JitLoad(inValue)));
+   CATCH_NATIVE
 }
 
 static void SLJIT_CALL andVariantInt( cpp::Variant *ioVar, int inValue )
 {
+   TRY_NATIVE
    JitStore(ioVar, (int)(JitLoad(ioVar)) & inValue);
+   CATCH_NATIVE
 }
 
 
 static void SLJIT_CALL orVariantInt( cpp::Variant *ioVar, int inValue )
 {
+   TRY_NATIVE
    JitStore(ioVar, (int)(JitLoad(ioVar)) | inValue);
+   CATCH_NATIVE
 }
 
 static void SLJIT_CALL xorVariantInt( cpp::Variant *ioVar, int inValue )
 {
+   TRY_NATIVE
    JitStore(ioVar, (int)(JitLoad(ioVar)) ^ inValue);
+   CATCH_NATIVE
 }
 
 static void SLJIT_CALL shlVariantInt( cpp::Variant *ioVar, int inValue )
 {
+   TRY_NATIVE
    JitStore(ioVar, (int)(JitLoad(ioVar)) << inValue);
+   CATCH_NATIVE
 }
 
 static void SLJIT_CALL shrVariantInt( cpp::Variant *ioVar, int inValue )
 {
+   TRY_NATIVE
    JitStore(ioVar, (int)(JitLoad(ioVar)) >> inValue);
+   CATCH_NATIVE
 }
 
 static void SLJIT_CALL ushrVariantInt( cpp::Variant *ioVar, int inValue )
 {
+   TRY_NATIVE
    JitStore(ioVar, (unsigned int)(int)(JitLoad(ioVar)) >> inValue);
+   CATCH_NATIVE
 }
 
 
@@ -3084,6 +3108,7 @@ struct FieldByName : public CppiaDynamicExpr
       {
          JitTemp gotVal(compiler, etString, sizeof(cpp::Variant));
          compiler->callNative( (void *)getFieldVariant, objSrc, (void *)&name, gotVal );
+         compiler->checkException();
 
          if (assign==aoAdd)
          {
@@ -3092,16 +3117,19 @@ struct FieldByName : public CppiaDynamicExpr
                case etObject:
                   value->genCode(compiler,sJitArg1.as(jtPointer), etObject);
                   compiler->callNative( (void *)addVariantObject, gotVal, sJitArg1.as(jtPointer) );
+                  compiler->checkException();
                   break;
                case etInt:
                   value->genCode(compiler,sJitArg1.as(jtInt), etInt);
                   compiler->callNative( (void *)addVariantInt, gotVal, sJitArg1.as(jtPointer) );
+                  compiler->checkException();
                   break;
                case etString:
                   {
                   JitTemp sval(compiler, etString);
                   value->genCode(compiler,sval, etString);
                   compiler->callNative( (void *)addVariantString, gotVal, sval);
+                  compiler->checkException();
                   }
                   break;
                case etFloat:
@@ -3109,6 +3137,7 @@ struct FieldByName : public CppiaDynamicExpr
                   JitTemp fval(compiler, jtFloat);
                   value->genCode(compiler,fval, etFloat);
                   compiler->callNative( (void *)addVariantFloat, gotVal, fval);
+                  compiler->checkException();
                   }
                   break;
                default:
@@ -3122,10 +3151,10 @@ struct FieldByName : public CppiaDynamicExpr
             value->genCode(compiler, fval, etFloat);
             switch(assign)
             {
-               case aoMult: compiler->callNative( (void *)multVariantFloat, gotVal, fval); break;
-               case aoDiv: compiler->callNative( (void *)divVariantFloat, gotVal, fval); break;
-               case aoMod: compiler->callNative( (void *)modVariantFloat, gotVal, fval); break;
-               case aoSub: compiler->callNative( (void *)subVariantFloat, gotVal, fval); break;
+               case aoMult: compiler->callNative( (void *)multVariantFloat, gotVal, fval); compiler->checkException(); break;
+               case aoDiv: compiler->callNative( (void *)divVariantFloat, gotVal, fval); compiler->checkException(); break;
+               case aoMod: compiler->callNative( (void *)modVariantFloat, gotVal, fval); compiler->checkException(); break;
+               case aoSub: compiler->callNative( (void *)subVariantFloat, gotVal, fval); compiler->checkException(); break;
                default: ;
             }
          }
@@ -3134,12 +3163,12 @@ struct FieldByName : public CppiaDynamicExpr
             value->genCode(compiler, sJitTemp2, etInt);
             switch(assign)
             {
-               case aoAnd: compiler->callNative( (void *)andVariantInt, gotVal, sJitTemp2.as(jtInt)); break;
-               case aoOr: compiler->callNative( (void *)orVariantInt, gotVal, sJitTemp2.as(jtInt)); break;
-               case aoXOr: compiler->callNative( (void *)xorVariantInt, gotVal, sJitTemp2.as(jtInt)); break;
-               case aoShl: compiler->callNative( (void *)shlVariantInt, gotVal, sJitTemp2.as(jtInt)); break;
-               case aoShr: compiler->callNative( (void *)shrVariantInt, gotVal, sJitTemp2.as(jtInt)); break;
-               case aoUShr: compiler->callNative( (void *)ushrVariantInt, gotVal, sJitTemp2.as(jtInt)); break;
+               case aoAnd: compiler->callNative( (void *)andVariantInt, gotVal, sJitTemp2.as(jtInt)); compiler->checkException(); break;
+               case aoOr: compiler->callNative( (void *)orVariantInt, gotVal, sJitTemp2.as(jtInt)); compiler->checkException(); break;
+               case aoXOr: compiler->callNative( (void *)xorVariantInt, gotVal, sJitTemp2.as(jtInt)); compiler->checkException(); break;
+               case aoShl: compiler->callNative( (void *)shlVariantInt, gotVal, sJitTemp2.as(jtInt)); compiler->checkException(); break;
+               case aoShr: compiler->callNative( (void *)shrVariantInt, gotVal, sJitTemp2.as(jtInt)); compiler->checkException(); break;
+               case aoUShr: compiler->callNative( (void *)ushrVariantInt, gotVal, sJitTemp2.as(jtInt)); compiler->checkException(); break;
                default: ;
             }
          }
@@ -3147,10 +3176,12 @@ struct FieldByName : public CppiaDynamicExpr
          if (ret)
          {
             compiler->callNative( (void *)setFieldVariant, objSrc, (void *)&name, gotVal );
+            compiler->checkException();
             compiler->genVariantValueTemp0(0, inDest, destType);
          }
          else
             compiler->callNative( (void *)setFieldVariantV, objSrc, (void *)&name, gotVal );
+            compiler->checkException();
       }
    }
    #endif
@@ -3940,7 +3971,10 @@ static hx::Object * SLJIT_CALL dynamicCatString(hx::Object *inLeft, String *inRi
 
 static hx::Object * SLJIT_CALL dynamicCatDynamic(hx::Object *inLeft, hx::Object *inRight)
 {
+   TRY_NATIVE
    return ( Dynamic(inLeft) + Dynamic(inRight) ).mPtr;
+   CATCH_NATIVE
+   return 0;
 }
 
 static int SLJIT_CALL modIntFloat(int inI, double *inMod)
@@ -4058,6 +4092,7 @@ void genSetter(CppiaCompiler *compiler, const JitVal &ioValue, ExprType exprType
             {
                inExpr->genCode(compiler, sJitArg1, etObject);
                compiler->callNative((void *)dynamicCatDynamic, ioValue, sJitArg1.as(jtPointer) );
+               compiler->checkException();
             }
             compiler->move(ioValue, sJitReturnReg.as(jtPointer) );
          }
@@ -4458,81 +4493,113 @@ static double sMinusOne = -1.0;
 
 static void SLJIT_CALL objDec(hx::Object **ioVal)
 {
+   TRY_NATIVE
    JitStore(ioVal, (Dynamic(JitLoad(ioVal))-1).mPtr);
+   CATCH_NATIVE
 }
 static void SLJIT_CALL objInc(hx::Object **ioVal)
 {
+   TRY_NATIVE
    JitStore(ioVal, (Dynamic(JitLoad(ioVal))+1).mPtr);
+   CATCH_NATIVE
 }
 
 static hx::Object * SLJIT_CALL objPostInc(hx::Object **ioVal)
 {
+   TRY_NATIVE
    hx::Object *result = JitLoad(ioVal);
    JitStore(ioVal, (Dynamic(JitLoad(ioVal))+1).mPtr);
    return result;
+   CATCH_NATIVE
+   return 0;
 }
 static hx::Object * SLJIT_CALL objPostDec(hx::Object **ioVal)
 {
+   TRY_NATIVE
    hx::Object *result = JitLoad(ioVal);
    JitStore(ioVal, (Dynamic(JitLoad(ioVal))-1).mPtr);
    return result;
+   CATCH_NATIVE
+   return 0;
 }
 
 static hx::Object * SLJIT_CALL objPreInc(hx::Object **ioVal)
 {
+   TRY_NATIVE
    JitStore(ioVal, (Dynamic(JitLoad(ioVal))+1).mPtr);
    return JitLoad(ioVal);
+   CATCH_NATIVE
+   return 0;
 }
 static hx::Object * SLJIT_CALL objPreDec(hx::Object **ioVal)
 {
+   TRY_NATIVE
    JitStore(ioVal, (Dynamic(JitLoad(ioVal))-1).mPtr);
    return JitLoad(ioVal);
+   CATCH_NATIVE
+   return 0;
 }
 
 #ifdef HXCPP_GC_GENERATIONAL
 static void SLJIT_CALL objDecWb(hx::Object *inObj,int inOffset)
 {
+   TRY_NATIVE
    hx::Object ** ioVal = (hx::Object **)( (char *)inObj + inOffset );
    *ioVal = (Dynamic(*ioVal)-1).mPtr;
    HX_OBJ_WB_GET(inObj, *ioVal);
+   CATCH_NATIVE
 }
 static void SLJIT_CALL objIncWb(hx::Object *inObj,int inOffset)
 {
+   TRY_NATIVE
    hx::Object ** ioVal = (hx::Object **)( (char *)inObj + inOffset );
    *ioVal = (Dynamic(*ioVal)+1).mPtr;
    HX_OBJ_WB_GET(inObj, *ioVal);
+   CATCH_NATIVE
 }
 
 static hx::Object * SLJIT_CALL objPostIncWb(hx::Object *inObj,int inOffset)
 {
+   TRY_NATIVE
    hx::Object ** ioVal = (hx::Object **)( (char *)inObj + inOffset );
    hx::Object *result = *ioVal;
    *ioVal = (Dynamic(result)+1).mPtr;
    HX_OBJ_WB_GET(inObj, *ioVal);
    return result;
+   CATCH_NATIVE
+   return 0;
 }
 static hx::Object * SLJIT_CALL objPostDecWb(hx::Object *inObj,int inOffset)
 {
+   TRY_NATIVE
    hx::Object ** ioVal = (hx::Object **)( (char *)inObj + inOffset );
    hx::Object *result = *ioVal;
    *ioVal = (Dynamic(result)-1).mPtr;
    HX_OBJ_WB_GET(inObj, *ioVal);
    return result;
+   CATCH_NATIVE
+   return 0;
 }
 
 static hx::Object * SLJIT_CALL objPreIncWb(hx::Object *inObj,int inOffset)
 {
+   TRY_NATIVE
    hx::Object ** ioVal = (hx::Object **)( (char *)inObj + inOffset );
    *ioVal = (Dynamic(*ioVal)+1).mPtr;
    HX_OBJ_WB_GET(inObj, *ioVal);
    return *ioVal;
+   CATCH_NATIVE
+   return 0;
 }
 static hx::Object * SLJIT_CALL objPreDecWb(hx::Object *inObj,int inOffset)
 {
+   TRY_NATIVE
    hx::Object ** ioVal = (hx::Object **)( (char *)inObj + inOffset );
    *ioVal = (Dynamic(*ioVal)-1).mPtr;
    HX_OBJ_WB_GET(inObj, *ioVal);
    return *ioVal;
+   CATCH_NATIVE
+   return 0;
 }
 
 #endif
@@ -4721,6 +4788,7 @@ struct MemReferenceCrement : public CppiaExpr
                if ( inDest.type==jtVoid)
                {
                   compiler->callNative( diff<0 ? (void *)objDecWb : (void *)objIncWb, obj, offset );
+                  compiler->checkException();
                }
                else
                {
@@ -4734,6 +4802,7 @@ struct MemReferenceCrement : public CppiaExpr
                      default: ;
                   }
                   compiler->callNative(func, obj, offset);
+                  compiler->checkException();
                   compiler->convertReturnReg( etObject, inDest, destType );
                }
 
@@ -4746,6 +4815,7 @@ struct MemReferenceCrement : public CppiaExpr
                if ( inDest.type==jtVoid)
                {
                   compiler->callNative( diff<0 ? (void *)objDec : (void *)objInc, ioPtr );
+                  compiler->checkException();
                }
                else
                {
@@ -4759,6 +4829,7 @@ struct MemReferenceCrement : public CppiaExpr
                      default: ;
                   }
                   compiler->callNative(func, ioPtr);
+                  compiler->checkException();
                   compiler->convertReturnReg( etObject, inDest, destType );
                }
             }
@@ -5622,54 +5693,76 @@ struct ArrayDef : public CppiaDynamicExpr
 #ifdef CPPIA_JIT
    hx::Object * SLJIT_CALL getItem(hx::Object *inObj, int inIndex)
    {
+      TRY_NATIVE
       return (inObj->__GetItem(inIndex)).mPtr;
+      CATCH_NATIVE
+      return 0;
    }
 
    void SLJIT_CALL incItem(hx::Object *inObj, int inIndex)
    {
+   TRY_NATIVE
       inObj->__SetItem( inIndex, inObj->__GetItem(inIndex) + 1 );
-   }
+   CATCH_NATIVE
+}
 
    void SLJIT_CALL decItem(hx::Object *inObj, int inIndex)
    {
+   TRY_NATIVE
       inObj->__SetItem( inIndex, inObj->__GetItem(inIndex) - 1 );
-   }
+   CATCH_NATIVE
+}
 
    hx::Object * SLJIT_CALL preIncItem(hx::Object *inObj, int inIndex)
    {
+   TRY_NATIVE
       Dynamic val = inObj->__GetItem(inIndex) +1;
       inObj->__SetItem( inIndex, val );
       return val.mPtr;
-   }
+   CATCH_NATIVE
+   return 0;
+}
 
    hx::Object * SLJIT_CALL postIncItem(hx::Object *inObj, int inIndex)
    {
+   TRY_NATIVE
       Dynamic val = inObj->__GetItem(inIndex);
       inObj->__SetItem( inIndex, val + 1 );
       return val.mPtr;
-   }
+   CATCH_NATIVE
+   return 0;
+}
 
    hx::Object * SLJIT_CALL setDynamicI(hx::Object *inObj, int inIndex, hx::Object *inValue)
    {
+   TRY_NATIVE
       inObj->__SetItem(  inIndex, inValue );
       return inValue;
-   }
+   CATCH_NATIVE
+   return 0;
+}
 
 
 
    hx::Object * SLJIT_CALL preDecItem(hx::Object *inObj, int inIndex)
    {
+   TRY_NATIVE
       Dynamic val = inObj->__GetItem(inIndex) - 1;
       inObj->__SetItem( inIndex, val );
       return val.mPtr;
-   }
+   CATCH_NATIVE
+   return 0;
+}
 
    hx::Object * SLJIT_CALL postDecItem(hx::Object *inObj, int inIndex)
    {
+   TRY_NATIVE
       Dynamic val = inObj->__GetItem(inIndex);
       inObj->__SetItem( inIndex, val -  1 );
       return val.mPtr;
-   }
+   CATCH_NATIVE
+   return 0;
+}
 
    struct DynIndexArgs
    {
@@ -5683,17 +5776,23 @@ struct ArrayDef : public CppiaDynamicExpr
    #define DynIndexFunc(name, OP) \
       hx::Object * SLJIT_CALL name(hx::Object *inObj, DynIndexArgs *args) \
       { \
+         TRY_NATIVE \
          Dynamic result = Dynamic(args->lvalue.obj) OP ; \
          inObj->__SetItem( args->index.ival, result); \
          return result.mPtr; \
+         CATCH_NATIVE \
+         return 0; \
       }
 
    #define DynIndexIntFunc(name, OP) \
       hx::Object * SLJIT_CALL name(hx::Object *inObj, DynIndexArgs *args) \
       { \
+         TRY_NATIVE \
          Dynamic result = ((int)Dynamic(args->lvalue.obj)) OP ; \
          inObj->__SetItem( args->index.ival, result); \
          return result.mPtr; \
+         CATCH_NATIVE \
+         return 0; \
       }
 
 
@@ -5704,10 +5803,13 @@ struct ArrayDef : public CppiaDynamicExpr
 
    hx::Object * SLJIT_CALL dynMod(hx::Object *inObj, DynIndexArgs *args)
    {
+   TRY_NATIVE
       Dynamic result = hx::Mod( Dynamic(args->lvalue.obj), args->rvalue.dval );
       inObj->__SetItem( args->index.ival, result);
       return result.mPtr;
-   }
+   CATCH_NATIVE
+   return 0;
+}
 
    DynIndexIntFunc(dynAnd, & args->rvalue.ival );
    DynIndexIntFunc(dynOr, | args->rvalue.ival );
@@ -5717,10 +5819,13 @@ struct ArrayDef : public CppiaDynamicExpr
 
    hx::Object * SLJIT_CALL dynUShr(hx::Object *inObj, DynIndexArgs *args)
    {
+   TRY_NATIVE
       Dynamic result = hx::UShr( Dynamic(args->lvalue.obj), args->rvalue.ival );
       inObj->__SetItem( args->index.ival, result);
       return result.mPtr;
-   }
+   CATCH_NATIVE
+   return 0;
+}
 
 
 #endif
@@ -5821,6 +5926,7 @@ struct DynamicArrayI : public CppiaDynamicExpr
       {
          index->genCode(compiler, sJitTemp1, etInt);
          compiler->callNative( (void *)getItem, obj, sJitTemp1.as(jtInt) );
+         compiler->checkException();
          compiler->convertReturnReg(etObject, inDest, destType);
          return;
       }
@@ -5831,6 +5937,7 @@ struct DynamicArrayI : public CppiaDynamicExpr
          {
             compiler->callNative( crement==coPostInc || crement==coPostInc ? (void *)incItem : (void *)decItem,
                obj, sJitTemp1.as(jtInt) );
+            compiler->checkException();
          }
          else
          {
@@ -5847,6 +5954,7 @@ struct DynamicArrayI : public CppiaDynamicExpr
                throw "Bad crement in DynamicArrayI";
 
             compiler->callNative( func, obj, sJitTemp1.as(jtInt) );
+            compiler->checkException();
             compiler->convertReturnReg(etObject, inDest, destType );
          }
          return;
@@ -5859,6 +5967,7 @@ struct DynamicArrayI : public CppiaDynamicExpr
 
          value->genCode(compiler, sJitTemp2, etObject);
          compiler->callNative( (void *)setDynamicI, obj, idx, sJitTemp2);
+         compiler->checkException();
          compiler->convertReturnReg(etObject, inDest, destType );
          return;
       }
@@ -5871,6 +5980,7 @@ struct DynamicArrayI : public CppiaDynamicExpr
       compiler->move(argsBuf.arg(0,etInt), sJitTemp1);
 
       compiler->callNative( (void *)getItem, obj, sJitTemp1.as(jtInt) );
+      compiler->checkException();
 
       compiler->move( argsBuf.arg(1,jtPointer), sJitReturnReg.as(jtPointer));
 
@@ -5905,6 +6015,7 @@ struct DynamicArrayI : public CppiaDynamicExpr
       if (!func)
          throw "Bad set in DynamicArrayI";
       compiler->callNative( func, obj, argsBuf );
+      compiler->checkException();
 
       compiler->convertReturnReg(etObject, inDest, destType);
    }
@@ -6168,25 +6279,34 @@ struct ArrayAccessI : public CppiaDynamicExpr
    // args: this expression, the object, the index, the operand, the value read
    static hx::Object * SLJIT_CALL jitGet(JitMultiArg *args)
    {
+      TRY_NATIVE
       ArrayAccessI *expr = (ArrayAccessI *)JitArg(args,0).obj;
       return expr->callGet(CppiaCtx::getCurrent(), JitArg(args,1).obj, JitArg(args,2).ival).mPtr;
+      CATCH_NATIVE
+      return 0;
    }
 
    static hx::Object * SLJIT_CALL jitSet(JitMultiArg *args)
    {
+   TRY_NATIVE
       ArrayAccessI *expr = (ArrayAccessI *)JitArg(args,0).obj;
       expr->callSet(CppiaCtx::getCurrent(), JitArg(args,1).obj, JitArg(args,2).ival, JitArg(args,3).obj);
       return JitArg(args,3).obj;
-   }
+   CATCH_NATIVE
+   return 0;
+}
 
    static hx::Object * SLJIT_CALL jitUpdate(JitMultiArg *args)
    {
+   TRY_NATIVE
       ArrayAccessI *expr = (ArrayAccessI *)JitArg(args,0).obj;
       Dynamic before = JitArg(args,4).obj;
       Dynamic after = expr->update(before, JitArg(args,3).obj);
       expr->callSet(CppiaCtx::getCurrent(), JitArg(args,1).obj, JitArg(args,2).ival, after);
       return expr->crement==coPostInc || expr->crement==coPostDec ? before.mPtr : after.mPtr;
-   }
+   CATCH_NATIVE
+   return 0;
+}
 
    void genCode(CppiaCompiler *compiler, const JitVal &inDest, ExprType destType) HXCPP_OVERRIDE
    {
@@ -6200,21 +6320,27 @@ struct ArrayAccessI : public CppiaDynamicExpr
       index->genCode(compiler, args.arg(2,jtInt), etInt);
 
       if (crement==coNone && assign==aoNone)
+      {
          compiler->callNative((void *)jitGet, args);
+         compiler->checkException();
+      }
       else if (crement==coNone && assign==aoSet)
       {
          value->genCode(compiler, args.arg(3,jtPointer), etObject);
          compiler->callNative((void *)jitSet, args);
+         compiler->checkException();
       }
       else
       {
          compiler->callNative((void *)jitGet, args);
+         compiler->checkException();
          compiler->move(args.arg(4,jtPointer), sJitReturnReg.as(jtPointer));
          if (crement==coNone)
             value->genCode(compiler, args.arg(3,jtPointer), etObject);
          else
             compiler->move(args.arg(3,jtPointer), JitVal((void *)0));
          compiler->callNative((void *)jitUpdate, args);
+         compiler->checkException();
       }
 
       if (destType!=etVoid && destType!=etNull)

@@ -95,8 +95,11 @@ inline JitType elem4JitType() { return ExprTypeOf<ELEM>::value==etFloat ? jtFloa
 
 static ArrayBase * SLJIT_CALL array_expand_size(ArrayBase *inArray, int inSize)
 {
+   TRY_NATIVE
    inArray->Realloc(inSize+1);
    return inArray;
+   CATCH_NATIVE
+   return 0;
 }
 
 // blit, __SetSizeExact and resize throw for a range or size the array cannot
@@ -235,6 +238,7 @@ struct ArraySetter : public ArrayBuiltinBase
 
    static void * SLJIT_CALL nativeRunInt(JitMultiArg *args)
    {
+   TRY_NATIVE
       Array_obj<ELEM> *thisVal = reinterpret_cast<Array_obj<ELEM> *>(JitArg(args,0).obj);
       ELEM &elem = thisVal->Item( JitArg(args,1).ival );
       JitMultiArg arg2 = JitArg(args,2);
@@ -244,10 +248,13 @@ struct ArraySetter : public ArrayBuiltinBase
          HX_OBJ_WB_GET(thisVal,hx::PointerOf(elem));
       #endif
       return &elem;
-   }
+   CATCH_NATIVE
+   return 0;
+}
 
    static void * SLJIT_CALL nativeRunFloat(JitMultiArg *args)
    {
+   TRY_NATIVE
       Array_obj<ELEM> *thisVal = reinterpret_cast<Array_obj<ELEM> *>(JitArg(args,0).obj);
       ELEM &elem = thisVal->Item( JitArg(args,1).ival );
       JitMultiArg arg2 = JitArg(args,2);
@@ -257,10 +264,13 @@ struct ArraySetter : public ArrayBuiltinBase
          HX_OBJ_WB_GET(thisVal,hx::PointerOf(elem));
       #endif
       return &elem;
-   }
+   CATCH_NATIVE
+   return 0;
+}
 
    static void * SLJIT_CALL nativeRunObject(JitMultiArg *args)
    {
+   TRY_NATIVE
       Array_obj<ELEM> *thisVal = reinterpret_cast<Array_obj<ELEM> *>(JitArg(args,0).obj);
       ELEM &elem = thisVal->Item( JitArg(args,1).ival );
       Dynamic obj(JitArg(args,2).obj);
@@ -270,10 +280,13 @@ struct ArraySetter : public ArrayBuiltinBase
          HX_OBJ_WB_GET(thisVal,hx::PointerOf(elem));
       #endif
       return &elem;
-   }
+   CATCH_NATIVE
+   return 0;
+}
 
    static void * SLJIT_CALL nativeRunString(JitMultiArg *args)
    {
+   TRY_NATIVE
       Array_obj<ELEM> *thisVal = reinterpret_cast<Array_obj<ELEM> *>(JitArg(args,0).obj);
       ELEM &elem = thisVal->Item( JitArg(args,1).ival );
       JitMultiArg arg2 = JitArg(args,2);
@@ -283,7 +296,9 @@ struct ArraySetter : public ArrayBuiltinBase
          HX_OBJ_WB_GET(thisVal,hx::PointerOf(elem));
       #endif
       return &elem;
-   }
+   CATCH_NATIVE
+   return 0;
+}
 
 
    void genCode(CppiaCompiler *compiler, const JitVal &inDest, ExprType destType) HXCPP_OVERRIDE
@@ -352,6 +367,7 @@ struct ArraySetter : public ArrayBuiltinBase
                                             sJitTemp0.star(jtInt, ArrayBase::allocOffset()) );
          // Make some room
          compiler->callNative( (void *)array_expand_size,  sJitTemp0.as(jtPointer), sJitTemp1.as(jtInt) );
+         compiler->checkException();
          // sJitTemp0 is still this, restore length...
          compiler->move( sJitTemp1,index);
 
@@ -434,15 +450,19 @@ struct ArraySetter : public ArrayBuiltinBase
          {
             case etInt:
                compiler->callNative( (void *)nativeRunInt, margs );
+               compiler->checkException();
                break;
             case etFloat:
                compiler->callNative( (void *)nativeRunFloat, margs );
+               compiler->checkException();
                break;
             case etString:
                compiler->callNative( (void *)nativeRunString, margs );
+               compiler->checkException();
                break;
             case etObject:
                compiler->callNative( (void *)nativeRunObject, margs );
+               compiler->checkException();
                break;
             default:
                throw "Bad array set type";
@@ -1173,8 +1193,11 @@ struct ArrayBuiltin : public ArrayBuiltinBase
    #ifdef CPPIA_JIT
    static ArrayBase * SLJIT_CALL array_expand(ArrayBase *inArray)
    {
+      TRY_NATIVE
       inArray->Realloc( inArray->length + 1 );
       return inArray;
+      CATCH_NATIVE
+      return 0;
    }
    static void SLJIT_CALL runSort( Array_obj<ELEM> *inArray, hx::Object *inFunc)
    {
@@ -1191,16 +1214,19 @@ struct ArrayBuiltin : public ArrayBuiltinBase
 
    static void SLJIT_CALL runElem( Array_obj<ELEM> *inArray, int inIndex)
    {
+   TRY_NATIVE
       ELEM &t = Array<ELEM>(inArray)[inIndex];
       CREMENT::run(t);
       #ifdef HXCPP_GC_GENERATIONAL
       if (hx::ContainsPointers<ELEM>())
          HX_OBJ_WB_GET(inArray,hx::PointerOf(t));
       #endif
-   }
+   CATCH_NATIVE
+}
 
    static int SLJIT_CALL runIntCrement( Array_obj<ELEM> *inArray, int inIndex)
    {
+   TRY_NATIVE
       ELEM &t = Array<ELEM>(inArray)[inIndex];
       int result =  ValToInt( CREMENT::run(t) );
       #ifdef HXCPP_GC_GENERATIONAL
@@ -1208,21 +1234,25 @@ struct ArrayBuiltin : public ArrayBuiltinBase
          HX_OBJ_WB_GET(inArray,hx::PointerOf(t));
       #endif
       return result;
-   }
+   CATCH_NATIVE
+   return 0;
+}
 
    static void SLJIT_CALL runFloatCrement( Array_obj<ELEM> *inArray, int inIndex, double *d)
    {
+   TRY_NATIVE
       ELEM &t = Array<ELEM>(inArray)[inIndex];
       JitStore(d, ValToFloat( CREMENT::run(t) ));
       #ifdef HXCPP_GC_GENERATIONAL
       if (hx::ContainsPointers<ELEM>())
          HX_OBJ_WB_GET(inArray,hx::PointerOf(t));
       #endif
-
-   }
+   CATCH_NATIVE
+}
 
    static hx::Object * SLJIT_CALL runObjCrement( Array_obj<ELEM> *inArray, int inIndex)
    {
+   TRY_NATIVE
       ELEM &t = Array<ELEM>(inArray)[inIndex];
       Dynamic result( CREMENT::run(t) );
       #ifdef HXCPP_GC_GENERATIONAL
@@ -1230,7 +1260,9 @@ struct ArrayBuiltin : public ArrayBuiltinBase
          HX_OBJ_WB_GET(inArray,hx::PointerOf(t));
       #endif
       return result.mPtr;
-   }
+   CATCH_NATIVE
+   return 0;
+}
 
    static int SLJIT_CALL runContains( Array_obj<ELEM> *inArray, typename ExprBaseTypeOf<ELEM>::Base inBase)
    {
@@ -1372,6 +1404,7 @@ struct ArrayBuiltin : public ArrayBuiltinBase
                                                              sJitTemp0.star(jtInt, ArrayBase::allocOffset()) );
 
                compiler->callNative( (void *)array_expand,  sJitTemp0 );
+               compiler->checkException();
                compiler->comeFrom(enough);
 
                // sJitTemp1 = this
@@ -1470,6 +1503,7 @@ struct ArrayBuiltin : public ArrayBuiltinBase
 
                   // result comes back in sJitTemp0
                   compiler->callNative( (void *)array_expand_size,  sJitTemp0, sJitTemp1 );
+                  compiler->checkException();
                   // but need to reload sJitTemp1
                   compiler->move(sJitTemp1.as(jtInt), index);
 
@@ -1989,10 +2023,12 @@ struct ArrayBuiltin : public ArrayBuiltinBase
                if (destType==etVoid || destType==etNull)
                {
                   compiler->callNative( (void *)runElem, thisVal, sJitTemp1 );
+                  compiler->checkException();
                }
                else if (destType==etInt)
                {
                   compiler->callNative( (void *)runIntCrement, thisVal, sJitTemp1 );
+                  compiler->checkException();
                   compiler->move( inDest.as(jtInt), sJitReturnReg.as(jtInt) );
                }
                else if (destType==etFloat)
@@ -2001,12 +2037,14 @@ struct ArrayBuiltin : public ArrayBuiltinBase
                   JitVal dVal = isMemoryVal(inDest) ? inDest : tempFloat;
                   // The result goes where dVal is: a float in memory is passed by address
                   compiler->callNative( (void *)runFloatCrement, thisVal, sJitTemp1, dVal.as(jtFloat) );
+                  compiler->checkException();
                   if (!isMemoryVal(inDest))
                      compiler->move(inDest.as(jtFloat), tempFloat);
                }
                else
                {
                   compiler->callNative( (void *)runObjCrement, thisVal, sJitTemp1 );
+                  compiler->checkException();
                   compiler->convertReturnReg(etObject, inDest, destType);
                }
             }
