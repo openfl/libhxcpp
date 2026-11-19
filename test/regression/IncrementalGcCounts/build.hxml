@@ -1,0 +1,4 @@
+-m Main
+--cpp bin
+-debug
+-D DEBUGSUFFIX=

@@ -495,11 +495,14 @@ jobs:
         working-directory: test/regression
         run: |
           failed=""
-          for test in GcMutationRoots GcContainerMutation IncrementalGcSlices IncrementalGcContainers IncrementalGcArrayChunks IncrementalGcDequeMoves IncrementalGcPacing IncrementalGcStartSweep IncrementalGcStats IncrementalGcFinishBoundary IncrementalGcVerifier IncrementalWindowsHeaders GcWeakMapChain GcWeakMapWalkCollect GenerationalFinalizerLifecycle GenerationalLargeBufferLifecycle; do
+          for test in GcMutationRoots GcContainerMutation IncrementalGcSlices IncrementalGcContainers IncrementalGcArrayChunks IncrementalGcDequeMoves IncrementalGcPacing IncrementalGcStartSweep IncrementalGcStats IncrementalGcFinishBoundary IncrementalGcVerifier IncrementalGcCounts IncrementalWindowsHeaders GcWeakMapChain GcWeakMapWalkCollect GenerationalFinalizerLifecycle GenerationalLargeBufferLifecycle; do
             echo "::group::incremental gc: $test"
             # The lifecycle fixtures' hxml selects generational mode; compile
-            # the same Main with incremental mode here instead.
-            if ! (cd "$test" && haxe -main Main -cpp bin -lib hxcpp -D HXCPP_GC_INCREMENTAL -D HXCPP_GC_INCREMENTAL_VERIFY -D HXCPP_GC_INCREMENTAL_TEST -D $HXCPP_ARCH_FLAG && bin/Main > out.txt && diff <(tr -d '\r' < stdout.txt) <(tr -d '\r' < out.txt)); then
+            # the same Main with incremental mode here instead. Gc.trace, which
+            # IncrementalGcCounts checks, counts in debug builds only.
+            extra=""
+            [ "$test" = IncrementalGcCounts ] && extra="-debug -D DEBUGSUFFIX="
+            if ! (cd "$test" && haxe -main Main -cpp bin -lib hxcpp -D HXCPP_GC_INCREMENTAL -D HXCPP_GC_INCREMENTAL_VERIFY -D HXCPP_GC_INCREMENTAL_TEST -D $HXCPP_ARCH_FLAG $extra && bin/Main > out.txt && diff <(tr -d '\r' < stdout.txt) <(tr -d '\r' < out.txt)); then
               failed="$failed $test"
               echo "::error::incremental gc failed: $test"
             fi

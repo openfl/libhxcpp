@@ -1,0 +1,3 @@
+pointers 40 bytes in, wrong: 0 of 2000
+pointers 400 bytes in, wrong: 0 of 2000
+pointer 200 KB into a large array: right

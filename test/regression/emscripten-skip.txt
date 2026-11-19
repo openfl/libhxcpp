@@ -26,6 +26,7 @@ CppiaModuleFree: threads
 CppiaModuleRetained: threads
 CppiaNullDynamicArray: its host is the first --next section, which -D emscripten does not reach, and it runs the script under the JIT too, and Emscripten has no cppia JIT
 CppiaStackSize: threads (std::thread, which needs a pthreads build)
+CppiaThreadedLookups: threads
 DateTimezoneCache: Emscripten takes the local zone from JavaScript and ignores TZ
 ExitWithBusyWorker: processes and threads
 FileFinalizerFlush: threads (std::thread, which needs a pthreads build)
@@ -33,6 +34,7 @@ FinalizerExceptionState: threads (std::thread, which needs a pthreads build)
 FinalizersAcrossFreeZones: threads
 GcConcurrentCensus: threads (std::thread, which needs a pthreads build)
 GcFinalizerPromotion: threads (std::thread, which needs a pthreads build)
+GcFreeZoneLeafNatives: threads and processes
 GcFreeZoneNestedGuard: single-threaded Emscripten builds have no GC-free zones, so a guard enters none
 GcFreeZoneThreadWaits: threads
 GcHeapGrows: expects the desktop 20 MB working target; other platforms, Emscripten included, use 8 MB
