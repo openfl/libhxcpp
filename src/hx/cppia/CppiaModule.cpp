@@ -1327,10 +1327,40 @@ static std::string slotDifference(const char *inWhat, CppiaClassInfo *inFrom, st
          return std::string(inWhat) + " " + name + " is not in the new class";
       if (name!=inTo->cppia.identStr(inNew[i]->nameId))
          return std::string(inWhat) + " " + name + " is not where it was";
-      if (inOld[i]->storeType!=inNew[i]->storeType || inOld[i]->offset!=inNew[i]->offset)
+      if (inOld[i]->storeType!=inNew[i]->storeType || inOld[i]->offset!=inNew[i]->offset ||
+          typeName(inFrom->cppia.types[inOld[i]->typeId])!=typeName(inTo->cppia.types[inNew[i]->typeId]))
          return std::string(inWhat) + " " + name + " changed its type";
    }
    return std::string();
+}
+
+// The first method of a class, its super classes' included, that is not in the
+//  same vtable slot in both. A call's slot is fixed when its code links, so old
+//  code still running would call a moved instance by its old slots, reaching
+//  another method or reading its return as another type (libhxcpp #464)
+static std::string methodDifference(CppiaClassInfo *inFrom, CppiaClassInfo *inTo)
+{
+   if (inFrom->memberFunctions.size()!=inTo->memberFunctions.size())
+      return "its methods are not the same";
+   for(size_t i=0;i<inFrom->memberFunctions.size();i++)
+      if (inFrom->memberFunctions[i]->name!=inTo->memberFunctions[i]->name ||
+          inFrom->memberFunctions[i]->vtableSlot!=inTo->memberFunctions[i]->vtableSlot)
+         return "method " + inFrom->memberFunctions[i]->name + " is not where it was";
+   return std::string();
+}
+
+// The script interfaces a class implements, by name, with their class info
+static std::map<std::string, CppiaClassInfo *> scriptInterfaces(CppiaClassInfo *inInfo)
+{
+   std::map<std::string, CppiaClassInfo *> result;
+   for(CppiaClassInfo *info=inInfo; info; info=info->superType ? info->superType->cppiaClass : 0)
+      for(size_t i=0;i<info->implements.size();i++)
+      {
+         TypeData *type = info->cppia.types[info->implements[i]];
+         if (type->cppiaClass)
+            result[typeName(type)] = type->cppiaClass;
+      }
+   return result;
 }
 
 // Why instances of inFrom cannot become instances of inTo, or empty when they can
@@ -1357,6 +1387,17 @@ static std::string incompatibility(CppiaClassInfo *inFrom, CppiaClassInfo *inTo)
    if (inFrom->classSize!=inTo->classSize || inFrom->extraData!=inTo->extraData ||
        inFrom->dynamicMapOffset!=inTo->dynamicMapOffset || inFrom->containsPointers!=inTo->containsPointers)
       return "its instances are laid out otherwise";
+   std::string method = methodDifference(inFrom, inTo);
+   if (!method.empty())
+      return method;
+   std::map<std::string, CppiaClassInfo *> fromInterfaces = scriptInterfaces(inFrom);
+   std::map<std::string, CppiaClassInfo *> toInterfaces = scriptInterfaces(inTo);
+   for(std::map<std::string, CppiaClassInfo *>::iterator i=fromInterfaces.begin(); i!=fromInterfaces.end(); ++i)
+   {
+      std::map<std::string, CppiaClassInfo *>::iterator other = toInterfaces.find(i->first);
+      if (other==toInterfaces.end() || !methodDifference(i->second, other->second).empty())
+         return "interface " + i->first + " changed its methods";
+   }
    return std::string();
 }
 
@@ -1400,6 +1441,34 @@ static Array<Dynamic> adoptInstances(CppiaModule *inNext, CppiaModule *inPreviou
          adoption.reason = incompatibility(info, to);
          if (adoption.reason.empty())
             adoption.to = to;
+      }
+   }
+
+   // New code reads a moved instance's fields with the new classes' layouts,
+   //  so a field that can hold an instance staying in the old class, whose
+   //  layout changed, would be read wrongly: the class holding it stays too,
+   //  until nothing changes (libhxcpp #464)
+   for(bool changed=true; changed; )
+   {
+      changed = false;
+      for(std::map<CppiaClassInfo *, Adoption>::iterator i=adoptions.begin(); i!=adoptions.end(); ++i)
+      {
+         if (!i->second.to)
+            continue;
+         std::vector<CppiaVar *> &vars = i->first->memberVars;
+         for(size_t v=0;v<vars.size();v++)
+         {
+            CppiaClassInfo *held = i->first->cppia.types[vars[v]->typeId]->cppiaClass;
+            std::map<CppiaClassInfo *, Adoption>::iterator heldAdoption = held ? adoptions.find(held) : adoptions.end();
+            if (heldAdoption!=adoptions.end() && !heldAdoption->second.to)
+            {
+               i->second.to = 0;
+               i->second.reason = std::string("field ") + i->first->cppia.identStr(vars[v]->nameId) + " can hold a " +
+                                  held->name + ", which stays in the old class";
+               changed = true;
+               break;
+            }
+         }
       }
    }
 
