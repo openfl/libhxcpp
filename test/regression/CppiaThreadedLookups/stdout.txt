@@ -1,0 +1,2 @@
+2000 script objects asked about 8 host interfaces on 8 threads: 0 wrong
+the module loaded on 8 threads at once: 0 failed

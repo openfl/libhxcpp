@@ -1,0 +1,8 @@
+--main Script
+--macro Gen.classes(2000)
+-cppia bin/script.cppia
+--next
+--main Main
+-cpp bin
+-D scriptable
+--dce no
