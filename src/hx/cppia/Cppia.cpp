@@ -3536,6 +3536,10 @@ struct CallMember : public CppiaExpr
          //  malformed file calls one where neither has any
          if (!type->cppiaClass->newFunc)
             throw "Super constructor call on a class with no constructor";
+         // A class's constructor calls its own super class's. Any other script
+         //  class's ran on an instance laid out for this one, past its end
+         if (inModule.linkingClass && classId!=inModule.linkingClass->superId)
+            throw "Super constructor call to a class that is not the super class";
          //CPPIALOG("Using cppia super %p %p\n", type->cppiaClass->newFunc, type->cppiaClass->newFunc->funExpr);
          CppiaExpr *replace = new CallFunExpr( this, 0, (ScriptCallable*)type->cppiaClass->newFunc->funExpr, args, true );
          replace->link(inModule);
@@ -5829,7 +5833,7 @@ struct DynamicArrayI : public CppiaDynamicExpr
          index->genCode(compiler, sJitTemp1, etInt);
          if (destType==etVoid || destType==etNull)
          {
-            compiler->callNative( crement==coPostInc || crement==coPostInc ? (void *)incItem : (void *)decItem,
+            compiler->callNative( crement==coPostInc || crement==coPreInc ? (void *)incItem : (void *)decItem,
                obj, sJitTemp1.as(jtInt) );
          }
          else
@@ -6301,11 +6305,13 @@ struct EnumIExpr : public CppiaDynamicExpr
    CppiaExpr *object;
    int       index;
    int       classId;
+   // Whether link bounded index by the enum's constructors
+   bool      indexChecked;
 
 
-   EnumIExpr(CppiaStream &stream)
+   EnumIExpr(CppiaStream &stream) : indexChecked(false)
    {
-      classId = stream.getInt();
+      classId = stream.getTypeId();
       index = stream.getInt();
       object = createCppiaExpr(stream);
    }
@@ -6313,6 +6319,18 @@ struct EnumIExpr : public CppiaDynamicExpr
    const char *getName() HXCPP_OVERRIDE { return "EnumIExpr"; }
    CppiaExpr *link(CppiaModule &inModule) HXCPP_OVERRIDE
    {
+      // An index from the file read past the enum value. A script enum's
+      //  largest constructor bounds it here, for the JIT, which reads the
+      //  parameter directly; the interpreter checks the value's own count
+      if (index<0)
+         throw "Bad enum index";
+      CppiaClassInfo *info = inModule.types[classId]->cppiaClass;
+      if (info && info->isEnum)
+      {
+         if (index>=info->mostEnumArgs())
+            throw "Bad enum index";
+         indexChecked = true;
+      }
       object = object->link(inModule);
       return this;
    }
@@ -6321,15 +6339,36 @@ struct EnumIExpr : public CppiaDynamicExpr
    {
       hx::Object *obj = object->runObject(ctx);
       BCR_CHECK;
-      return static_cast<EnumBase_obj *>(obj)->_hx_getParamI(index).mPtr;
+      EnumBase_obj *value = static_cast<EnumBase_obj *>(obj);
+      if (index>=value->_hx_getParamCount())
+         return 0;
+      return value->_hx_getParamI(index).mPtr;
    }
 
    #ifdef CPPIA_JIT
+   static hx::Object * SLJIT_CALL paramChecked(hx::Object *inValue, int inIndex)
+   {
+      EnumBase_obj *value = static_cast<EnumBase_obj *>(inValue);
+      if (!value || inIndex>=value->_hx_getParamCount())
+         return 0;
+      return value->_hx_getParamI(inIndex).mPtr;
+   }
+
    void genCode(CppiaCompiler *compiler, const JitVal &inDest, ExprType destType) HXCPP_OVERRIDE
    {
       object->genCode(compiler, sJitTemp0, etObject);
-      int offset = sizeof( EnumBase_obj ) + index*sizeof(cpp::Variant);
-      compiler->genVariantValueTemp0(offset, inDest, destType);
+      if (indexChecked)
+      {
+         int offset = sizeof( EnumBase_obj ) + index*sizeof(cpp::Variant);
+         compiler->genVariantValueTemp0(offset, inDest, destType);
+      }
+      else
+      {
+         // A host enum's constructors are not known here, so its value's own
+         //  count bounds the read, as in the interpreter
+         compiler->callNative( (void *)paramChecked, sJitTemp0.as(jtPointer), JitVal(index) );
+         compiler->convertReturnReg(etObject, inDest, destType);
+      }
    }
    #endif
 };

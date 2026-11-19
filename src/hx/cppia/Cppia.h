@@ -844,6 +844,8 @@ public:
    inline ScriptCallable *findStaticSetter(const String &inName)
       { return findFunction(staticSetters,inName); }
    CppiaEnumConstructor *findEnum(int inFieldId);
+   // The most arguments any of an enum's constructors takes
+   int mostEnumArgs();
    ExprType findFunctionType(CppiaModule &inModule, int inName);
    CppiaFunction *findVTableFunction(int inId);
    int findFunctionSlot(int inName);

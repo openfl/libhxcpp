@@ -14,6 +14,7 @@ CffiPrimeUnicodeFallback: loads an ndll it builds, and Emscripten links statical
 CffiQuietMissingPrimitive: loads an ndll it builds, and Emscripten links statically
 ConditionTimedWait: threads
 CppiaAdoptInstances: threads (std::thread, which needs a pthreads build)
+CppiaAdoptLayouts: compares the cppia JIT, which Emscripten has not
 CppiaArrayAccess: its host is the first --next section, which -D emscripten does not reach
 CppiaBreakpoints: threads
 CppiaHostArgs: processes
@@ -22,6 +23,7 @@ CppiaHostMismatch: its host is the first --next section, which -D emscripten doe
 CppiaJitBuiltins: threads
 CppiaJitThrowNull: its host is the first --next section, which -D emscripten does not reach
 CppiaLazyJit: threads, and Emscripten has no cppia JIT
+CppiaMalformedLoads: compares the cppia JIT, which Emscripten has not
 CppiaModuleFree: threads
 CppiaModuleRetained: threads
 CppiaNullDynamicArray: its host is the first --next section, which -D emscripten does not reach, and it runs the script under the JIT too, and Emscripten has no cppia JIT
