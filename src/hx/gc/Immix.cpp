@@ -8831,6 +8831,10 @@ public:
          #ifdef HXCPP_SCRIPTABLE
             MarkSetMember("ScriptStack",__inCtx);
             hx::MarkConservative((int *)(stack), (int *)(pointer),__inCtx);
+            // An exception a JIT helper caught waits here for the jitted code
+            //  to check for it, which it may do after allocating
+            if (exception)
+               hx::MarkConservativePointer(exception, __inCtx);
          #endif
          MarkSetMember("Registers",__inCtx);
          hx::MarkConservative(CAPTURE_REG_START, CAPTURE_REG_END, __inCtx);
@@ -8849,6 +8853,10 @@ public:
 
          #ifdef HXCPP_SCRIPTABLE
             hx::MarkConservative((int *)(stack), (int *)(pointer),__inCtx);
+            // An exception a JIT helper caught waits here for the jitted code
+            //  to check for it, which it may do after allocating
+            if (exception)
+               hx::MarkConservativePointer(exception, __inCtx);
          #endif
       #endif
 

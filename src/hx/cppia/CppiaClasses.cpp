@@ -502,6 +502,7 @@ struct EnumField : public CppiaDynamicExpr
          compiler->add(sJitCtxFrame, sJitFrame, compiler->getCurrentFrameSize());
 
          compiler->callNative((void *)createEnum,(void *)enumClass.mPtr,(void *)&enumName,(int)args.size() );
+         compiler->checkException();
 
          if (destType!=etVoid && destType!=etNull)
             compiler->convertResult( etObject, inDest, destType );
