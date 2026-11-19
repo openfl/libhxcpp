@@ -2136,18 +2136,27 @@ void YoungStore(hx::Object *inOwner, unsigned int &ioLogged, int inLength, const
    if (inCtx->mYoungValues && inLength>=YOUNG_LOG_MIN_LENGTH)
    {
       // Counted per cycle: the cycle is in the top 12 bits. A lost update
-      //  between threads only logs more than the limit
-      unsigned int logged = ioLogged;
+      //  between threads only logs more than the limit, so relaxed accesses
+      //  do, but plain ones were a data race
+      #if defined(__GNUC__) || defined(__clang__)
+      unsigned int logged = __atomic_load_n(&ioLogged, __ATOMIC_RELAXED);
+      #else
+      unsigned int logged = *(volatile unsigned int *)&ioLogged;
+      #endif
       unsigned int cycle = sCollectCycle & 0xfff;
       unsigned int count = (logged>>20)==cycle ? (logged & 0xfffff) : 0;
       unsigned int limit = std::min( (unsigned int)inLength>>5, 0xfffffu );
       if (count<limit)
       {
-         ioLogged = (cycle<<20) | (count+1);
+         #if defined(__GNUC__) || defined(__clang__)
+         __atomic_store_n(&ioLogged, (cycle<<20) | (count+1), __ATOMIC_RELAXED);
+         #else
+         *(volatile unsigned int *)&ioLogged = (cycle<<20) | (count+1);
+         #endif
          for(int v=0;v<inCount;v++)
          {
             const void *value = inValues[v];
-            if (!value || ((unsigned char *)value)[HX_ENDIAN_MARK_ID_BYTE])
+            if (!value || BarrierMarkByte(value))
                continue;
             MarkChunk *chunk = inCtx->mYoungValues;
             chunk->push( (hx::Object *)value );
@@ -2164,8 +2173,7 @@ void YoungStore(hx::Object *inOwner, unsigned int &ioLogged, int inLength, const
          return;
       }
    }
-   unsigned char &mark = ((unsigned char *)inOwner)[HX_ENDIAN_MARK_ID_BYTE];
-   mark |= HX_GC_REMEMBERED;
+   BarrierRemember(inOwner);
    inCtx->pushReferrer(inOwner);
 }
 
