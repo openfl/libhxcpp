@@ -189,6 +189,9 @@ void _hx_std_put_env( String e, String v )
    <doc>Sleep a given number of seconds</doc>
 **/
 
+// In a guard, which keeps a zone the caller entered, as with
+//  cpp.vm.Gc.enterGCFreeZone around a blocking call: a plain exit here ended it,
+//  and the caller's own exit then stopped the process (libhxcpp #457)
 void _hx_std_sys_sleep( double f )
 {
    // A negative duration sleeps for zero - the double->DWORD conversion on
@@ -198,7 +201,7 @@ void _hx_std_sys_sleep( double f )
    // and spin-wait loops rely on that to let other threads run.
    if (!(f > 0))
       f = 0;
-   hx::EnterGCFreeZone();
+   hx::AutoGCFreeZone zone;
 #if defined(NEKO_WINDOWS)
    // Sleep takes a DWORD of milliseconds, and 0xffffffff is INFINITE. A longer
    //  sleep, infinity included, converted to a short one or none, so it goes in
@@ -227,7 +230,6 @@ void _hx_std_sys_sleep( double f )
       {
          if( errno != EINTR )
          {
-            hx::ExitGCFreeZone();
             return;
          }
          t = tmp;
@@ -235,7 +237,6 @@ void _hx_std_sys_sleep( double f )
    }
    while (f > 0);
 #endif
-   hx::ExitGCFreeZone();
 }
 
 /**
@@ -392,6 +393,9 @@ bool _hx_std_sys_is64()
    sys_command : string -> int
    <doc>Run the shell command and return exit code</doc>
 **/
+// In a guard, which keeps a zone the caller entered, as with
+//  cpp.vm.Gc.enterGCFreeZone around a blocking call: a plain exit here ended it,
+//  and the caller's own exit then stopped the process (libhxcpp #457)
 int _hx_std_sys_command( String cmd )
 {
    #if defined(HX_WINRT) || defined(__EMSCRIPTEN__) || defined(EPPC) || defined(IPHONE) || defined(APPLETV) || defined(HX_APPLEWATCH)
@@ -402,7 +406,7 @@ int _hx_std_sys_command( String cmd )
 
 #ifdef NEKO_WINDOWS
    int result = 0;
-   hx::EnterGCFreeZone();
+   hx::AutoGCFreeZone zone;
 
    #ifdef HX_SMART_STRINGS
    if (!cmd.isUTF16Encoded())
@@ -415,10 +419,9 @@ int _hx_std_sys_command( String cmd )
    }
 #else
    hx::strbuf buf;
-   hx::EnterGCFreeZone();
+   hx::AutoGCFreeZone zone;
    int result = system(cmd.utf8_str(&buf));
 #endif
-   hx::ExitGCFreeZone();
 
    #if !defined(NEKO_WINDOWS)
    result = WEXITSTATUS(result) | (WTERMSIG(result) << 8);
@@ -1052,14 +1055,16 @@ Array<String> _hx_std_sys_env()
    sys_getch : bool -> int
    <doc>Read a character from stdin with or without echo</doc>
 **/
+// In a guard, which keeps a zone the caller entered, as with
+//  cpp.vm.Gc.enterGCFreeZone around a blocking call: a plain exit here ended it,
+//  and the caller's own exit then stopped the process (libhxcpp #457)
 int _hx_std_sys_getch( bool b )
 {
 #if defined(HX_WINRT) || defined(__EMSCRIPTEN__) || defined(EPPC)
    return 0;
 #elif defined(NEKO_WINDOWS)
-   hx::EnterGCFreeZone();
+   hx::AutoGCFreeZone zone;
    int result = b?getche():getch();
-   hx::ExitGCFreeZone();
 
    return result;
 #else
@@ -1068,7 +1073,7 @@ int _hx_std_sys_getch( bool b )
    // terminal on initscr()
    int c;
    struct termios term, old;
-   hx::EnterGCFreeZone();
+   hx::AutoGCFreeZone zone;
    tcgetattr(fileno(stdin), &old);
    term = old;
    cfmakeraw(&term);
@@ -1076,7 +1081,6 @@ int _hx_std_sys_getch( bool b )
    c = getchar();
    tcsetattr(fileno(stdin), 0, &old);
    if( b ) fputc(c,stdout);
-   hx::ExitGCFreeZone();
    return c;
 #   endif
 }

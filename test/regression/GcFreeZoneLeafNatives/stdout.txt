@@ -1,0 +1,3 @@
+Sys.sleep in a zone: ok
+Sys.command in a zone: 3
+gc_safe_point in a zone, through 100 collections: ok
