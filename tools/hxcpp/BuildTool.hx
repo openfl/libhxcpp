@@ -311,7 +311,7 @@ class BuildTool
       if (cached)
       {
          var cacheSize = mDefines.exists("HXCPP_CACHE_MB") ? Std.parseInt( mDefines.get("HXCPP_CACHE_MB") ) : 1000;
-         if (cacheSize!=null && cacheSize>0)
+         if (cacheSize!=null && cacheSize>0 && CompileCache.dueForTrim())
             CompileCache.clear(0,cacheSize,false,null);
       }
 
