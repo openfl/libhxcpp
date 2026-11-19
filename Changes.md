@@ -2,6 +2,8 @@
 libhxcpp 6.0.0 (unreleased)
 ------------------------------------------------------------
 
+* Fixed HXCPP_GC_MOVING, and HXCPP_GC_DEBUG_ALWAYS_MOVE without generational, corrupting live objects after a collection that ran out of blocks to move into: the block it was emptying kept, in part, the start bits of the objects it had moved out, and a stale stack word holding one of their old addresses had a later collection take the moved header for an object of 254 rows and mark rows past the block's row table, over the objects in its first rows. The start bits go as the objects move, and a moved header is never taken for an object (libhxcpp #450)
+
 libhxcpp 6.0.0-rc.3
 ------------------------------------------------------------
 
