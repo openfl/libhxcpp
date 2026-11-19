@@ -1,0 +1,4 @@
+moved-out locations marked as objects: 0
+moved-out locations marked as objects, again: 0
+fillers changed: 0
+kept items with a wrong value: 0

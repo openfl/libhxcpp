@@ -1433,6 +1433,11 @@ struct BlockDataInfo
    // When known to be an actual object start...
    AllocType GetAllocTypeChecked(uintptr_t inOffset, bool allowPrevious) const
    {
+      // Where an object moved out, not an object: its mark byte is 0, which
+      //  passes for the previous mark one collection in 16
+      if (*reinterpret_cast<const unsigned int *>(mPtr->mData + inOffset) == IMMIX_OBJECT_HAS_MOVED)
+         return allocNone;
+
       unsigned char time{ mPtr->mData[inOffset + HX_ENDIAN_MARK_ID_BYTE_HEADER] };
       if (((time + 1) & MARK_BYTE_MASK) != (gByteMarkID & MARK_BYTE_MASK))
       {
@@ -5129,6 +5134,11 @@ public:
                         header = IMMIX_OBJECT_HAS_MOVED;
                         moveObjs++;
 
+                        // The block's own start bit goes too: when the to blocks run
+                        //  out, this block is kept in part, and a start left here
+                        //  would have the next collection take the moved header for
+                        //  an object of 254 rows, marking rows past the row table
+                        allocStart[r] &= ~(1u<<i);
                         starts &= ~(1<<i);
                         if (!starts)
                            break;
