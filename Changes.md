@@ -1,5 +1,5 @@
 
-libhxcpp 6.0.0 (unreleased)
+libhxcpp 6.0.0-rc.3
 ------------------------------------------------------------
 
 * Fixed a collection that could fault in a marking thread, or write a mark byte into a thread's stack, in a program with a class that has a dynamic method. A class's registration copies its vtable from an instance made on the stack, whose constructor gives each dynamic method a default closure holding that instance; a stale word a stack scan found could reach the closure, and marking it followed the stack address as if it were an object. The default closure now marks only what the collector made. The telemetry test crashed this way on Windows x64 every run, and stock hxcpp does too
