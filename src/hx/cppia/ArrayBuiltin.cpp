@@ -153,8 +153,14 @@ struct ArraySetter : public ArrayBuiltinBase
       CPPIA_CHECK(thisVal);
       int i = args[0]->runInt(ctx);
       BCR_CHECK;
+      // On a copy, and the element found after: the right-hand side can grow
+      //  the array or move its items, which left a reference taken before
+      //  pointing at the old buffer
+      ELEM value = thisVal->__get(i);
+      FUNC::run(value, ctx, args[1]);
+      BCR_CHECK;
       ELEM &elem = thisVal->Item(i);
-      FUNC::run(elem, ctx, args[1]);
+      elem = value;
       #ifdef HXCPP_GC_GENERATIONAL
       if (hx::ContainsPointers<ELEM>())
          HX_OBJ_WB_CTX(thisVal,hx::PointerOf(elem),ctx);
@@ -168,8 +174,14 @@ struct ArraySetter : public ArrayBuiltinBase
       CPPIA_CHECK(thisVal);
       int i = args[0]->runInt(ctx);
       BCR_CHECK;
+      // On a copy, and the element found after: the right-hand side can grow
+      //  the array or move its items, which left a reference taken before
+      //  pointing at the old buffer
+      ELEM value = thisVal->__get(i);
+      FUNC::run(value, ctx, args[1]);
+      BCR_CHECK;
       ELEM &elem = thisVal->Item(i);
-      FUNC::run(elem, ctx, args[1]);
+      elem = value;
       #ifdef HXCPP_GC_GENERATIONAL
       if (hx::ContainsPointers<ELEM>())
          HX_OBJ_WB_CTX(thisVal,hx::PointerOf(elem),ctx);
@@ -183,8 +195,14 @@ struct ArraySetter : public ArrayBuiltinBase
       CPPIA_CHECK(thisVal);
       int i = args[0]->runInt(ctx);
       BCR_CHECK;
+      // On a copy, and the element found after: the right-hand side can grow
+      //  the array or move its items, which left a reference taken before
+      //  pointing at the old buffer
+      ELEM value = thisVal->__get(i);
+      FUNC::run(value, ctx, args[1]);
+      BCR_CHECK;
       ELEM &elem = thisVal->Item(i);
-      FUNC::run(elem, ctx, args[1]);
+      elem = value;
       #ifdef HXCPP_GC_GENERATIONAL
       if (hx::ContainsPointers<ELEM>())
          HX_OBJ_WB_CTX(thisVal,hx::PointerOf(elem),ctx);
@@ -198,8 +216,14 @@ struct ArraySetter : public ArrayBuiltinBase
       CPPIA_CHECK(thisVal);
       int i = args[0]->runInt(ctx);
       BCR_CHECK;
+      // On a copy, and the element found after: the right-hand side can grow
+      //  the array or move its items, which left a reference taken before
+      //  pointing at the old buffer
+      ELEM value = thisVal->__get(i);
+      FUNC::run(value, ctx, args[1]);
+      BCR_CHECK;
       ELEM &elem = thisVal->Item(i);
-      FUNC::run(elem, ctx, args[1]);
+      elem = value;
       #ifdef HXCPP_GC_GENERATIONAL
       if (hx::ContainsPointers<ELEM>())
          HX_OBJ_WB_CTX(thisVal,hx::PointerOf(elem),ctx);
@@ -1333,19 +1357,22 @@ struct ArrayBuiltin : public ArrayBuiltinBase
             {
                thisExpr->genCode(compiler, sJitTemp0, etObject);
                genNullReferenceExceptionCheck(compiler, sJitTemp0);
-               JumpId enough = compiler->compare( cmpI_LESS, sJitTemp0.star(jtInt, ArrayBase::lengthOffset()),
-                                                             sJitTemp0.star(jtInt, ArrayBase::allocOffset()) );
-
-               // result comes back in sJitTemp0
-               compiler->callNative( (void *)array_expand,  sJitTemp0 );
-               compiler->comeFrom(enough);
 
                JitTemp arrayThis(compiler,jtPointer);
                compiler->move(arrayThis, sJitTemp0);
 
+               // The value first: an argument that grows the array would otherwise
+               //  leave the room made for it too small
                ExprType elemType = (ExprType)ExprTypeOf<ELEM>::value;
                JitTemp tempVal(compiler,getJitType(elemType));
                args[0]->genCode(compiler, tempVal, elemType);
+
+               compiler->move(sJitTemp0, arrayThis);
+               JumpId enough = compiler->compare( cmpI_LESS, sJitTemp0.star(jtInt, ArrayBase::lengthOffset()),
+                                                             sJitTemp0.star(jtInt, ArrayBase::allocOffset()) );
+
+               compiler->callNative( (void *)array_expand,  sJitTemp0 );
+               compiler->comeFrom(enough);
 
                // sJitTemp1 = this
                compiler->move(sJitTemp1, arrayThis);
@@ -1972,7 +1999,8 @@ struct ArrayBuiltin : public ArrayBuiltinBase
                {
                   JitTemp tempFloat(compiler, jtFloat);
                   JitVal dVal = isMemoryVal(inDest) ? inDest : tempFloat;
-                  compiler->callNative( (void *)runFloatCrement, thisVal, sJitTemp1 );
+                  // The result goes where dVal is: a float in memory is passed by address
+                  compiler->callNative( (void *)runFloatCrement, thisVal, sJitTemp1, dVal.as(jtFloat) );
                   if (!isMemoryVal(inDest))
                      compiler->move(inDest.as(jtFloat), tempFloat);
                }
