@@ -6565,13 +6565,20 @@ public:
       {
          hx::IncrementalState &state = hx::IncrementalData();
          bool active = hx::gIncrementalActive.load(std::memory_order_relaxed);
-         bool requested = hx::sIncrementalRequestMs > 0 && !sgCensus;
+         // A census, or Gc.trace, counts what this collection marks, so a cycle
+         //  part done, whose earlier slices marked objects already, is failed and
+         //  everything marked again: finishing it undercounted (libhxcpp #453)
+         bool counting = sgCensus;
+         #ifdef HXCPP_DEBUG
+         counting = counting || gCollectTrace;
+         #endif
+         bool requested = hx::sIncrementalRequestMs > 0 && !counting;
          if (active && !requested)
          {
             std::lock_guard<std::mutex> lock(state.statsLock);
             state.forcedFinishes++;
          }
-         if (active && sgCensus)
+         if (active && counting)
             state.failed.store(true, std::memory_order_relaxed);
          if (active && hx::sIncrementalRequestMs == 0)
          {
@@ -7064,11 +7071,10 @@ public:
       STAMP(t5)
 
       size_t mem = mRowsInUse<<IMMIX_LINE_BITS;
-      #ifdef HXCPP_GC_INCREMENTAL
-      if (full || cycleFinished)
-      #else
+      // Only a full reclaim counts the bytes of the objects that survived. A
+      //  finished incremental cycle that is not one counts whole rows, which
+      //  reported several times the live bytes as live (libhxcpp #453)
       if (full)
-      #endif
          mLiveBytes = stats.bytesInUse;
       size_t baseMem = full ? bytesInUse : mem;
       #ifdef HXCPP_GC_DYNAMIC_SIZE
