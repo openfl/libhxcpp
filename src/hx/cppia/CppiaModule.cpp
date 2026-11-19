@@ -135,6 +135,10 @@ CppiaModule::CppiaModule()
    if (sgNativeNameSlotCount>0)
       for(int i=2;i<sgNativeNameSlotCount;i++)
          interfaceSlots[sgNativeNameSlots[i]] = i;
+   // The host's names take slots 2 to sgNativeNameSlotCount-1, so the script's
+   //  own start after them. Counting from the map's size gave the first of them
+   //  the host's last slot, and a class with both had two methods in it
+   nextInterfaceSlot = sgNativeNameSlotCount>2 ? sgNativeNameSlotCount : 1;
 
    std::lock_guard<std::mutex> lock(sModuleLock);
    allModules().push_back(this);
@@ -338,7 +342,7 @@ int CppiaModule::getInterfaceSlot(const std::string &inName)
    InterfaceSlots::iterator it = interfaceSlots.find(inName);
    if (it==interfaceSlots.end())
    {
-      int result = interfaceSlots.size()+1;
+      int result = nextInterfaceSlot++;
       interfaceSlots[inName] = result;
       return result;
    }
