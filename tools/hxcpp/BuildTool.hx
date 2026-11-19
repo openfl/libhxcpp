@@ -1217,8 +1217,10 @@ class BuildTool
                case "nvcc" :
                   setupNvcc();
                   group.mNvcc = true;
+                  // Set, not compared: the group kept the haxe tags, so it was
+                  //  given the host compiler's flags (libhxcpp #472)
                   if (group.mTags=="haxe,static")
-                     group.mTags=="nvcc";
+                     group.mTags="nvcc";
                case "objprefix" :
                   group.mObjPrefix = substitute(el.att.value);
                case "compilervalue" :

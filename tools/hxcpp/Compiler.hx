@@ -275,7 +275,9 @@ class Compiler
          args = args.concat(mCPPFlags);
       }
 
-      if (isRc || inFile.getTags()!=inFile.mGroup.getTags())
+      // The precompiled header is built with the group's standard, and a file
+      //  with its own cannot use it: MSVC and clang both refuse (libhxcpp #472)
+      if (isRc || inFile.getTags()!=inFile.mGroup.getTags() || inFile.mCxxStandard!=inFile.mGroup.mCxxStandard)
          allowPch = false;
 
       if (inFile.mGroup.isPrecompiled() && allowPch)
