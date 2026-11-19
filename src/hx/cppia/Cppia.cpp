@@ -740,7 +740,7 @@ static void SLJIT_CALL callLazy(CppiaCtx *ctx, ScriptCallable *function)
    function->compileLazy();
    CATCH_NATIVE
    if (!ctx->exception)
-      function->compiled(ctx);
+      function->getCompiled()(ctx);
 }
 
 // Calls the compiled code in inCode, or when that is null, compiles the function in
@@ -770,9 +770,9 @@ void genFunctionCall(ScriptCallable *function, CppiaCompiler *compiler,
       compiler->add( sJitCtxFrame, sJitFrame, JitVal(framePos) );
 
       // Compiled yet
-      if (function->compiled)
+      if (CppiaFunc code = function->getCompiled())
       {
-         compiler->call( JitVal( (void *)(function->compiled)), sJitCtx );
+         compiler->call( JitVal( (void *)code), sJitCtx );
       }
       else if (function->lazy)
       {
