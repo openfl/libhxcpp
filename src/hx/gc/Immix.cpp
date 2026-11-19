@@ -8339,6 +8339,11 @@ public:
       if (mGCFreeZone)
          return;
       #endif
+      // Every other thread is stopped or in a zone before this is set, so this
+      //  is the collecting thread, running a finalizer that took a Mutex or
+      //  similar: it is the collection, and has nothing to wait for
+      if (sgIsCollecting)
+         return;
       PauseForCollect();
    }
 
