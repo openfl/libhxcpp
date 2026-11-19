@@ -2247,8 +2247,11 @@ void *hx::Object::_hx_getInterface(int inId)
    if (!vtable)
       return 0;
    CppiaClassInfo *info = ((CppiaClassInfo *)vtable[-1]);
-   void *result = info->interfaceScriptTables[inId];
-   return info->interfaceScriptTables[inId];
+   // Filled when the class links. operator[] inserted an entry for each
+   //  interface asked about that the class does not implement, from whichever
+   //  thread asked, while others searched the same map (libhxcpp #466)
+   std::map<int, void *>::iterator it = info->interfaceScriptTables.find(inId);
+   return it==info->interfaceScriptTables.end() ? 0 : it->second;
 }
 
 

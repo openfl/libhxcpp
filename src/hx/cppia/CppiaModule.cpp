@@ -12,7 +12,8 @@ namespace hx
 {
 
 
-static int sScriptId = 0;
+// Modules load on any thread
+static std::atomic<int> sScriptId(0);
 static std::atomic<int> sLiveModules(0);
 
 

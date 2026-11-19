@@ -2,6 +2,7 @@
 #include <hx/Scriptable.h>
 #include "Cppia.h"
 #include <algorithm>
+#include <mutex>
 
 
 namespace hx
@@ -101,18 +102,27 @@ ScriptNamedFunction HaxeNativeClass::findStaticFunction(String inName)
 
 
 
+// The maps are filled as the host starts, and only read after, by any thread
+//  loading or running a script: a lookup with operator[] inserted the names it
+//  missed, under threads walking or searching the same map (libhxcpp #466)
 HaxeNativeClass *HaxeNativeClass::findClass(const std::string &inName)
 {
-   return sScriptRegistered ? (*sScriptRegistered)[inName] : 0;
+   if (!sScriptRegistered)
+      return 0;
+   ScriptRegisteredMap::iterator it = sScriptRegistered->find(inName);
+   return it==sScriptRegistered->end() ? 0 : it->second;
 }
 
 HaxeNativeClass *HaxeNativeClass::hxObject()
 {
-   return sScriptRegistered ? (*sScriptRegistered)["hx.Object"] : 0;
+   return findClass("hx.Object");
 }
 
 void HaxeNativeClass::link()
 {
+   // Each load links, and the super classes it sets are shared by every module
+   static std::mutex linkLock;
+   std::lock_guard<std::mutex> lock(linkLock);
    HaxeNativeClass *hxObj = hxObject();
    for(ScriptRegisteredMap::iterator i = sScriptRegistered->begin(); i!=sScriptRegistered->end();++i)
    {
@@ -131,7 +141,7 @@ void HaxeNativeClass::link()
          hx::Class superClass = cls->GetSuper();
          if (superClass.mPtr)
          {
-            HaxeNativeClass *superRef = (*sScriptRegistered)[superClass.mPtr->mName.utf8_str()];
+            HaxeNativeClass *superRef = findClass(superClass.mPtr->mName.utf8_str());
             if (superRef)
             {
                DBGLOG("registered %s\n",superClass.mPtr->mName.utf8_str());
@@ -282,7 +292,10 @@ void ScriptableRegisterInterface( String inName,
 
 HaxeNativeInterface *HaxeNativeInterface::findInterface(const std::string &inName)
 {
-   return sScriptRegisteredInterface ? (*sScriptRegisteredInterface)[inName] : 0;
+   if (!sScriptRegisteredInterface)
+      return 0;
+   HaxeNativeIntefaceMap::iterator it = sScriptRegisteredInterface->find(inName);
+   return it==sScriptRegisteredInterface->end() ? 0 : it->second;
 }
 
 
