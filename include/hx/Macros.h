@@ -806,14 +806,19 @@ static ::Dynamic __##class##func(const ::Array< ::Dynamic> &inArgs) \
 #define HX_DYNAMIC_CALL25(ret,func) HX_DYNAMIC_CALL(ret,func,HX_ARR_LIST25,HX_DYNAMIC_ARG_LIST25,HX_ARG_LIST25)
 #define HX_DYNAMIC_CALL26(ret,func) HX_DYNAMIC_CALL(ret,func,HX_ARR_LIST26,HX_DYNAMIC_ARG_LIST26,HX_ARG_LIST26)
 
+// A class's __register copies its vtable from an instance it makes on the stack,
+//  whose constructor gives each dynamic function a default closure holding that
+//  instance. The closure is garbage at once, but a stale word a stack scan finds
+//  can still reach it, and marking it went on into the stack as if it were an
+//  object, writing mark bytes there. The closure marks only what the collector made
 #if (HXCPP_API_LEVEL>=500)
     #define HX_BEGIN_DEFAULT_FUNC(name,t0) \
 	    namespace { \
        struct name : public  ::hx::Object { \
         ::hx::ObjectPtr<t0> __this; \
        name( ::hx::ObjectPtr<t0> __0 = ::null()) : __this(__0) {} \
-       void __Mark( ::hx::MarkContext *__inCtx) HXCPP_OVERRIDE { HX_MARK_MEMBER(__this); } \
-       void __Visit( ::hx::VisitContext *__inCtx) HXCPP_OVERRIDE { HX_VISIT_MEMBER(__this); }
+       void __Mark( ::hx::MarkContext *__inCtx) HXCPP_OVERRIDE { if ( ::hx::IsCollectedAlloc(__this.mPtr)) HX_MARK_MEMBER(__this); } \
+       void __Visit( ::hx::VisitContext *__inCtx) HXCPP_OVERRIDE { if ( ::hx::IsCollectedAlloc(__this.mPtr)) HX_VISIT_MEMBER(__this); }
 #else
     #define HX_BEGIN_DEFAULT_FUNC(name,t0) \
 	    namespace { \
@@ -821,8 +826,8 @@ static ::Dynamic __##class##func(const ::Array< ::Dynamic> &inArgs) \
        HX_IS_INSTANCE_OF enum { _hx_ClassId =  ::hx::clsIdClosure }; \
         ::hx::ObjectPtr<t0> __this; \
        name( ::hx::ObjectPtr<t0> __0 = ::null()) : __this(__0) {} \
-       void __Mark( ::hx::MarkContext *__inCtx) HXCPP_OVERRIDE { HX_MARK_MEMBER(__this); } \
-       void __Visit( ::hx::VisitContext *__inCtx) HXCPP_OVERRIDE { HX_VISIT_MEMBER(__this); }
+       void __Mark( ::hx::MarkContext *__inCtx) HXCPP_OVERRIDE { if ( ::hx::IsCollectedAlloc(__this.mPtr)) HX_MARK_MEMBER(__this); } \
+       void __Visit( ::hx::VisitContext *__inCtx) HXCPP_OVERRIDE { if ( ::hx::IsCollectedAlloc(__this.mPtr)) HX_VISIT_MEMBER(__this); }
 #endif
 
 #define HX_END_DEFAULT_FUNC \
