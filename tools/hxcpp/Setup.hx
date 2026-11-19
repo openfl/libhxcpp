@@ -490,16 +490,22 @@ class Setup
 
       if (Log.verbose) Log.println("");
 
+      // Any NDKV<n>, the lowest if there are several. Only 6 to 19 were
+      //  looked for, so a request for r20 or later was ignored, and the newest
+      //  NDK found was used instead (libhxcpp #472)
       var ndkVersion = 0;
-      for (i in 6...20)
+      var requested = ~/^NDKV([0-9]+)$/;
+      for (key in defines.keys())
       {
-         if (defines.exists("NDKV" + i))
+         if (requested.match(key))
          {
-            ndkVersion = i;
-            Log.info("", "\x1b[33;1mRequested Android NDK r" + i + "\x1b[0m");
-            break;
+            var version = Std.parseInt(requested.matched(1));
+            if (version!=null && version>=6 && (ndkVersion==0 || version<ndkVersion))
+               ndkVersion = version;
          }
       }
+      if (ndkVersion!=0)
+         Log.info("", "\x1b[33;1mRequested Android NDK r" + ndkVersion + "\x1b[0m");
 
       if (!defines.exists("ANDROID_NDK_ROOT") || ndkVersion!=0)
       {
@@ -624,7 +630,7 @@ class Setup
             var minPlatform:Null<Int> = try {
                haxe.Json.parse(sys.io.File.getContent(platformsJson)).min;
             } catch (e:Dynamic) {
-               Log.warn("Unable to determine minimum supported Android platform: " + e.toString());
+               Log.warn("Unable to determine minimum supported Android platform: " + Std.string(e));
                null;
             };
 
