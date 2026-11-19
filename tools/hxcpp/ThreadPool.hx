@@ -1,15 +1,24 @@
 #if haxe4
   import sys.thread.Thread;
   import sys.thread.Mutex;
+  import sys.thread.Tls;
 #else
   #if neko
   import neko.vm.Thread;
   import neko.vm.Mutex;
+  import neko.vm.Tls;
   #else
   import cpp.vm.Thread;
   import cpp.vm.Mutex;
+  import cpp.vm.Tls;
   #end
 #end
+
+// Thrown by Tools.exit on a compile thread, to end its job
+class WorkerExit
+{
+   public function new() { }
+}
 
 #if cpp
 import cpp.AtomicInt;
@@ -17,6 +26,14 @@ import cpp.AtomicInt;
 
 class ThreadPool
 {
+   static var worker = new Tls<Bool>();
+
+   // Whether this is one of the compile threads
+   public static function onWorker():Bool
+   {
+      return worker.value == true;
+   }
+
    var threads:Array<Thread>;
    var mainThread:Thread;
    #if cpp
@@ -43,6 +60,7 @@ class ThreadPool
 
    function threadLoop(threadId:Int)
    {
+      worker.value = true;
       while(true)
       {
          var job:Int->Void = Thread.readMessage(true);
@@ -58,9 +76,12 @@ class ThreadPool
          }
          catch (error:Dynamic)
          {
-            if (BuildTool.threadExitCode!=0)
-               BuildTool.setThreadError(-1);
-            else
+            // Any error ends the build. As a warning, a compile that failed
+            //  and then could not delete its old object went on to link that
+            //  object and exit 0 (libhxcpp #471)
+            if (BuildTool.threadExitCode==0)
+               BuildTool.threadExitCode = -1;
+            if (!Std.isOfType(error, WorkerExit))
                Log.warn("Error in compile thread: " + error);
          }
 

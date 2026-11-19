@@ -471,9 +471,16 @@ class Compiler
                cleanTmp(tmpFile);
                if (err!=0)
                {
-                  if (FileSystem.exists(obj_name))
-                     FileSystem.deleteFile(obj_name);
+                  // The error first: when the delete threw, as it does for a
+                  //  read-only object or one another process has open, it was
+                  //  lost, and the old object was linked (libhxcpp #471)
                   BuildTool.setThreadError(err);
+                  try
+                  {
+                     if (FileSystem.exists(obj_name))
+                        FileSystem.deleteFile(obj_name);
+                  }
+                  catch(e:Dynamic) { }
                }
                else
                   inProgress.fileDone();

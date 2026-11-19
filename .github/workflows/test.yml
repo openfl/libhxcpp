@@ -199,6 +199,11 @@ jobs:
         run: |
           haxelib run hxcpp xml/Build.xml -options options.txt
           test "$(./value | tr -d '\r')" = 42
+      - name: build tool errors on compile threads
+        continue-on-error: ${{ inputs.warn_only }}
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        shell: bash
+        run: bash test/compile_errors/check.sh
       - name: build tool MSVC setup scripts with ! in the Visual Studio path
         continue-on-error: ${{ inputs.warn_only }}
         if: ${{ !cancelled() && steps.setup.outcome == 'success' && runner.os == 'Windows' }}
