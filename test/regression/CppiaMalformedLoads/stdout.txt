@@ -1,0 +1,26 @@
+interpreted
+  MAIN with no types: failed to load
+  unknown enum constructor: failed to load
+  enum constructor with the wrong argument count: failed to load
+  two classes with one type id: failed to load
+  a string constant past the string table: failed to load
+Script.hx:10: x=0
+  an enum parameter index past its constructors: ran
+  a file id past the string table: failed to load
+Script.hx:7: false
+  break outside a loop: ran
+Script.hx:7: false
+  continue outside a loop: ran
+  a super call to a class that is not the super class: failed to load
+jit
+  MAIN with no types: failed to load
+  unknown enum constructor: failed to load
+  enum constructor with the wrong argument count: failed to load
+  two classes with one type id: failed to load
+  a string constant past the string table: failed to load
+Script.hx:10: x=0
+  an enum parameter index past its constructors: ran
+  a file id past the string table: failed to load
+  break outside a loop: failed to load
+  continue outside a loop: failed to load
+  a super call to a class that is not the super class: failed to load

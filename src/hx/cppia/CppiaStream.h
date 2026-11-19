@@ -72,10 +72,7 @@ struct CppiaStream
    {
       return binary ? 0 : getInt();
    }
-   int getFileId()
-   {
-      return binary ? 0 : getInt();
-   }
+   int getFileId();
    void skipChar()
    {
       if (data>=max)

@@ -470,13 +470,20 @@ public:
       return oldPos;
    }
 
+   // Outside a loop there is nowhere to go, and sljit asserted, ending the
+   //  process. Haxe emits neither there, so only a malformed file has one. The
+   //  first pass, which only measures, has no labels, so it cannot tell
    void  addContinue() HXCPP_OVERRIDE
    {
+      if (compiler && !continuePos)
+         setError("Continue outside a loop");
       jump(continuePos);
    }
 
    void addBreak() HXCPP_OVERRIDE
    {
+      if (compiler && !continuePos)
+         setError("Break outside a loop");
       allBreaks.push( jump(0) );
    }
 

@@ -421,7 +421,9 @@ void CppiaConst::fromStream(CppiaStream &stream)
    else if (tok[0]=='s')
    {
       type = cString;
-      ival = stream.getInt();
+      // Checked: a bad id grew the string table to it, leaving the addresses
+      //  of its strings that the JIT had built into code dangling
+      ival = stream.getStringId();
    }
    else if (tok=="NULL")
       type = cNull;
@@ -757,6 +759,18 @@ int CppiaStream::getStringId()
    int id = getInt();
    if (id<0 || id>=module->strings->length)
       throw "Bad string id";
+   return id;
+}
+
+// The text format names each expression's file by a string id. A bad one grew
+//  the string table to it when the file name was read: 1.4 GB for 100000000
+int CppiaStream::getFileId()
+{
+   if (binary)
+      return 0;
+   int id = getInt();
+   if (id<0 || (id>0 && id>=module->strings->length))
+      throw "Bad file id";
    return id;
 }
 
