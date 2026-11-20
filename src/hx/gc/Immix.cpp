@@ -7994,6 +7994,11 @@ void MarkConservativePointer(void *inPtr,hx::MarkContext *__inCtx)
    #endif
 }
 
+bool IsCollectedAlloc(const void *inPtr)
+{
+   return inPtr && sGlobalAlloc->GetMemType(reinterpret_cast<uintptr_t>(inPtr))!=memUnmanaged;
+}
+
 } // namespace hx
 
 

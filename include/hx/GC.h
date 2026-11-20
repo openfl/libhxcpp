@@ -205,6 +205,10 @@ void MarkConservative(int *inBottom, int *inTop,hx::MarkContext *__inCtx);
 // Keeps what a cpp.Pointer points into, as a pointer on the stack would
 void MarkConservativePointer(void *inPtr,hx::MarkContext *__inCtx);
 
+// Whether inPtr is in memory the collector manages. Only while it collects,
+//  when its lists of blocks and large allocations hold still
+bool IsCollectedAlloc(const void *inPtr);
+
 
 // Create/Remove a root.
 // All statics are explicitly registered - this saves adding the whole data segment
