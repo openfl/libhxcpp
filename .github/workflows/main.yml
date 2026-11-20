@@ -69,6 +69,17 @@ jobs:
       with:
         haxe: 4.3.7
 
+    # The runner's own LLVM, first on PATH, can be older than the newest MSVC
+    # STL accepts (STL1000 wanted Clang 22 from MSVC 14.52 when the runner had
+    # Clang 20), so the build uses the clang-cl Visual Studio ships with its STL
+    - name: Use Visual Studio's clang-cl
+      run: |
+        $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -property installationPath
+        $llvm = Join-Path $vs "VC\Tools\Llvm\x64\bin"
+        if (!(Test-Path (Join-Path $llvm "clang-cl.exe"))) { throw "Visual Studio has no clang-cl in $llvm" }
+        & (Join-Path $llvm "clang-cl.exe") --version
+        $llvm | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
     - name: Build the runtime tests
       working-directory: test/haxe
       run: haxe compile.hxml -D HXCPP_MSVC_LLVM -D HXCPP_M64
