@@ -1,8 +1,9 @@
 import haxe.io.Path;
 
 // libhxcpp #464. adoptInstances moved instances whose methods were not in the
-// same vtable slots, so old code still running called the wrong method, or
-// read its return as another type, and moved instances whose fields held
+// same vtable slots, or whose methods changed their types, so old code still
+// running called the wrong method, or read its return as another type, and
+// moved instances whose fields held
 // instances that stayed, which new code read with the new layout. Neither
 // moves now, and the report says why.
 class Main {
@@ -27,7 +28,7 @@ class Main {
 		for (jit in [false, true]) {
 			cpp.cppia.Host.enableJit(jit);
 			Sys.println(jit ? "jit" : "interpreted");
-			for (name in ["methods", "fields"]) {
+			for (name in ["methods", "retyped", "fields"]) {
 				Sys.println(name);
 				try {
 					scenario(dir, name);

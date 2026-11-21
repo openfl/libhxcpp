@@ -1338,14 +1338,41 @@ static std::string slotDifference(const char *inWhat, CppiaClassInfo *inFrom, st
 //  same vtable slot in both. A call's slot is fixed when its code links, so old
 //  code still running would call a moved instance by its old slots, reaching
 //  another method or reading its return as another type (libhxcpp #464)
+// A method's return and argument types, by name. A call site keeps the types
+//  it linked with, so old code calling a moved instance's retyped method read
+//  an Int as a String, or passed a String where the new code takes an Int
+static std::string methodSignature(CppiaFunction *inFunc)
+{
+   CppiaModule &cppia = inFunc->cppia;
+   int types = (int)cppia.types.size();
+   std::string result = inFunc->returnType>=0 && inFunc->returnType<types ?
+      typeName(cppia.types[inFunc->returnType]) : std::string("?");
+   result += "(";
+   for(size_t a=0;a<inFunc->args.size();a++)
+   {
+      const ArgInfo &arg = inFunc->args[a];
+      if (a)
+         result += ",";
+      if (arg.optional)
+         result += "?";
+      result += arg.typeId>=0 && arg.typeId<types ? typeName(cppia.types[arg.typeId]) : std::string("?");
+   }
+   return result + ")";
+}
+
 static std::string methodDifference(CppiaClassInfo *inFrom, CppiaClassInfo *inTo)
 {
    if (inFrom->memberFunctions.size()!=inTo->memberFunctions.size())
       return "its methods are not the same";
    for(size_t i=0;i<inFrom->memberFunctions.size();i++)
-      if (inFrom->memberFunctions[i]->name!=inTo->memberFunctions[i]->name ||
-          inFrom->memberFunctions[i]->vtableSlot!=inTo->memberFunctions[i]->vtableSlot)
-         return "method " + inFrom->memberFunctions[i]->name + " is not where it was";
+   {
+      CppiaFunction *from = inFrom->memberFunctions[i];
+      CppiaFunction *to = inTo->memberFunctions[i];
+      if (from->name!=to->name || from->vtableSlot!=to->vtableSlot)
+         return "method " + from->name + " is not where it was";
+      if (methodSignature(from)!=methodSignature(to))
+         return "method " + from->name + " changed its types";
+   }
    return std::string();
 }
 
