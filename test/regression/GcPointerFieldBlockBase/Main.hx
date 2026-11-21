@@ -3,6 +3,12 @@
 // holding exactly a block's base address, such as one past the end of an array
 // whose buffer ends where its block does, made that search's offset wrap, and
 // the collection walked for hours. It holds no object and keeps nothing.
+class Holder {
+	public var base:cpp.Pointer<Int>;
+
+	public function new() {}
+}
+
 @:cppFileCode('
 static ::cpp::Pointer<int> blockBaseOf(::Array<int> inArray)
 {
@@ -15,12 +21,6 @@ static ::cpp::Pointer<int> blockBaseOf(::Array<int> inArray)
 	return ::cpp::Pointer<int>((int *)(at & ~(blockSize - 1)));
 }
 ')
-class Holder {
-	public var base:cpp.Pointer<Int>;
-
-	public function new() {}
-}
-
 class Main {
 	static var holders:Array<Holder>;
 	static var arrays:Array<Array<Int>>;
