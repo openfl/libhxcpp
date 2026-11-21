@@ -1,0 +1,16 @@
+interpreted
+float crement: x=1.5 y=3.5 [2.5,3.5]
+int crement: x=10 y=19 [11,19]
+push string: length=102 last=pushed spy=[0,0,0,0]
+push int: length=103 last=30583 spy=[0,0,0,0]
+store: 42 length=1003
+compound store: 43
+store past the end: [1,2,3,3]
+jit
+float crement: x=1.5 y=3.5 [2.5,3.5]
+int crement: x=10 y=19 [11,19]
+push string: length=102 last=pushed spy=[0,0,0,0]
+push int: length=103 last=30583 spy=[0,0,0,0]
+store: 42 length=1003
+compound store: 43
+store past the end: [1,2,3,3]

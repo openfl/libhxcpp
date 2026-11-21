@@ -1,0 +1,28 @@
+-cp methods/old
+--main Script
+-cppia bin/methods-old.cppia
+--next
+-cp methods/new
+--main Script
+-cppia bin/methods-new.cppia
+--next
+-cp retyped/old
+--main Script
+-cppia bin/retyped-old.cppia
+--next
+-cp retyped/new
+--main Script
+-cppia bin/retyped-new.cppia
+--next
+-cp fields/old
+--main Script
+-cppia bin/fields-old.cppia
+--next
+-cp fields/new
+--main Script
+-cppia bin/fields-new.cppia
+--next
+--main Main
+-cpp bin
+-D scriptable
+--dce no

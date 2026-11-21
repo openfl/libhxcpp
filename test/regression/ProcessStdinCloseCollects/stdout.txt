@@ -1,0 +1,2 @@
+collected while the child ran: true
+stdin closed while the child ran: true

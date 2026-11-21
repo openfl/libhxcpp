@@ -1,0 +1,26 @@
+interpreted
+Array<Dynamic> compound: [11,10,11,3,20]
+Array<Dynamic> crement: [2,1,4] x=2 y=4
+Array<Dynamic> insert: [z,1,2]
+Array<Dynamic> toString: [z,1,2]
+Array<Any> bools: [false,true,true] [true,true,true]
+Array<Null<Int>> bits: [5,8,2,4,8,3]
+Array<Null<Int>> arith: [5,6,2]
+indexOf as a Float: 2.5 0.5 1
+join as a statement: receiver evaluated 1, toString calls 1
+toString as a statement: receiver evaluated 2, toString calls 2
+out of range as a String: 0 0
+++ on a Dynamic array as a statement: [2,3]
+jit
+Array<Dynamic> compound: [11,10,11,3,20]
+Array<Dynamic> crement: [2,1,4] x=2 y=4
+Array<Dynamic> insert: [z,1,2]
+Array<Dynamic> toString: [z,1,2]
+Array<Any> bools: [false,true,true] [true,true,true]
+Array<Null<Int>> bits: [5,8,2,4,8,3]
+Array<Null<Int>> arith: [5,6,2]
+indexOf as a Float: 2.5 0.5 1
+join as a statement: receiver evaluated 1, toString calls 1
+toString as a statement: receiver evaluated 2, toString calls 2
+out of range as a String: 0 0
+++ on a Dynamic array as a statement: [2,3]

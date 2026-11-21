@@ -1,0 +1,10 @@
+interpreted
+IFoo.fooOnly: fooOnly
+IBar.barOnly: barOnly
+after IMap.clear: clear 
+IMap.exists: true
+jit
+IFoo.fooOnly: fooOnly
+IBar.barOnly: barOnly
+after IMap.clear: clear 
+IMap.exists: true

@@ -452,6 +452,8 @@ public:
    std::unordered_set<int>           allFileIds;
    typedef std::map< std::string, int > InterfaceSlots;
    InterfaceSlots                  interfaceSlots;
+   // The slot the next name the host does not know gets
+   int                             nextInterfaceSlot;
 
    StackLayout                     *layout;
    CppiaClassInfo                  *linkingClass;
@@ -844,6 +846,8 @@ public:
    inline ScriptCallable *findStaticSetter(const String &inName)
       { return findFunction(staticSetters,inName); }
    CppiaEnumConstructor *findEnum(int inFieldId);
+   // The most arguments any of an enum's constructors takes
+   int mostEnumArgs();
    ExprType findFunctionType(CppiaModule &inModule, int inName);
    CppiaFunction *findVTableFunction(int inId);
    int findFunctionSlot(int inName);

@@ -1,3 +1,4 @@
+semaphore minus one ok
 semaphore negative ok
 semaphore nan ok
 semaphore huge ok

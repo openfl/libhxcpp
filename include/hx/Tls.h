@@ -44,10 +44,12 @@
          #ifdef HXCPP_M64
          mFastOffset = mSlot*sizeof(void *) + 0x1480;
          #else
-         if (FAST || mSlot < kMaxInlineSlots)
-            mFastOffset = mSlot*sizeof(void *) + 0xE10;
-         else
-            mFastOffset = mSlot - kMaxInlineSlots;
+         // Only the first 64 slots are in the thread's environment block. The
+         //  rest are in an array of their own, which a thread that never set
+         //  one does not have yet, so they go through TlsGetValue, as on x64.
+         //  Reading every slot inline, as FAST once did, read other fields of
+         //  the block once the process had used 64 slots (libhxcpp #458)
+         mFastOffset = mSlot < kMaxInlineSlots ? mSlot*sizeof(void *) + 0xE10 : 0;
          #endif
       }
       inline DATA *operator=(DATA *inData)
@@ -59,13 +61,9 @@
       inline operator DATA *()
       {
          #if !defined(HXCPP_M64) && (_MSC_VER >= 1400)
-         const size_t kTibExtraTlsOffset = 0xF94;
-
-         if (FAST || mSlot < kMaxInlineSlots)
+         if (mSlot < kMaxInlineSlots)
            return (DATA *)__readfsdword(mFastOffset);
-
-         DATA **extra = (DATA **)(__readfsdword(kTibExtraTlsOffset));
-         return extra[mFastOffset];
+         return (DATA *)TlsGetValue(mSlot);
          #elif (_MSC_VER >= 1400) & !defined(HXCPP_DEBUG) && !defined(HXCPP_ARM64)// 64 bit version...
          if (mSlot < 64)
            return (DATA *)__readgsqword(mFastOffset);

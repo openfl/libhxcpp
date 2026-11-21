@@ -12,7 +12,8 @@ namespace hx
 {
 
 
-static int sScriptId = 0;
+// Modules load on any thread
+static std::atomic<int> sScriptId(0);
 static std::atomic<int> sLiveModules(0);
 
 
@@ -135,6 +136,10 @@ CppiaModule::CppiaModule()
    if (sgNativeNameSlotCount>0)
       for(int i=2;i<sgNativeNameSlotCount;i++)
          interfaceSlots[sgNativeNameSlots[i]] = i;
+   // The host's names take slots 2 to sgNativeNameSlotCount-1, so the script's
+   //  own start after them. Counting from the map's size gave the first of them
+   //  the host's last slot, and a class with both had two methods in it
+   nextInterfaceSlot = sgNativeNameSlotCount>2 ? sgNativeNameSlotCount : 1;
 
    std::lock_guard<std::mutex> lock(sModuleLock);
    allModules().push_back(this);
@@ -338,7 +343,7 @@ int CppiaModule::getInterfaceSlot(const std::string &inName)
    InterfaceSlots::iterator it = interfaceSlots.find(inName);
    if (it==interfaceSlots.end())
    {
-      int result = interfaceSlots.size()+1;
+      int result = nextInterfaceSlot++;
       interfaceSlots[inName] = result;
       return result;
    }
@@ -421,7 +426,9 @@ void CppiaConst::fromStream(CppiaStream &stream)
    else if (tok[0]=='s')
    {
       type = cString;
-      ival = stream.getInt();
+      // Checked: a bad id grew the string table to it, leaving the addresses
+      //  of its strings that the JIT had built into code dangling
+      ival = stream.getStringId();
    }
    else if (tok=="NULL")
       type = cNull;
@@ -757,6 +764,18 @@ int CppiaStream::getStringId()
    int id = getInt();
    if (id<0 || id>=module->strings->length)
       throw "Bad string id";
+   return id;
+}
+
+// The text format names each expression's file by a string id. A bad one grew
+//  the string table to it when the file name was read: 1.4 GB for 100000000
+int CppiaStream::getFileId()
+{
+   if (binary)
+      return 0;
+   int id = getInt();
+   if (id<0 || (id>0 && id>=module->strings->length))
+      throw "Bad file id";
    return id;
 }
 
@@ -1308,10 +1327,67 @@ static std::string slotDifference(const char *inWhat, CppiaClassInfo *inFrom, st
          return std::string(inWhat) + " " + name + " is not in the new class";
       if (name!=inTo->cppia.identStr(inNew[i]->nameId))
          return std::string(inWhat) + " " + name + " is not where it was";
-      if (inOld[i]->storeType!=inNew[i]->storeType || inOld[i]->offset!=inNew[i]->offset)
+      if (inOld[i]->storeType!=inNew[i]->storeType || inOld[i]->offset!=inNew[i]->offset ||
+          typeName(inFrom->cppia.types[inOld[i]->typeId])!=typeName(inTo->cppia.types[inNew[i]->typeId]))
          return std::string(inWhat) + " " + name + " changed its type";
    }
    return std::string();
+}
+
+// The first method of a class, its super classes' included, that is not in the
+//  same vtable slot in both. A call's slot is fixed when its code links, so old
+//  code still running would call a moved instance by its old slots, reaching
+//  another method or reading its return as another type (libhxcpp #464)
+// A method's return and argument types, by name. A call site keeps the types
+//  it linked with, so old code calling a moved instance's retyped method read
+//  an Int as a String, or passed a String where the new code takes an Int
+static std::string methodSignature(CppiaFunction *inFunc)
+{
+   CppiaModule &cppia = inFunc->cppia;
+   int types = (int)cppia.types.size();
+   std::string result = inFunc->returnType>=0 && inFunc->returnType<types ?
+      typeName(cppia.types[inFunc->returnType]) : std::string("?");
+   result += "(";
+   for(size_t a=0;a<inFunc->args.size();a++)
+   {
+      const ArgInfo &arg = inFunc->args[a];
+      if (a)
+         result += ",";
+      if (arg.optional)
+         result += "?";
+      result += arg.typeId>=0 && arg.typeId<types ? typeName(cppia.types[arg.typeId]) : std::string("?");
+   }
+   return result + ")";
+}
+
+static std::string methodDifference(CppiaClassInfo *inFrom, CppiaClassInfo *inTo)
+{
+   if (inFrom->memberFunctions.size()!=inTo->memberFunctions.size())
+      return "its methods are not the same";
+   for(size_t i=0;i<inFrom->memberFunctions.size();i++)
+   {
+      CppiaFunction *from = inFrom->memberFunctions[i];
+      CppiaFunction *to = inTo->memberFunctions[i];
+      if (from->name!=to->name || from->vtableSlot!=to->vtableSlot)
+         return "method " + from->name + " is not where it was";
+      if (methodSignature(from)!=methodSignature(to))
+         return "method " + from->name + " changed its types";
+   }
+   return std::string();
+}
+
+// The script interfaces a class implements, by name, with their class info
+static std::map<std::string, CppiaClassInfo *> scriptInterfaces(CppiaClassInfo *inInfo)
+{
+   std::map<std::string, CppiaClassInfo *> result;
+   for(CppiaClassInfo *info=inInfo; info; info=info->superType ? info->superType->cppiaClass : 0)
+      for(size_t i=0;i<info->implements.size();i++)
+      {
+         TypeData *type = info->cppia.types[info->implements[i]];
+         if (type->cppiaClass)
+            result[typeName(type)] = type->cppiaClass;
+      }
+   return result;
 }
 
 // Why instances of inFrom cannot become instances of inTo, or empty when they can
@@ -1338,6 +1414,17 @@ static std::string incompatibility(CppiaClassInfo *inFrom, CppiaClassInfo *inTo)
    if (inFrom->classSize!=inTo->classSize || inFrom->extraData!=inTo->extraData ||
        inFrom->dynamicMapOffset!=inTo->dynamicMapOffset || inFrom->containsPointers!=inTo->containsPointers)
       return "its instances are laid out otherwise";
+   std::string method = methodDifference(inFrom, inTo);
+   if (!method.empty())
+      return method;
+   std::map<std::string, CppiaClassInfo *> fromInterfaces = scriptInterfaces(inFrom);
+   std::map<std::string, CppiaClassInfo *> toInterfaces = scriptInterfaces(inTo);
+   for(std::map<std::string, CppiaClassInfo *>::iterator i=fromInterfaces.begin(); i!=fromInterfaces.end(); ++i)
+   {
+      std::map<std::string, CppiaClassInfo *>::iterator other = toInterfaces.find(i->first);
+      if (other==toInterfaces.end() || !methodDifference(i->second, other->second).empty())
+         return "interface " + i->first + " changed its methods";
+   }
    return std::string();
 }
 
@@ -1381,6 +1468,34 @@ static Array<Dynamic> adoptInstances(CppiaModule *inNext, CppiaModule *inPreviou
          adoption.reason = incompatibility(info, to);
          if (adoption.reason.empty())
             adoption.to = to;
+      }
+   }
+
+   // New code reads a moved instance's fields with the new classes' layouts,
+   //  so a field that can hold an instance staying in the old class, whose
+   //  layout changed, would be read wrongly: the class holding it stays too,
+   //  until nothing changes (libhxcpp #464)
+   for(bool changed=true; changed; )
+   {
+      changed = false;
+      for(std::map<CppiaClassInfo *, Adoption>::iterator i=adoptions.begin(); i!=adoptions.end(); ++i)
+      {
+         if (!i->second.to)
+            continue;
+         std::vector<CppiaVar *> &vars = i->first->memberVars;
+         for(size_t v=0;v<vars.size();v++)
+         {
+            CppiaClassInfo *held = i->first->cppia.types[vars[v]->typeId]->cppiaClass;
+            std::map<CppiaClassInfo *, Adoption>::iterator heldAdoption = held ? adoptions.find(held) : adoptions.end();
+            if (heldAdoption!=adoptions.end() && !heldAdoption->second.to)
+            {
+               i->second.to = 0;
+               i->second.reason = std::string("field ") + i->first->cppia.identStr(vars[v]->nameId) + " can hold a " +
+                                  held->name + ", which stays in the old class";
+               changed = true;
+               break;
+            }
+         }
       }
    }
 

@@ -102,8 +102,11 @@ struct StringIteratorExpr : public StringExpr
    #ifdef CPPIA_JIT
    static hx::Object *SLJIT_CALL run(String *inValue)
    {
+      TRY_NATIVE
       String value = JitLoad(inValue);
       return ( KEYS ? value.keyValueIterator() : value.iterator() ).mPtr;
+      CATCH_NATIVE
+      return 0;
    }
 
    void genCode(CppiaCompiler *compiler, const JitVal &inDest,ExprType destType) HXCPP_OVERRIDE
@@ -111,6 +114,7 @@ struct StringIteratorExpr : public StringExpr
       JitTemp value(compiler,jtString);
       strVal->genCode(compiler, value, etString);
       compiler->callNative( (void *)run, value);
+      compiler->checkException();
       compiler->convertReturnReg(etObject, inDest, destType);
    }
    #endif
