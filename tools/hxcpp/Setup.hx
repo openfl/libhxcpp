@@ -507,7 +507,17 @@ class Setup
       if (ndkVersion!=0)
          Log.info("", "\x1b[33;1mRequested Android NDK r" + ndkVersion + "\x1b[0m");
 
-      if (!defines.exists("ANDROID_NDK_ROOT") || ndkVersion!=0)
+      // An ANDROID_NDK_ROOT that is already the requested version is used as
+      //  it is, as before NDKV20 and up were read: a search would find only the
+      //  newest NDK in the SDK and stop the build when that is another version
+      var rootMatches = false;
+      if (defines.exists("ANDROID_NDK_ROOT") && ndkVersion!=0)
+      {
+         var configured = defines.get("ANDROID_NDK_ROOT");
+         rootMatches = FileSystem.exists(configured) && Std.int(getNdkVersion(configured))==ndkVersion;
+      }
+
+      if (!defines.exists("ANDROID_NDK_ROOT") || (ndkVersion!=0 && !rootMatches))
       {
          root = Setup.findAndroidNdkRoot( defines, ndkVersion );
          if (root==null)
