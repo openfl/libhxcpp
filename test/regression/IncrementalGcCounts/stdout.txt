@@ -1,0 +1,3 @@
+live bytes after an incremental cycle as after the full collection: true
+kept 50000
+Gc.trace with a cycle part done: 200000 of 200000

@@ -215,6 +215,13 @@ class FileGroup
       }
    }
 
+   // Defines that change how the toolchains compile, or what: without the
+   //  cache, this copy of Options.txt is all that tells the objects are stale,
+   //  so switching one of these reused objects built without it, and adding
+   //  CPPIA_NO_JIT failed to link (libhxcpp #470)
+   static var compileDefines = ["cppia_no_jit", "cppia_jit", "abi", "objc", "objc_arc", "stdlibcpp", "exe_link", "o3",
+      "legacy_macosx_sdk", "armv6", "rpi", "winrt", "nom32", "nom64", "no_shared_libs"];
+
    public function filterOptions(contents:String)
    {
       // Old-style
@@ -237,7 +244,7 @@ class FileGroup
          }
          else if (name.indexOf("hxcpp")>=0 || name=="scriptable" || name.indexOf("dll")>=0 || name=="no_console" ||
             name.substr(0,8)=="android-" || name.substr(0,4)=="ndkv" || name=="toolchain" || name=="platform" ||
-              name=="toolchain_version" || name=="android_ndk_root" )
+              name=="toolchain_version" || name=="android_ndk_root" || compileDefines.indexOf(name)>=0 )
             result.push(def);
       }
 

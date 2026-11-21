@@ -1,0 +1,36 @@
+interpreted
+methods
+  before: old b 7 / old a 7
+  adopt Foo: moved 0, its methods are not the same
+  old code foo.b() -> old b 7
+  old code foo.a() -> length 7
+  after, old code: old b 7 / old a 7
+retyped
+  before: old b 7 / old a 7
+  adopt Foo: moved 0, method a changed its types
+  old code foo.b() -> old b 7
+  old code foo.a() -> length 7
+  after, old code: old b 7 / old a 7
+fields
+  before: p.get() = 1
+  adopt Child: moved 0, field n is not where it was
+  adopt Parent: moved 0, field c can hold a Child, which stays in the old class
+  after, old code: p.get() = 1
+jit
+methods
+  before: old b 7 / old a 7
+  adopt Foo: moved 0, its methods are not the same
+  old code foo.b() -> old b 7
+  old code foo.a() -> length 7
+  after, old code: old b 7 / old a 7
+retyped
+  before: old b 7 / old a 7
+  adopt Foo: moved 0, method a changed its types
+  old code foo.b() -> old b 7
+  old code foo.a() -> length 7
+  after, old code: old b 7 / old a 7
+fields
+  before: p.get() = 1
+  adopt Child: moved 0, field n is not where it was
+  adopt Parent: moved 0, field c can hold a Child, which stays in the old class
+  after, old code: p.get() = 1

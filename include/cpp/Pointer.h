@@ -574,4 +574,21 @@ T *StarOf(T &x) { return &x; }
 }
 
 
+// Haxe 4's haxe.atomic.AtomicInt is a cpp.Pointer<Int>, and its methods call
+//  these. A thread spinning on one never otherwise reached a safe point, so a
+//  collection on another thread waited for it for ever, as Haxe 5's
+//  hx::atomic::AtomicInt does not (libhxcpp #455). The runtime's own spinlocks
+//  call the volatile int * forms, which do not stop.
+#define HX_ATOMIC_SAFE_POINT if (::hx::gPauseForCollect) __hxcpp_gc_safe_point();
+inline int _hx_atomic_add(::cpp::Pointer<int> a, int b) { HX_ATOMIC_SAFE_POINT return _hx_atomic_add((volatile int *)a.ptr, b); }
+inline int _hx_atomic_sub(::cpp::Pointer<int> a, int b) { HX_ATOMIC_SAFE_POINT return _hx_atomic_sub((volatile int *)a.ptr, b); }
+inline int _hx_atomic_and(::cpp::Pointer<int> a, int b) { HX_ATOMIC_SAFE_POINT return _hx_atomic_and((volatile int *)a.ptr, b); }
+inline int _hx_atomic_or(::cpp::Pointer<int> a, int b) { HX_ATOMIC_SAFE_POINT return _hx_atomic_or((volatile int *)a.ptr, b); }
+inline int _hx_atomic_xor(::cpp::Pointer<int> a, int b) { HX_ATOMIC_SAFE_POINT return _hx_atomic_xor((int *)a.ptr, b); }
+inline int _hx_atomic_compare_exchange(::cpp::Pointer<int> a, int expected, int replacement) { HX_ATOMIC_SAFE_POINT return _hx_atomic_compare_exchange((volatile int *)a.ptr, expected, replacement); }
+inline int _hx_atomic_exchange(::cpp::Pointer<int> a, int replacement) { HX_ATOMIC_SAFE_POINT return _hx_atomic_exchange((volatile int *)a.ptr, replacement); }
+inline int _hx_atomic_load(::cpp::Pointer<int> a) { HX_ATOMIC_SAFE_POINT return _hx_atomic_load((volatile int *)a.ptr); }
+inline int _hx_atomic_store(::cpp::Pointer<int> a, int value) { HX_ATOMIC_SAFE_POINT return _hx_atomic_store((volatile int *)a.ptr, value); }
+#undef HX_ATOMIC_SAFE_POINT
+
 #endif

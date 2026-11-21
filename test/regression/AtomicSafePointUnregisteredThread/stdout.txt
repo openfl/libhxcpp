@@ -1,0 +1,1 @@
+the native thread read the atomic through 50 collections: true

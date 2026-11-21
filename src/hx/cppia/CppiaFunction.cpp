@@ -169,6 +169,10 @@ CppiaExpr *ScriptCallable::link(CppiaModule &inModule)
    inModule.layout = &layout;
    data = &inModule;
 
+   // A module's main, which names no type, uses the first, which a malformed
+   //  module may not have
+   if (returnTypeId<0 || returnTypeId>=(int)inModule.types.size())
+      throw "Bad type id";
    returnType = inModule.types[ returnTypeId ]->expressionType;
    isBoolReturn = inModule.types[ returnTypeId ]->haxeClass==ClassOf<bool>();
    layout.returnType = returnType;

@@ -1,0 +1,2 @@
+collections finished: true
+arrays kept: true

@@ -1083,10 +1083,12 @@ bool gc_try_unblocking()
 }
 
 
+// The runtime's own safe point, which does nothing in a GC-free zone, as
+//  between gc_enter_blocking and gc_exit_blocking: pausing there was "Bad
+//  Allocation while collecting", or waited for a release that never came
 void gc_safe_point()
 {
-   if (hx::gPauseForCollect)
-      hx::PauseForCollect();
+   __hxcpp_gc_safe_point();
 }
 
 gcroot create_root(value) { return 0; }

@@ -1,0 +1,1 @@
+made 100000 strings, and 100000 on another thread, and collected

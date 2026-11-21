@@ -1433,6 +1433,11 @@ struct BlockDataInfo
    // When known to be an actual object start...
    AllocType GetAllocTypeChecked(uintptr_t inOffset, bool allowPrevious) const
    {
+      // Where an object moved out, not an object: its mark byte is 0, which
+      //  passes for the previous mark one collection in 16
+      if (*reinterpret_cast<const unsigned int *>(mPtr->mData + inOffset) == IMMIX_OBJECT_HAS_MOVED)
+         return allocNone;
+
       unsigned char time{ mPtr->mData[inOffset + HX_ENDIAN_MARK_ID_BYTE_HEADER] };
       if (((time + 1) & MARK_BYTE_MASK) != (gByteMarkID & MARK_BYTE_MASK))
       {
@@ -1459,7 +1464,7 @@ struct BlockDataInfo
    }
 
    #ifdef HXCPP_GC_NURSERY
-   AllocType GetEnclosingNurseryType(uintptr_t inOffset, uintptr_t* outPtr) const
+   AllocType GetEnclosingNurseryType(uintptr_t inOffset, uintptr_t* outPtr, uintptr_t inReach=sgCheckInternalOffset) const
    {
       // The block did not get used in the previous cycle, so allocStart is invalid and
       //  no new objects should be in here
@@ -1505,7 +1510,7 @@ struct BlockDataInfo
 
                if (inOffset>=scan && inOffset<end)
                {
-                  if (inOffset > scan + sgCheckInternalOffset)
+                  if (inOffset > scan + inReach)
                      return allocNone;
 
                   if (nullptr != outPtr)
@@ -1559,9 +1564,9 @@ struct BlockDataInfo
       return GetAllocTypeChecked(inOffset,inAllowPrevious);
    }
 
-   AllocType GetEnclosingAllocType(uintptr_t inOffset, uintptr_t* outPtr, bool inAllowPrevious) const
+   AllocType GetEnclosingAllocType(uintptr_t inOffset, uintptr_t* outPtr, bool inAllowPrevious, uintptr_t inReach=sgCheckInternalOffset) const
    {
-      for (uintptr_t dx{ 0 }; dx <= sgCheckInternalOffset; dx += 4)
+      for (uintptr_t dx{ 0 }; dx <= inReach && dx <= inOffset; dx += 4)
       {
          uintptr_t blockOffset{ inOffset - dx };
          if (blockOffset >= 0)
@@ -1601,7 +1606,7 @@ struct BlockDataInfo
       }
 
       #ifdef HXCPP_GC_NURSERY
-      return GetEnclosingNurseryType(inOffset,outPtr);
+      return GetEnclosingNurseryType(inOffset,outPtr,inReach);
       #endif
       // Not a actual start...
       return allocNone;
@@ -2136,18 +2141,27 @@ void YoungStore(hx::Object *inOwner, unsigned int &ioLogged, int inLength, const
    if (inCtx->mYoungValues && inLength>=YOUNG_LOG_MIN_LENGTH)
    {
       // Counted per cycle: the cycle is in the top 12 bits. A lost update
-      //  between threads only logs more than the limit
-      unsigned int logged = ioLogged;
+      //  between threads only logs more than the limit, so relaxed accesses
+      //  do, but plain ones were a data race
+      #if defined(__GNUC__) || defined(__clang__)
+      unsigned int logged = __atomic_load_n(&ioLogged, __ATOMIC_RELAXED);
+      #else
+      unsigned int logged = *(volatile unsigned int *)&ioLogged;
+      #endif
       unsigned int cycle = sCollectCycle & 0xfff;
       unsigned int count = (logged>>20)==cycle ? (logged & 0xfffff) : 0;
       unsigned int limit = std::min( (unsigned int)inLength>>5, 0xfffffu );
       if (count<limit)
       {
-         ioLogged = (cycle<<20) | (count+1);
+         #if defined(__GNUC__) || defined(__clang__)
+         __atomic_store_n(&ioLogged, (cycle<<20) | (count+1), __ATOMIC_RELAXED);
+         #else
+         *(volatile unsigned int *)&ioLogged = (cycle<<20) | (count+1);
+         #endif
          for(int v=0;v<inCount;v++)
          {
             const void *value = inValues[v];
-            if (!value || ((unsigned char *)value)[HX_ENDIAN_MARK_ID_BYTE])
+            if (!value || BarrierMarkByte(value))
                continue;
             MarkChunk *chunk = inCtx->mYoungValues;
             chunk->push( (hx::Object *)value );
@@ -2164,8 +2178,7 @@ void YoungStore(hx::Object *inOwner, unsigned int &ioLogged, int inLength, const
          return;
       }
    }
-   unsigned char &mark = ((unsigned char *)inOwner)[HX_ENDIAN_MARK_ID_BYTE];
-   mark |= HX_GC_REMEMBERED;
+   BarrierRemember(inOwner);
    inCtx->pushReferrer(inOwner);
 }
 
@@ -5129,6 +5142,11 @@ public:
                         header = IMMIX_OBJECT_HAS_MOVED;
                         moveObjs++;
 
+                        // The block's own start bit goes too: when the to blocks run
+                        //  out, this block is kept in part, and a start left here
+                        //  would have the next collection take the moved header for
+                        //  an object of 254 rows, marking rows past the row table
+                        allocStart[r] &= ~(1u<<i);
                         starts &= ~(1<<i);
                         if (!starts)
                            break;
@@ -6547,13 +6565,20 @@ public:
       {
          hx::IncrementalState &state = hx::IncrementalData();
          bool active = hx::gIncrementalActive.load(std::memory_order_relaxed);
-         bool requested = hx::sIncrementalRequestMs > 0 && !sgCensus;
+         // A census, or Gc.trace, counts what this collection marks, so a cycle
+         //  part done, whose earlier slices marked objects already, is failed and
+         //  everything marked again: finishing it undercounted (libhxcpp #453)
+         bool counting = sgCensus;
+         #ifdef HXCPP_DEBUG
+         counting = counting || gCollectTrace;
+         #endif
+         bool requested = hx::sIncrementalRequestMs > 0 && !counting;
          if (active && !requested)
          {
             std::lock_guard<std::mutex> lock(state.statsLock);
             state.forcedFinishes++;
          }
-         if (active && sgCensus)
+         if (active && counting)
             state.failed.store(true, std::memory_order_relaxed);
          if (active && hx::sIncrementalRequestMs == 0)
          {
@@ -7046,11 +7071,10 @@ public:
       STAMP(t5)
 
       size_t mem = mRowsInUse<<IMMIX_LINE_BITS;
-      #ifdef HXCPP_GC_INCREMENTAL
-      if (full || cycleFinished)
-      #else
+      // Only a full reclaim counts the bytes of the objects that survived. A
+      //  finished incremental cycle that is not one counts whole rows, which
+      //  reported several times the live bytes as live (libhxcpp #453)
       if (full)
-      #endif
          mLiveBytes = stats.bytesInUse;
       size_t baseMem = full ? bytesInUse : mem;
       #ifdef HXCPP_GC_DYNAMIC_SIZE
@@ -7609,7 +7633,7 @@ public:
    //  allocation finds it too, as GetEnclosingAllocType does in a block, and
    //  outBase is set to where it starts. Native code may hold only a field's
    //  address, which kept a small object alive but not a large one (libhxcpp #373)
-   MemType GetMemType(uintptr_t inPtr, uintptr_t *outBase = nullptr)
+   MemType GetMemType(uintptr_t inPtr, uintptr_t *outBase = nullptr, size_t inReach = 0)
    {
       BlockData* block{ reinterpret_cast<BlockData*>(inPtr & IMMIX_BLOCK_BASE_MASK) };
 
@@ -7621,9 +7645,10 @@ public:
       // Most stack words are nowhere near the large allocations - reject on
       // the cached bounds before paying for the full list scan. The bounds
       // are of the starts, so a pointer into the highest reaches past them
-      size_t reach = outBase ? sgCheckInternalOffset : 0;
+      // inReach, for a pointer field, goes further: see MarkConservativePointer
+      size_t reach = outBase ? (inReach ? inReach : sgCheckInternalOffset) : 0;
       size_t p = (size_t)inPtr;
-      if (p < mLargeMin || p > mLargeMax + reach)
+      if (p < mLargeMin || (p > mLargeMax && p - mLargeMax > reach))
          return memUnmanaged;
       uintptr_t base = 0;
 
@@ -7791,7 +7816,9 @@ MarkChunk *MarkChunk::swapForNew()
 
 
 HX_NO_SANITIZE_ADDRESS
-void MarkConservative(int *inBottom, int *inTop,hx::MarkContext *__inCtx)
+// inReach is how far into an allocation a pointer may be and still keep it:
+//  0 for a stack word, which uses sgCheckInternalOffset
+static void MarkConservativeReach(int *inBottom, int *inTop,hx::MarkContext *__inCtx, uintptr_t inReach)
 {
    #ifdef VERIFY_STACK_READ
    VerifyStackRead(inBottom, inTop);
@@ -7853,7 +7880,7 @@ void MarkConservative(int *inBottom, int *inTop,hx::MarkContext *__inCtx)
          hx::localCount++;
          #endif
          uintptr_t largeBase{};
-         MemType mem{ sGlobalAlloc->GetMemType(potentialObject, &largeBase) };
+         MemType mem{ sGlobalAlloc->GetMemType(potentialObject, &largeBase, inReach) };
 
          #ifdef HX_WATCH
          isWatch = false;
@@ -7897,9 +7924,13 @@ void MarkConservative(int *inBottom, int *inTop,hx::MarkContext *__inCtx)
                BlockDataInfo* info{ (*gBlockInfo)[block->mId] };
 
                size_t pos{ potentialObject & IMMIX_BLOCK_OFFSET_MASK };
+               // A block's base address, such as a one-past-end pointer into the
+               //  block before, holds no object, and pos - sizeof(int) would wrap
+               //  to a reach the search below took near for ever to walk
                AllocType t{
-                  sgCheckInternalOffset ?
-                     info->GetEnclosingAllocType(pos - sizeof(int), &potentialObject, allowPrevious) :
+                  pos < sizeof(int) ? allocNone :
+                  (inReach || sgCheckInternalOffset) ?
+                     info->GetEnclosingAllocType(pos - sizeof(int), &potentialObject, allowPrevious, inReach ? inReach : sgCheckInternalOffset) :
                      info->GetAllocType(pos - sizeof(int), allowPrevious) };
 
                #ifdef HX_WATCH
@@ -7982,15 +8013,28 @@ void MarkConservative(int *inBottom, int *inTop,hx::MarkContext *__inCtx)
    #endif
 }
 
+void MarkConservative(int *inBottom, int *inTop,hx::MarkContext *__inCtx)
+{
+   MarkConservativeReach(inBottom, inTop, __inCtx, 0);
+}
+
+// A cpp.Pointer field, or a pointer boxed in a Dynamic, keeps what it points
+//  into wherever it points in it, as cpp.Pointer.arrayElem(a, 100) does. A
+//  stack word keeps an allocation only within sgCheckInternalOffset of its
+//  start, since a pointer further in is usually held from the start too, but a
+//  field may be all there is (libhxcpp #451). In a block, nothing bigger than
+//  the block, and a large allocation is checked against its own size
+static const uintptr_t sPointerFieldReach = ~(uintptr_t)0 >> 1;
+
 void MarkConservativePointer(void *inPtr,hx::MarkContext *__inCtx)
 {
    void *word[1] = { inPtr };
    // MarkConservative reads every pointer-sized word starting on an int in
    //  the range, so this covers the one word and nothing past it
    #ifdef HXCPP_STACK_UP
-   MarkConservative(reinterpret_cast<int *>(word + 1) - 1, reinterpret_cast<int *>(word) + 1, __inCtx);
+   MarkConservativeReach(reinterpret_cast<int *>(word + 1) - 1, reinterpret_cast<int *>(word) + 1, __inCtx, sPointerFieldReach);
    #else
-   MarkConservative(reinterpret_cast<int *>(word), reinterpret_cast<int *>(word + 1), __inCtx);
+   MarkConservativeReach(reinterpret_cast<int *>(word), reinterpret_cast<int *>(word + 1), __inCtx, sPointerFieldReach);
    #endif
 }
 
@@ -8329,6 +8373,11 @@ public:
       if (mGCFreeZone)
          return;
       #endif
+      // Every other thread is stopped or in a zone before this is set, so this
+      //  is the collecting thread, running a finalizer that took a Mutex or
+      //  similar: it is the collection, and has nothing to wait for
+      if (sgIsCollecting)
+         return;
       PauseForCollect();
    }
 
@@ -8821,6 +8870,10 @@ public:
          #ifdef HXCPP_SCRIPTABLE
             MarkSetMember("ScriptStack",__inCtx);
             hx::MarkConservative((int *)(stack), (int *)(pointer),__inCtx);
+            // An exception a JIT helper caught waits here for the jitted code
+            //  to check for it, which it may do after allocating
+            if (exception)
+               hx::MarkConservativePointer(exception, __inCtx);
          #endif
          MarkSetMember("Registers",__inCtx);
          hx::MarkConservative(CAPTURE_REG_START, CAPTURE_REG_END, __inCtx);
@@ -8839,6 +8892,10 @@ public:
 
          #ifdef HXCPP_SCRIPTABLE
             hx::MarkConservative((int *)(stack), (int *)(pointer),__inCtx);
+            // An exception a JIT helper caught waits here for the jitted code
+            //  to check for it, which it may do after allocating
+            if (exception)
+               hx::MarkConservativePointer(exception, __inCtx);
          #endif
       #endif
 
@@ -9647,11 +9704,17 @@ void __hxcpp_exit_gc_free_zone()
 
 // The thread primitives' fast paths call this, and Mutex and Condition may be
 //  used from inside a zone: pausing there during a collection was "Bad
-//  Allocation while collecting", or waited for a release that never came
+//  Allocation while collecting", or waited for a release that never came. A
+//  thread the collector does not know, such as a native callback thread that
+//  spins on an atomic, is not one it waits for, and has nothing to stop for
 void __hxcpp_gc_safe_point()
 {
     if (hx::gPauseForCollect)
-      GetLocalAlloc()->SafePoint();
+    {
+      LocalAllocator *alloc = GetLocalAlloc(true);
+      if (alloc)
+         alloc->SafePoint();
+    }
 }
 
 //#define HXCPP_FORCE_OBJ_MAP

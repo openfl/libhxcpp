@@ -118,6 +118,9 @@ class BuildTool
         inIncludePath:Array<String>, inDirtyList:Array<String> )
    {
       mDefines = inDefines;
+      // Read once the arguments and Options.txt are in, not only from the
+      //  environment
+      exitOnThreadError = exitOnThreadError || inDefines.exists("HXCPP_EXIT_ON_ERROR");
       mFileGroups = new FileGroups();
       mCompiler = null;
       mStripper = null;
@@ -308,7 +311,7 @@ class BuildTool
       if (cached)
       {
          var cacheSize = mDefines.exists("HXCPP_CACHE_MB") ? Std.parseInt( mDefines.get("HXCPP_CACHE_MB") ) : 1000;
-         if (cacheSize!=null && cacheSize>0)
+         if (cacheSize!=null && cacheSize>0 && CompileCache.dueForTrim())
             CompileCache.clear(0,cacheSize,false,null);
       }
 
@@ -1214,8 +1217,10 @@ class BuildTool
                case "nvcc" :
                   setupNvcc();
                   group.mNvcc = true;
+                  // Set, not compared: the group kept the haxe tags, so it was
+                  //  given the host compiler's flags (libhxcpp #472)
                   if (group.mTags=="haxe,static")
-                     group.mTags=="nvcc";
+                     group.mTags="nvcc";
                case "objprefix" :
                   group.mObjPrefix = substitute(el.att.value);
                case "compilervalue" :

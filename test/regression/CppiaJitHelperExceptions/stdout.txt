@@ -1,0 +1,14 @@
+interpreted
+field += throwing toString, then allocating: caught toString threw
+field += throwing toString, then allocating: caught toString threw
+field += throwing toString, then allocating: caught toString threw
+Dynamic += throwing toString: caught toString threw
+Dynamic index += throwing toString: caught toString threw
+statements run after a throw: 0
+jit
+field += throwing toString, then allocating: caught toString threw
+field += throwing toString, then allocating: caught toString threw
+field += throwing toString, then allocating: caught toString threw
+Dynamic += throwing toString: caught toString threw
+Dynamic index += throwing toString: caught toString threw
+statements run after a throw: 0
