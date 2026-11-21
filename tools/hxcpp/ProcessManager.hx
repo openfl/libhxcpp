@@ -404,12 +404,14 @@ class ProcessManager
       catch(e:Dynamic)
       {
          Log.lock();
-         if (BuildTool.threadExitCode == 0)
-         {
+         var first = BuildTool.threadExitCode == 0;
+         if (first)
             Log.info('${Log.RED}${Log.BOLD}$e${Log.NORMAL}\n');
-            BuildTool.setThreadError(-1);
-         }
          Log.unlock();
+         // Not under the lock: with HXCPP_EXIT_ON_ERROR it ends this thread, and
+         //  the other compile threads then waited for the lock for ever
+         if (first)
+            BuildTool.setThreadError(-1);
          return -1;
       }
 
