@@ -6,6 +6,7 @@
 
 AnonConcurrentString: threads
 ArrayConcurrentString: threads
+AtomicSafePointUnregisteredThread: threads (std::thread, which needs a pthreads build)
 AtomicSpinSafePoint: threads (std::thread, which needs a pthreads build)
 AttachedThreadId: threads (std::thread, which needs a pthreads build)
 CffiNekoNullBoolWithoutInit: runs neko, which loads an ndll the test builds

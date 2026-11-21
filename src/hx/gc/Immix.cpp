@@ -9678,11 +9678,17 @@ void __hxcpp_exit_gc_free_zone()
 
 // The thread primitives' fast paths call this, and Mutex and Condition may be
 //  used from inside a zone: pausing there during a collection was "Bad
-//  Allocation while collecting", or waited for a release that never came
+//  Allocation while collecting", or waited for a release that never came. A
+//  thread the collector does not know, such as a native callback thread that
+//  spins on an atomic, is not one it waits for, and has nothing to stop for
 void __hxcpp_gc_safe_point()
 {
     if (hx::gPauseForCollect)
-      GetLocalAlloc()->SafePoint();
+    {
+      LocalAllocator *alloc = GetLocalAlloc(true);
+      if (alloc)
+         alloc->SafePoint();
+    }
 }
 
 //#define HXCPP_FORCE_OBJ_MAP
