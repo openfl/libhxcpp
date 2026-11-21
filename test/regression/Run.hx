@@ -42,6 +42,10 @@ function runOutput(test:String, emscripten:Bool):String {
 	final stdout = proc.stdout.readAll().toString();
 	final code = proc.exitCode();
 	stderrRead.wait();
+	// Each test's pipes stayed open here, and every later test inherited them:
+	//  after some 290 tests, SocketSelectHighDescriptors' sockets were past
+	//  macOS's FD_SETSIZE of 1024, and its select failed
+	proc.close();
 	lastStderr = stderr.replace("\r\n", "\n");
 
 	if (emscripten && code == 124) {
