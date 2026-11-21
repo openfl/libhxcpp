@@ -15,8 +15,7 @@ class Item {
 
 class Main {
 	// Finalizers run inside a collection, one collection at a time and under
-	// the collector's lock, so the count needs no lock of its own; taking a
-	// Mutex there would reach a safe point from inside the collection.
+	// the collector's lock, so the count needs no lock of its own.
 	static var finalized = 0;
 
 	static function onFinalize(item:Item):Void {

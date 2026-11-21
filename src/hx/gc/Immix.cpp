@@ -1433,6 +1433,11 @@ struct BlockDataInfo
    // When known to be an actual object start...
    AllocType GetAllocTypeChecked(uintptr_t inOffset, bool allowPrevious) const
    {
+      // Where an object moved out, not an object: its mark byte is 0, which
+      //  passes for the previous mark one collection in 16
+      if (*reinterpret_cast<const unsigned int *>(mPtr->mData + inOffset) == IMMIX_OBJECT_HAS_MOVED)
+         return allocNone;
+
       unsigned char time{ mPtr->mData[inOffset + HX_ENDIAN_MARK_ID_BYTE_HEADER] };
       if (((time + 1) & MARK_BYTE_MASK) != (gByteMarkID & MARK_BYTE_MASK))
       {
@@ -2136,18 +2141,27 @@ void YoungStore(hx::Object *inOwner, unsigned int &ioLogged, int inLength, const
    if (inCtx->mYoungValues && inLength>=YOUNG_LOG_MIN_LENGTH)
    {
       // Counted per cycle: the cycle is in the top 12 bits. A lost update
-      //  between threads only logs more than the limit
-      unsigned int logged = ioLogged;
+      //  between threads only logs more than the limit, so relaxed accesses
+      //  do, but plain ones were a data race
+      #if defined(__GNUC__) || defined(__clang__)
+      unsigned int logged = __atomic_load_n(&ioLogged, __ATOMIC_RELAXED);
+      #else
+      unsigned int logged = *(volatile unsigned int *)&ioLogged;
+      #endif
       unsigned int cycle = sCollectCycle & 0xfff;
       unsigned int count = (logged>>20)==cycle ? (logged & 0xfffff) : 0;
       unsigned int limit = std::min( (unsigned int)inLength>>5, 0xfffffu );
       if (count<limit)
       {
-         ioLogged = (cycle<<20) | (count+1);
+         #if defined(__GNUC__) || defined(__clang__)
+         __atomic_store_n(&ioLogged, (cycle<<20) | (count+1), __ATOMIC_RELAXED);
+         #else
+         *(volatile unsigned int *)&ioLogged = (cycle<<20) | (count+1);
+         #endif
          for(int v=0;v<inCount;v++)
          {
             const void *value = inValues[v];
-            if (!value || ((unsigned char *)value)[HX_ENDIAN_MARK_ID_BYTE])
+            if (!value || BarrierMarkByte(value))
                continue;
             MarkChunk *chunk = inCtx->mYoungValues;
             chunk->push( (hx::Object *)value );
@@ -2164,8 +2178,7 @@ void YoungStore(hx::Object *inOwner, unsigned int &ioLogged, int inLength, const
          return;
       }
    }
-   unsigned char &mark = ((unsigned char *)inOwner)[HX_ENDIAN_MARK_ID_BYTE];
-   mark |= HX_GC_REMEMBERED;
+   BarrierRemember(inOwner);
    inCtx->pushReferrer(inOwner);
 }
 
@@ -5129,6 +5142,11 @@ public:
                         header = IMMIX_OBJECT_HAS_MOVED;
                         moveObjs++;
 
+                        // The block's own start bit goes too: when the to blocks run
+                        //  out, this block is kept in part, and a start left here
+                        //  would have the next collection take the moved header for
+                        //  an object of 254 rows, marking rows past the row table
+                        allocStart[r] &= ~(1u<<i);
                         starts &= ~(1<<i);
                         if (!starts)
                            break;
@@ -8329,6 +8347,11 @@ public:
       if (mGCFreeZone)
          return;
       #endif
+      // Every other thread is stopped or in a zone before this is set, so this
+      //  is the collecting thread, running a finalizer that took a Mutex or
+      //  similar: it is the collection, and has nothing to wait for
+      if (sgIsCollecting)
+         return;
       PauseForCollect();
    }
 
@@ -8821,6 +8844,10 @@ public:
          #ifdef HXCPP_SCRIPTABLE
             MarkSetMember("ScriptStack",__inCtx);
             hx::MarkConservative((int *)(stack), (int *)(pointer),__inCtx);
+            // An exception a JIT helper caught waits here for the jitted code
+            //  to check for it, which it may do after allocating
+            if (exception)
+               hx::MarkConservativePointer(exception, __inCtx);
          #endif
          MarkSetMember("Registers",__inCtx);
          hx::MarkConservative(CAPTURE_REG_START, CAPTURE_REG_END, __inCtx);
@@ -8839,6 +8866,10 @@ public:
 
          #ifdef HXCPP_SCRIPTABLE
             hx::MarkConservative((int *)(stack), (int *)(pointer),__inCtx);
+            // An exception a JIT helper caught waits here for the jitted code
+            //  to check for it, which it may do after allocating
+            if (exception)
+               hx::MarkConservativePointer(exception, __inCtx);
          #endif
       #endif
 
@@ -9647,11 +9678,17 @@ void __hxcpp_exit_gc_free_zone()
 
 // The thread primitives' fast paths call this, and Mutex and Condition may be
 //  used from inside a zone: pausing there during a collection was "Bad
-//  Allocation while collecting", or waited for a release that never came
+//  Allocation while collecting", or waited for a release that never came. A
+//  thread the collector does not know, such as a native callback thread that
+//  spins on an atomic, is not one it waits for, and has nothing to stop for
 void __hxcpp_gc_safe_point()
 {
     if (hx::gPauseForCollect)
-      GetLocalAlloc()->SafePoint();
+    {
+      LocalAllocator *alloc = GetLocalAlloc(true);
+      if (alloc)
+         alloc->SafePoint();
+    }
 }
 
 //#define HXCPP_FORCE_OBJ_MAP

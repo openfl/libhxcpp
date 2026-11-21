@@ -91,60 +91,90 @@ static void SLJIT_CALL runJoin( ArrayAnyImpl *inArray, String *ioValue)
 
 static int SLJIT_CALL arrayPushInt( ArrayAnyImpl *inArray, int inVal)
 {
+   TRY_NATIVE
    return inArray->push(inVal);
+   CATCH_NATIVE
+   return 0;
 }
 static int SLJIT_CALL arrayPushObject( ArrayAnyImpl *inArray, hx::Object *inVal)
 {
+   TRY_NATIVE
    return inArray->push(Dynamic(inVal));
+   CATCH_NATIVE
+   return 0;
 }
 static int SLJIT_CALL arrayPushFloat( ArrayAnyImpl *inArray, double *inVal)
 {
+   TRY_NATIVE
    return inArray->push(JitLoad(inVal));
+   CATCH_NATIVE
+   return 0;
 }
 static int SLJIT_CALL arrayPushString( ArrayAnyImpl *inArray, String *inVal)
 {
+   TRY_NATIVE
    return inArray->push(JitLoad(inVal));
+   CATCH_NATIVE
+   return 0;
 }
 
 
 
 static int SLJIT_CALL arraySetInt( ArrayAnyImpl *inArray, int inIndex, int inVal)
 {
+   TRY_NATIVE
    inArray->set(inIndex,inVal);
    return inVal;
+   CATCH_NATIVE
+   return 0;
 }
 static hx::Object * SLJIT_CALL arraySetObject( ArrayAnyImpl *inArray, int inIndex, hx::Object *inVal)
 {
+   TRY_NATIVE
    inArray->set(inIndex,Dynamic(inVal));
    return inVal;
+   CATCH_NATIVE
+   return 0;
 }
 static void SLJIT_CALL arraySetFloat( ArrayAnyImpl *inArray, int inIndex, double *inVal)
 {
+   TRY_NATIVE
    inArray->set(inIndex,JitLoad(inVal));
+   CATCH_NATIVE
 }
 static void SLJIT_CALL arraySetString( ArrayAnyImpl *inArray, int inIndex, String *inVal)
 {
+   TRY_NATIVE
    inArray->set(inIndex,JitLoad(inVal));
+   CATCH_NATIVE
 }
 
 
 
 static void SLJIT_CALL arrayUnshiftInt( ArrayAnyImpl *inArray, int inVal)
 {
+   TRY_NATIVE
    inArray->unshift(inVal);
+   CATCH_NATIVE
 }
 static void SLJIT_CALL arrayUnshiftObject( ArrayAnyImpl *inArray, hx::Object *inVal)
 {
+   TRY_NATIVE
    inArray->unshift(Dynamic(inVal));
+   CATCH_NATIVE
 }
 static void SLJIT_CALL arrayUnshiftFloat( ArrayAnyImpl *inArray, double *inVal)
 {
+   TRY_NATIVE
    inArray->unshift(JitLoad(inVal));
+   CATCH_NATIVE
 }
 
 static void SLJIT_CALL arrayUnshiftString( ArrayAnyImpl *inArray, String *inVal)
 {
+   TRY_NATIVE
    inArray->unshift(JitLoad(inVal));
+   CATCH_NATIVE
 }
 
 
@@ -831,6 +861,7 @@ struct ArrayBuiltinAny : public ArrayBuiltinBase
                   case etInt:
                      args[1]->genCode(compiler, sJitArg2.as(jtInt), etInt);
                      compiler->callNative( (void *)arraySetInt, thisVal, index, sJitArg2.as(jtInt));
+                     compiler->checkException();
                      compiler->convertReturnReg(etInt, inDest, destType);
                      break;
                   case etFloat:
@@ -838,6 +869,7 @@ struct ArrayBuiltinAny : public ArrayBuiltinBase
                      JitTemp value(compiler, jtFloat);
                      args[1]->genCode(compiler, value, etFloat);
                      compiler->callNative( (void *)arraySetFloat, thisVal, index, value);
+                     compiler->checkException();
                      compiler->convert(value,etFloat, inDest, destType);
                      }
                      break;
@@ -846,12 +878,14 @@ struct ArrayBuiltinAny : public ArrayBuiltinBase
                      JitTemp value(compiler, jtString);
                      args[1]->genCode(compiler, value, etString);
                      compiler->callNative( (void *)arraySetString, thisVal, index, value);
+                     compiler->checkException();
                      compiler->convert(value,etString, inDest, destType);
                      }
                      break;
                   case etObject:
                      args[1]->genCode(compiler, sJitArg2.as(jtPointer), etObject);
                      compiler->callNative( (void *)arraySetObject, thisVal, index, sJitArg2.as(jtPointer));
+                     compiler->checkException();
                      compiler->convertReturnReg(etObject, inDest, destType);
                      break;
                   default: ; //?
@@ -868,12 +902,14 @@ struct ArrayBuiltinAny : public ArrayBuiltinBase
                   case etInt:
                      args[0]->genCode(compiler, sJitArg1.as(jtInt), etInt);
                      compiler->callNative( (void *)arrayPushInt, thisVal, sJitArg1.as(jtInt));
+                     compiler->checkException();
                      break;
                   case etFloat:
                      {
                      JitTemp value(compiler, jtFloat);
                      args[0]->genCode(compiler, value, etFloat);
                      compiler->callNative( (void *)arrayPushFloat, thisVal, value);
+                     compiler->checkException();
                      }
                      break;
                   case etString:
@@ -881,11 +917,13 @@ struct ArrayBuiltinAny : public ArrayBuiltinBase
                      JitTemp value(compiler, jtString);
                      args[0]->genCode(compiler, value, etString);
                      compiler->callNative( (void *)arrayPushString, thisVal, value);
+                     compiler->checkException();
                      }
                      break;
                   case etObject:
                      args[0]->genCode(compiler, sJitArg1.as(jtPointer), etObject);
                      compiler->callNative( (void *)arrayPushObject, thisVal, sJitArg1.as(jtPointer));
+                     compiler->checkException();
                      break;
                   default: ; //?
                }
@@ -901,12 +939,14 @@ struct ArrayBuiltinAny : public ArrayBuiltinBase
                   case etInt:
                      args[0]->genCode(compiler, sJitArg1.as(jtInt), etInt);
                      compiler->callNative( (void *)arrayUnshiftInt, thisVal, sJitArg1.as(jtInt));
+                     compiler->checkException();
                      break;
                   case etFloat:
                      {
                      JitTemp value(compiler, jtFloat);
                      args[0]->genCode(compiler, value, etFloat);
                      compiler->callNative( (void *)arrayUnshiftFloat, thisVal, value);
+                     compiler->checkException();
                      }
                      break;
                   case etString:
@@ -914,11 +954,13 @@ struct ArrayBuiltinAny : public ArrayBuiltinBase
                      JitTemp value(compiler, jtString);
                      args[0]->genCode(compiler, value, etString);
                      compiler->callNative( (void *)arrayUnshiftString, thisVal, value);
+                     compiler->checkException();
                      }
                      break;
                   case etObject:
                      args[0]->genCode(compiler, sJitArg1.as(jtPointer), etObject);
                      compiler->callNative( (void *)arrayUnshiftObject, thisVal, sJitArg1.as(jtPointer));
+                     compiler->checkException();
                      break;
                   default: ; //?
                }

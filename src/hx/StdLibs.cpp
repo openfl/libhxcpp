@@ -423,6 +423,23 @@ void WriteConsoleAllA(HANDLE h, const char *str, DWORD length) {
 }
 #endif
 
+namespace
+{
+// Output to stdout can block for a long time: a pipe nobody reads, a slow
+//  reader, or a Windows console with text selected. Outside a GC-free zone, the
+//  next collection on any thread waits for it, and every other thread with it.
+//  The text is made before, since nothing may allocate in a zone, and a thread
+//  the collector does not know needs no zone.
+struct OutputZone
+{
+   bool entered;
+   OutputZone() : entered(HX_CTX_GET && hx::TryGCFreeZone()) { }
+   ~OutputZone() { if (entered) hx::ExitGCFreeZone(); }
+   OutputZone(const OutputZone &) = delete;
+   OutputZone &operator=(const OutputZone &) = delete;
+};
+}
+
 void __trace(Dynamic inObj, Dynamic info)
 {
    String text;
@@ -434,7 +451,6 @@ void __trace(Dynamic inObj, Dynamic info)
    DWORD mode;
    if (GetConsoleMode(handle, &mode))
    {
-      fflush(stdout);
       String s;
       if (info == null()) {
          s = HX_CSTRING("?? ") + text + HX_CSTRING("\n");
@@ -445,30 +461,38 @@ void __trace(Dynamic inObj, Dynamic info)
       }
       if (s.isUTF16Encoded())
       {
-         WriteConsoleAllW(handle, s.__WCStr(), s.length);
+         const wchar_t *wide = s.__WCStr();
+         OutputZone zone;
+         fflush(stdout);
+         WriteConsoleAllW(handle, wide, s.length);
       } else {
          // ascii
-         WriteConsoleAllA(handle, s.__CStr(), s.length);
+         const char *narrow = s.__CStr();
+         OutputZone zone;
+         fflush(stdout);
+         WriteConsoleAllA(handle, narrow, s.length);
       }
       return;
    }
 #endif
 
    hx::strbuf convertBuf;
+   const char *textOut = text.raw_ptr() ? text.out_str(&convertBuf) : "null";
    if (info==null())
    {
-      PRINTF("?? %s\n", text.raw_ptr() ? text.out_str(&convertBuf) : "null");
+      OutputZone zone;
+      PRINTF("?? %s\n", textOut);
+      fflush(stdout);
    }
    else
    {
       const char *filename = Dynamic((info)->__Field(HX_CSTRING("fileName"), HX_PROP_DYNAMIC))->toString().utf8_str(0,false);
       int line = Dynamic((info)->__Field( HX_CSTRING("lineNumber") , HX_PROP_DYNAMIC))->__ToInt();
 
-      hx::strbuf convertBuf;
-      //PRINTF("%s:%d: %s\n", filename, line, text.raw_ptr() ? text.out_str(&convertBuf) : "null");
-      PRINTF("%s:%d: %s\n", filename, line, text.raw_ptr() ? text.out_str(&convertBuf) : "null");
+      OutputZone zone;
+      PRINTF("%s:%d: %s\n", filename, line, textOut);
+      fflush(stdout);
    }
-   fflush(stdout);
 }
 
 void __hxcpp_exit(int inExitCode)
@@ -779,13 +803,17 @@ void __hxcpp_print_string(const String &inString)
    HANDLE handle;
    if (hxStdoutIsConsole(handle) && inV.isUTF16Encoded())
    {
+      const wchar_t *wide = inV.__WCStr();
+      OutputZone zone;
       fflush(stdout);
-      WriteConsoleAllW(handle, inV.__WCStr(), inV.length);
+      WriteConsoleAllW(handle, wide, inV.length);
       return;
    }
 #endif
    hx::strbuf convertBuf;
-   PRINTF("%s", inV.out_str(&convertBuf) );
+   const char *out = inV.out_str(&convertBuf);
+   OutputZone zone;
+   PRINTF("%s", out );
 }
 
 void __hxcpp_println_string(const String &inString)
@@ -796,15 +824,19 @@ void __hxcpp_println_string(const String &inString)
    bool isConsole = hxStdoutIsConsole(handle);
    if (isConsole && inV.isUTF16Encoded())
    {
+      const wchar_t *wide = inV.__WCStr();
+      OutputZone zone;
       fflush(stdout);
-      WriteConsoleAllW(handle, inV.__WCStr(), inV.length);
+      WriteConsoleAllW(handle, wide, inV.length);
       fwrite("\n", 1, 1, stdout);
       fflush(stdout);
       return;
    }
 #endif
    hx::strbuf convertBuf;
-   PRINTF("%s\n", inV.out_str(&convertBuf));
+   const char *out = inV.out_str(&convertBuf);
+   OutputZone zone;
+   PRINTF("%s\n", out);
    // Flush every line, redirected or not.  Boot asks for line buffering,
    // but the Windows CRT treats _IOLBF as full buffering, so a redirected
    // stdout there held a server's log lines back from whatever reads them,

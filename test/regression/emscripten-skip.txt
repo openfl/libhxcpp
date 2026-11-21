@@ -6,6 +6,8 @@
 
 AnonConcurrentString: threads
 ArrayConcurrentString: threads
+AtomicSafePointUnregisteredThread: threads (std::thread, which needs a pthreads build)
+AtomicSpinSafePoint: threads (std::thread, which needs a pthreads build)
 AttachedThreadId: threads (std::thread, which needs a pthreads build)
 CffiNekoNullBoolWithoutInit: runs neko, which loads an ndll the test builds
 CffiNekoValueTags: runs neko, which loads an ndll the test builds
@@ -45,6 +47,7 @@ GcRunKeepsHeap: expects the desktop 20 MB working target; other platforms, Emscr
 GcScopeOwnership: counts thread attachments, which single-threaded Emscripten builds do not make
 GcSmallNursery: threads (std::thread, which needs a pthreads build)
 GcStackLargeContainer: threads (std::thread, which needs a pthreads build)
+GcStdoutBlocked: processes (runs itself) and threads
 GcTraceDeepGraph: processes (runs itself) and threads (std::thread, which needs a pthreads build)
 GcTraceLargeObjects: processes (runs itself)
 GcWeakMapChain: threads
@@ -84,6 +87,7 @@ ProcessExitCodeTwice: processes
 ProcessPosixStartError: processes
 ProcessReapAfterClose: processes
 ProcessSigpipeHandler: processes
+ProcessStdinCloseCollects: processes and threads
 ProcessWaitError: processes
 PthreadFastTls: threads
 RegexpConcurrentCollection: threads

@@ -1,0 +1,2 @@
+collected while a thread spun on an AtomicInt
+the spinning thread saw the flag

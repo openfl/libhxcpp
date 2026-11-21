@@ -452,6 +452,8 @@ public:
    std::unordered_set<int>           allFileIds;
    typedef std::map< std::string, int > InterfaceSlots;
    InterfaceSlots                  interfaceSlots;
+   // The slot the next name the host does not know gets
+   int                             nextInterfaceSlot;
 
    StackLayout                     *layout;
    CppiaClassInfo                  *linkingClass;
