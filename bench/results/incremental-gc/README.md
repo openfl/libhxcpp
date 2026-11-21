@@ -90,4 +90,4 @@ Local TSan did not reach a usable test run: the installed GCC runtime rejected t
 
 ## Remaining gates
 
-This is experimental. The throughput target in [#372](https://github.com/openfl/libhxcpp/issues/372) is still open. Weak closure, finalizers, reclamation, root capture, thread rendezvous and forced completion can exceed the slice target. Longer soaks, additional memory-pressure and native-integration coverage, pause distributions for all stopped threads, progress and metadata high-water counters, and cross-platform results are still needed before considering a default change.
+This is experimental. The throughput, maximum pause and memory targets set in [#372](https://github.com/openfl/libhxcpp/issues/372) are still open and tracked in [#446](https://github.com/openfl/libhxcpp/issues/446). Weak closure, finalizers, reclamation, root capture, thread rendezvous and forced completion can exceed the slice target. Longer soaks, additional memory-pressure and native-integration coverage, pause distributions for all stopped threads, progress and metadata high-water counters, and cross-platform results are still needed before considering a default change.
