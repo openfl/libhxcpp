@@ -120,9 +120,16 @@ HaxeNativeClass *HaxeNativeClass::hxObject()
 
 void HaxeNativeClass::link()
 {
-   // Each load links, and the super classes it sets are shared by every module
+   // Each load links, and the super classes it sets are shared by every module.
+   //  Linking allocates, so a thread that waits for another's link waits in a
+   //  GC-free zone: outside one, a collection the linker reached waited for it
    static std::mutex linkLock;
-   std::lock_guard<std::mutex> lock(linkLock);
+   if (!linkLock.try_lock())
+   {
+      hx::AutoGCFreeZone zone;
+      linkLock.lock();
+   }
+   std::lock_guard<std::mutex> lock(linkLock, std::adopt_lock);
    HaxeNativeClass *hxObj = hxObject();
    for(ScriptRegisteredMap::iterator i = sScriptRegistered->begin(); i!=sScriptRegistered->end();++i)
    {
