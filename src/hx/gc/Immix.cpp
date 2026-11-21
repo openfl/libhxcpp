@@ -7924,7 +7924,11 @@ static void MarkConservativeReach(int *inBottom, int *inTop,hx::MarkContext *__i
                BlockDataInfo* info{ (*gBlockInfo)[block->mId] };
 
                size_t pos{ potentialObject & IMMIX_BLOCK_OFFSET_MASK };
+               // A block's base address, such as a one-past-end pointer into the
+               //  block before, holds no object, and pos - sizeof(int) would wrap
+               //  to a reach the search below took near for ever to walk
                AllocType t{
+                  pos < sizeof(int) ? allocNone :
                   (inReach || sgCheckInternalOffset) ?
                      info->GetEnclosingAllocType(pos - sizeof(int), &potentialObject, allowPrevious, inReach ? inReach : sgCheckInternalOffset) :
                      info->GetAllocType(pos - sizeof(int), allowPrevious) };
