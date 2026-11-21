@@ -1,5 +1,5 @@
 
-libhxcpp 6.0.0 (unreleased)
+libhxcpp 6.0.0
 ------------------------------------------------------------
 
 * Builds with the compile cache no longer size the whole cache each time: with 29792 files that took 98 ms to over a second before every build, even one with nothing to compile, and takes 3 to 14 ms now. The cache is trimmed to HXCPP_CACHE_MB at most once in ten minutes (libhxcpp #473)
