@@ -130,6 +130,8 @@ class Main {
 		var stale:Int = untyped __cpp__("pickStale()");
 		var partial:Int = untyped __cpp__("gPartial");
 		Sys.stderr().writeString('partly emptied blocks: $partial, moved-out addresses: $stale\n');
+		// Without a partly emptied block nothing below is tested, and every count is 0
+		Sys.println("found a partly emptied block with moved-out addresses: " + (partial > 0 && stale > 0));
 
 		var fillers = new haxe.ds.Vector<Filler>(40000);
 		untyped __cpp__("collectWithStale()");
