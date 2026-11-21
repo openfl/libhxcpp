@@ -1,3 +1,4 @@
+found a partly emptied block with moved-out addresses: true
 moved-out locations marked as objects: 0
 moved-out locations marked as objects, again: 0
 fillers changed: 0
