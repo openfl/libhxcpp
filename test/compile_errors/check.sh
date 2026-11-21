@@ -26,12 +26,18 @@ build() {
   echo "exit $?"
 }
 
+# expect_failure <name> <text the log must show> <command...>: the build must
+# fail for that reason, not for an unrelated one such as a missing tool
 expect_failure() {
-  local name=$1; shift
+  local name=$1 expected=$2; shift 2
   local result
   result=$(build "$@")
   if [ "$result" = "exit 0" ] || [ "$result" = "hung" ]; then
     echo "::error::$name: $result, where it should fail"
+    tail -20 build.log
+    failed=1
+  elif ! grep -q "$expected" build.log; then
+    echo "::error::$name: failed ($result), but without \"$expected\" in its log"
     tail -20 build.log
     failed=1
   else
@@ -39,9 +45,9 @@ expect_failure() {
   fi
 }
 
-(cd error && HXCPP_EXIT_ON_ERROR=1 expect_failure "HXCPP_EXIT_ON_ERROR in the environment" haxe build.hxml -D "$HXCPP_ARCH_FLAG") || failed=1
-(cd error && expect_failure "-D HXCPP_EXIT_ON_ERROR" haxe build.hxml -D HXCPP_EXIT_ON_ERROR -D "$HXCPP_ARCH_FLAG") || failed=1
-(cd tags && expect_failure "two optimisation tags" haxe build.hxml -D "$HXCPP_ARCH_FLAG") || failed=1
+(cd error && HXCPP_EXIT_ON_ERROR=1 expect_failure "HXCPP_EXIT_ON_ERROR in the environment" this_is_not_cpp haxe build.hxml -D "$HXCPP_ARCH_FLAG") || failed=1
+(cd error && expect_failure "-D HXCPP_EXIT_ON_ERROR" this_is_not_cpp haxe build.hxml -D HXCPP_EXIT_ON_ERROR -D "$HXCPP_ARCH_FLAG") || failed=1
+(cd tags && expect_failure "two optimisation tags" "More than one optimization tag" haxe build.hxml -D "$HXCPP_ARCH_FLAG") || failed=1
 
 # Windows only: elsewhere a read-only file can still be deleted
 if [ "$OS" = "Windows_NT" ]; then
@@ -56,7 +62,7 @@ if [ "$OS" = "Windows_NT" ]; then
     # Newer than the object by more than the build tool's one second
     sleep 2
     cp ../Main.hx Main.hx
-    expect_failure "a compile error over a read-only object" haxe build.hxml -D "$HXCPP_ARCH_FLAG"
+    expect_failure "a compile error over a read-only object" this_is_not_cpp haxe build.hxml -D "$HXCPP_ARCH_FLAG"
     # The old object must not be linked: the link itself may then fail or not
     if grep -q 'Link:' build.log; then
       echo "::error::a compile error over a read-only object: linked the old object"
