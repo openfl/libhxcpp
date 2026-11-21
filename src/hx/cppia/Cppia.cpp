@@ -3568,9 +3568,17 @@ struct CallMember : public CppiaExpr
          if (!type->cppiaClass->newFunc)
             throw "Super constructor call on a class with no constructor";
          // A class's constructor calls its own super class's. Any other script
-         //  class's ran on an instance laid out for this one, past its end
-         if (inModule.linkingClass && classId!=inModule.linkingClass->superId)
-            throw "Super constructor call to a class that is not the super class";
+         //  class's ran on an instance laid out for this one, past its end. A
+         //  class with no constructor of its own links the one it inherits, so
+         //  the call may be to the super class of any class it extends
+         if (inModule.linkingClass)
+         {
+            bool ancestor = false;
+            for(CppiaClassInfo *c=inModule.linkingClass; c && !ancestor; c=c->superType ? c->superType->cppiaClass : 0)
+               ancestor = classId==c->superId;
+            if (!ancestor)
+               throw "Super constructor call to a class that is not the super class";
+         }
          //CPPIALOG("Using cppia super %p %p\n", type->cppiaClass->newFunc, type->cppiaClass->newFunc->funExpr);
          CppiaExpr *replace = new CallFunExpr( this, 0, (ScriptCallable*)type->cppiaClass->newFunc->funExpr, args, true );
          replace->link(inModule);
@@ -6431,10 +6439,9 @@ struct EnumIExpr : public CppiaDynamicExpr
    int       index;
    int       classId;
    // Whether link bounded index by the enum's constructors
-   bool      indexChecked;
 
 
-   EnumIExpr(CppiaStream &stream) : indexChecked(false)
+   EnumIExpr(CppiaStream &stream)
    {
       classId = stream.getTypeId();
       index = stream.getInt();
@@ -6445,17 +6452,13 @@ struct EnumIExpr : public CppiaDynamicExpr
    CppiaExpr *link(CppiaModule &inModule) HXCPP_OVERRIDE
    {
       // An index from the file read past the enum value. A script enum's
-      //  largest constructor bounds it here, for the JIT, which reads the
-      //  parameter directly; the interpreter checks the value's own count
+      //  largest constructor bounds it here; the interpreter and the JIT
+      //  also check the value's own count when they read
       if (index<0)
          throw "Bad enum index";
       CppiaClassInfo *info = inModule.types[classId]->cppiaClass;
-      if (info && info->isEnum)
-      {
-         if (index>=info->mostEnumArgs())
-            throw "Bad enum index";
-         indexChecked = true;
-      }
+      if (info && info->isEnum && index>=info->mostEnumArgs())
+         throw "Bad enum index";
       object = object->link(inModule);
       return this;
    }
@@ -6479,20 +6482,31 @@ struct EnumIExpr : public CppiaDynamicExpr
       return value->_hx_getParamI(inIndex).mPtr;
    }
 
+   // Where an enum value keeps its parameter count, which is protected
+   struct CountOf : public EnumBase_obj
+   {
+      static int offset() { return (int)offsetof(CountOf, mFixedFields); }
+   };
+
    void genCode(CppiaCompiler *compiler, const JitVal &inDest, ExprType destType) HXCPP_OVERRIDE
    {
       object->genCode(compiler, sJitTemp0, etObject);
-      if (indexChecked)
+      int offset = sizeof( EnumBase_obj ) + index*sizeof(cpp::Variant);
       {
-         int offset = sizeof( EnumBase_obj ) + index*sizeof(cpp::Variant);
+         // The value's own count bounds the read, as in the interpreter: a
+         //  host enum's constructors are not known here, Haxe types most reads
+         //  as Dynamic, and a script enum's largest constructor can have more
+         //  parameters than this value. The usual read stays inline: only a
+         //  null value or an index past its count takes the call
+         JumpId isNull = compiler->compare(cmpP_ZERO, sJitTemp0.as(jtPointer), (void *)0);
+         JumpId past = compiler->compare(cmpI_SIG_LESS_EQUAL, sJitTemp0.star(jtInt, CountOf::offset()), JitVal(index));
          compiler->genVariantValueTemp0(offset, inDest, destType);
-      }
-      else
-      {
-         // A host enum's constructors are not known here, so its value's own
-         //  count bounds the read, as in the interpreter
+         JumpId done = compiler->jump();
+         compiler->comeFrom(isNull);
+         compiler->comeFrom(past);
          compiler->callNative( (void *)paramChecked, sJitTemp0.as(jtPointer), JitVal(index) );
          compiler->convertReturnReg(etObject, inDest, destType);
+         compiler->comeFrom(done);
       }
    }
    #endif
