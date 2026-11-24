@@ -125,6 +125,7 @@ ThreadEndsWhileCollecting: threads
 ThreadScratchApi4: threads
 ThreadWaitTimeouts: threads
 TimerStampFirstCall: threads
+TlsHighSlot: threads
 UncaughtNullException: processes (runs itself)
 WeakAdapterDepth: threads (std::thread, which needs a pthreads build)
 WeakMapIndirectChain: threads (std::thread, which needs a pthreads build)
