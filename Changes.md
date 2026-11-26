@@ -2,6 +2,8 @@
 libhxcpp 6.0.1 (unreleased)
 ------------------------------------------------------------
 
+* Fixed a Haxe exception that no catch takes ending the process without its error: one thrown in a callback the OS or a library calls, through a noexcept function or a destructor, from the HXCPP_CATCH_SEGV handler, or out of the function of a thread Haxe did not start, ends the process through std::terminate, where GCC's runtime printed only "terminate called after throwing an instance of 'Dynamic'", LLVM's "libc++abi: terminating due to uncaught exception of type Dynamic", and MSVC's nothing at all. The runtime's terminate handler now prints it as main's catch does, its stack and then "Error : " and the message, says it escaped through native code, shows it in a message box in a program linked for the Windows subsystem and logs it on Android, then calls the handler that was there before. MSVC's runtime keeps a handler for each thread, so there it covers the threads the collector has known
+
 libhxcpp 6.0.0
 ------------------------------------------------------------
 

@@ -32,6 +32,7 @@ CppiaNullDynamicArray: its host is the first --next section, which -D emscripten
 CppiaStackSize: threads (std::thread, which needs a pthreads build)
 CppiaThreadedLookups: threads
 DateTimezoneCache: Emscripten takes the local zone from JavaScript and ignores TZ
+EscapedHaxeException: processes and threads (std::thread, which needs a pthreads build)
 ExitWithBusyWorker: processes and threads
 FileFinalizerFlush: threads (std::thread, which needs a pthreads build)
 FinalizerExceptionState: threads (std::thread, which needs a pthreads build)
