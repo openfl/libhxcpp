@@ -1,4 +1,9 @@
 
+libhxcpp 6.1.0 (unreleased)
+------------------------------------------------------------
+
+* Added hxcpp.ssl.DigestStream, a digest that takes its input in pieces, so a program can hash a large file a block at a time instead of holding all of it in memory, as sys.ssl.Digest.make needs. new DigestStream(SHA256) starts one, update(bytes, pos, len) adds a range of bytes, and finish() returns the digest, the same as Digest.make gives for the whole input, with the same algorithms. A stream that is never finished is freed by the collector, and a bad algorithm or range, or a call after finish, throws. A build that uses it needs -lib hxcpp or -lib libhxcpp, as hxcpp.gc.Incremental does, and links the ssl library without any sys.ssl class
+
 libhxcpp 6.0.1 (unreleased)
 ------------------------------------------------------------
 

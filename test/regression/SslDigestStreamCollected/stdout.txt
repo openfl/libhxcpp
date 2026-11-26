@@ -1,0 +1,6 @@
+unfinished streams contribute to GC pressure: true
+kept streams digest correctly after collections: true
+finishing half the streams frees their memory: true
+finalizing dropped streams removes their pressure: true
+abandoned streams are freed by collection: true
+a new stream digests after the finalizers ran: true

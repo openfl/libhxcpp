@@ -1021,6 +1021,9 @@ Dynamic _hx_ssl_key_from_pem( String data, bool pub, String pass );
 Array<unsigned char> _hx_ssl_dgst_make( Array<unsigned char> buf, String alg );
 Array<unsigned char> _hx_ssl_dgst_sign( Array<unsigned char> buf, Dynamic hpkey, String alg );
 bool _hx_ssl_dgst_verify( Array<unsigned char> buf, Array<unsigned char> sign, Dynamic hpkey, String alg );
+Dynamic _hx_ssl_dgst_new(String alg);
+void _hx_ssl_dgst_update(Dynamic hdgst, Array<unsigned char> buf, int pos, int len);
+Array<unsigned char> _hx_ssl_dgst_finish(Dynamic hdgst);
 
 
 #endif

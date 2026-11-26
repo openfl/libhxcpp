@@ -1,0 +1,30 @@
+an unknown algorithm throws: true
+an empty algorithm name throws: true
+a null algorithm throws: true
+a negative pos throws: true
+a negative len throws: true
+a pos past the end throws: true
+a len past the end throws: true
+a pos and len past the end throws: true
+a pos and len whose sum overflows throws: true
+a large pos and len whose sum overflows throws: true
+a minimum pos throws: true
+a pos into empty bytes throws: true
+null bytes throws: true
+a stream that saw misuse still digests what it was given: true
+an update after finish throws: true
+a zero-length update after finish throws: true
+a finish after finish throws: true
+a null handle to update throws: true
+a null handle to finish throws: true
+a String as the handle throws: true
+an object as the handle throws: true
+an Array as the handle throws: true
+a TLS configuration handle throws: true
+an unknown algorithm to the native throws: true
+a null algorithm to the native throws: true
+the native handle digests what it was given: true
+a native handle already freed by finish, to update throws: true
+a native handle already freed by finish, to finish throws: true
+a new stream digests: true
+done
