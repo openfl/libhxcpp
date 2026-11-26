@@ -1,0 +1,5 @@
+through a noexcept function: reported
+a null: reported
+on a native thread: reported
+on a thread the collector no longer knows: reported
+inside a GC-free zone: reported

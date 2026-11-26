@@ -10,6 +10,7 @@ namespace hx
 {
 
 void ParkThreadsForExit();
+void InstallTerminateHandler();
 
 void Boot()
 {
@@ -32,6 +33,9 @@ void Boot()
 	ArrayBase::__boot();
 	EnumBase_obj::__boot();
    Math_obj::__boot();
+
+   // Reports a Haxe exception that no catch takes before the process ends
+   InstallTerminateHandler();
 
    #if !defined(HXCPP_SINGLE_THREADED_APP) && !defined(HX_WINRT)
    // Other threads stop running Haxe code once the process starts to exit.

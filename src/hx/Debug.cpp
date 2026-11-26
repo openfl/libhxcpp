@@ -12,6 +12,8 @@
 #include <mutex>
 #include <atomic>
 #include <algorithm>
+#include <thread>
+#include <chrono>
 
 
 #if defined(HXCPP_CATCH_SEGV) && !defined(_MSC_VER)
@@ -137,6 +139,246 @@ void CriticalError(const String &inErr, bool inAllowFixup)
     CriticalErrorHandler(inErr, inAllowFixup);
 }
 
+
+// ---- Haxe exceptions that no catch takes ------------------------------------
+//
+// A Haxe exception that escapes every C++ catch ends the process through
+//  std::terminate: one thrown in a callback the OS or a library calls, through
+//  a noexcept function or a destructor, from the HXCPP_CATCH_SEGV signal
+//  handler, or anywhere else main's catch cannot reach. The C++ runtime then
+//  says at most that a 'Dynamic' was thrown, and MSVC's says nothing, so this
+//  handler reports it as main's catch does before the process ends.
+
+#if defined(_MSC_VER)
+#define HX_TERMINATE_NOINLINE __declspec(noinline)
+#elif defined(__GNUC__)
+#define HX_TERMINATE_NOINLINE __attribute__((noinline))
+#else
+#define HX_TERMINATE_NOINLINE
+#endif
+
+bool IsCollectingThread();
+
+static void HaxeTerminate();
+
+// MSVC's runtime keeps a terminate handler for each thread, so each thread the
+//  collector knows installs this one as it attaches, and keeps the one it had
+#ifdef _MSC_VER
+static thread_local std::terminate_handler sPreviousTerminate = 0;
+#else
+static std::terminate_handler sPreviousTerminate = 0;
+#endif
+// Set on a thread in the handler, which ends the process if it gets there again
+static thread_local bool sInTerminate = false;
+// Set by the first thread to report, which ends the process for every thread
+static std::atomic<bool> sReportingEscape(false);
+
+void InstallTerminateHandler()
+{
+   if (std::get_terminate() != HaxeTerminate)
+      sPreviousTerminate = std::set_terminate(HaxeTerminate);
+}
+
+static void PrintEscaped(const char *inLine)
+{
+#ifdef ANDROID
+   __android_log_print(ANDROID_LOG_ERROR, "Exception", "%s", inLine);
+#endif
+   printf("%s\n", inLine);
+}
+
+#if defined(HX_WINDOWS) && !defined(HX_WINRT)
+// A program linked for the Windows subsystem, as HX_WIN_MAIN's are, has no
+//  console to print to, so its main shows a message box instead
+static bool IsWindowsSubsystem()
+{
+   const char *base = (const char *)GetModuleHandleA(0);
+   if (!base)
+      return false;
+   const IMAGE_NT_HEADERS *nt = (const IMAGE_NT_HEADERS *)(base + ((const IMAGE_DOS_HEADER *)base)->e_lfanew);
+   return nt->OptionalHeader.Subsystem == IMAGE_SUBSYSTEM_WINDOWS_GUI;
+}
+#endif
+
+// Records the frames the exception has left, then those it has not: with no
+//  catch to reach, it may not have unwound at all
+static void LockInEscapedStack(StackContext *ctx)
+{
+#ifdef HXCPP_STACK_TRACE
+   // Not set if the exception did not come from hx::Throw, so what the stack
+   //  holds is an earlier exception's
+   if (!ctx->mIsUnwindingException)
+      ctx->mExceptionStack.clear();
+   for (int i = ctx->mStackFrames.size() - 1; i >= 0; --i)
+      ctx->mExceptionStack.push(*ctx->mStackFrames[i]);
+   // Frames entered while reporting must not change it
+   ctx->mIsUnwindingException = false;
+   ctx->mUnwindResumeDepth = -1;
+   ctx->mOuterExceptionStack.clear();
+#endif
+}
+
+// Below the top of stack its caller set, so the collector sees its copy of the
+//  exception
+HX_TERMINATE_NOINLINE static void ReportEscapedException(const std::exception_ptr &inException, bool inThreadWasKnown)
+{
+   Dynamic e;
+   try
+   {
+      std::rethrow_exception(inException);
+   }
+   catch (Dynamic &caught)
+   {
+      e = caught;
+   }
+   catch (...)
+   {
+      return;
+   }
+
+   StackContext *ctx = StackContext::getCurrent();
+   if (inThreadWasKnown)
+      LockInEscapedStack(ctx);
+
+   String customStack;
+   if (e != null())
+   {
+      try
+      {
+         customStack = e->__Field(HX_CSTRING("_hx_customStack"), HX_PROP_DYNAMIC).asString();
+      }
+      catch (...)
+      {
+         customStack = String();
+      }
+   }
+
+   hx::strbuf buf;
+   if (hx::IsNotNull(customStack))
+   {
+      try
+      {
+         PrintEscaped(customStack.utf8_str(&buf));
+      }
+      catch (...)
+      {
+      }
+   }
+#ifdef HXCPP_STACK_TRACE
+   else if (inThreadWasKnown)
+   {
+      try
+      {
+         ctx->dumpExceptionStack();
+      }
+      catch (...)
+      {
+      }
+   }
+#endif
+
+   String message;
+   const char *text = "null";
+   if (e != null())
+   {
+      try
+      {
+         message = e->toString();
+         text = hx::IsNull(message) ? "null" : message.utf8_str(&buf);
+      }
+      catch (...)
+      {
+         text = "(a Haxe exception whose toString threw)";
+      }
+   }
+
+   printf("Error : %s\n", text);
+#ifdef ANDROID
+   __android_log_print(ANDROID_LOG_ERROR, "Exception", "%s", text);
+#endif
+   PrintEscaped("The exception escaped through native code, ending the process");
+   fflush(stdout);
+
+#if defined(HX_WINDOWS) && !defined(HX_WINRT)
+   if (IsWindowsSubsystem())
+   {
+      typedef int (WINAPI *MessageBoxFunc)(HWND, LPCSTR, LPCSTR, UINT);
+      HMODULE user32 = LoadLibraryA("user32.dll");
+      MessageBoxFunc messageBox = user32 ? (MessageBoxFunc)GetProcAddress(user32, "MessageBoxA") : 0;
+      if (messageBox)
+         messageBox(0, text, "Error", 0);
+   }
+#endif
+}
+
+static bool IsHaxeException(const std::exception_ptr &inException)
+{
+   if (!inException)
+      return false;
+   try
+   {
+      std::rethrow_exception(inException);
+   }
+   catch (Dynamic &)
+   {
+      return true;
+   }
+   catch (...)
+   {
+   }
+   return false;
+}
+
+static void HaxeTerminate()
+{
+   // Terminate again on this thread, from inside the report or a handler it
+   //  called: going round again would never end
+   if (sInTerminate)
+      abort();
+   sInTerminate = true;
+
+   std::exception_ptr exception = std::current_exception();
+   if (IsHaxeException(exception))
+   {
+      // A collection running on this thread, as in a finalizer, cannot
+      //  allocate, nor wait for another thread that does
+      bool collecting = IsCollectingThread();
+
+      if (sReportingEscape.exchange(true))
+      {
+         // Another thread is reporting and will end the process. It may need a
+         //  collection meanwhile, so this thread keeps out of its way
+         if (collecting)
+            abort();
+         if (StackContext::getCurrent())
+            TryGCFreeZone();
+         for (;;)
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+      }
+
+      if (collecting)
+      {
+         printf("Error : (a Haxe exception, which cannot be read during a collection)\n");
+         PrintEscaped("The exception escaped through native code, ending the process");
+         fflush(stdout);
+      }
+      else
+      {
+         // Reporting runs Haxe code, which needs a thread the collector knows,
+         //  outside any GC-free zone. On a thread it did not know, the stack
+         //  of frames is not the exception's
+         bool known = StackContext::getCurrent() != 0;
+         int topOfStack = 0;
+         SetTopOfStack(&topOfStack, true);
+         ReportEscapedException(exception, known);
+      }
+   }
+
+   std::terminate_handler previous = sPreviousTerminate;
+   if (previous && previous != HaxeTerminate)
+      previous();
+   abort();
+}
 
 #ifdef HXCPP_CATCH_SEGV
 class hxSehException : public hx::Object
@@ -426,6 +668,12 @@ void StackContext::onThreadAttach()
       #else
       mOldSignalFunc = signal( SIGSEGV, hxSignalFunction );
       #endif
+   #endif
+
+   #ifdef _MSC_VER
+   // MSVC's runtime keeps a terminate handler for each thread, so the one
+   //  hx::Boot installs covers only its own
+   InstallTerminateHandler();
    #endif
 
    #ifdef HXCPP_SCRIPTABLE

@@ -171,6 +171,8 @@ Each run also boots the program again. `main` calls `hx::Boot()` and `__boot_all
 
 The generated `main` returns 0, or -1 after printing an uncaught exception. `Sys.exit(code)` calls the C `exit` instead of returning from `main`.
 
+A Haxe exception that never reaches `main`'s catch, as one thrown in a callback the OS or a library calls, through a `noexcept` function, or out of the function of a thread Haxe did not start, ends the process through `std::terminate`. Before it does, hxcpp prints it as `main` would, its stack and then `Error : ` and the message, and says it escaped through native code. A program linked for the Windows subsystem also shows it in a message box. With MSVC's runtime, which keeps a terminate handler for each thread, this covers the threads the collector has known: the threads Haxe starts, and foreign threads once they attach.
+
 
 ### Cppia script stacks
 

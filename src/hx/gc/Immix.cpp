@@ -8258,6 +8258,17 @@ public:
    //  SetTopOfStack(0,_) -> pop stack lock. If all gone, clear global stack lock
    //
 
+   // While a collection runs, each other thread the collector knows is stopped
+   //  or in a GC-free zone, so a thread that is neither runs it
+   bool IsCollecting() const
+   {
+      #ifndef HXCPP_SINGLE_THREADED_APP
+      if (mGCFreeZone)
+         return false;
+      #endif
+      return sgIsCollecting;
+   }
+
    #ifdef HXCPP_EXPLICIT_STACK_EXTENT // {
 
    void SetTopOfStack(int *inTop,bool inPush) { }
@@ -9038,6 +9049,12 @@ void PauseForCollect()
    GetLocalAlloc()->PauseForCollect();
 }
 
+// For the terminate handler, which must not allocate on the collecting thread
+bool IsCollectingThread()
+{
+   LocalAllocator *tla = GetLocalAlloc(true);
+   return tla && tla->IsCollecting();
+}
 
 
 void EnterGCFreeZone()
