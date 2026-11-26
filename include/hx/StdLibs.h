@@ -265,6 +265,24 @@ HXCPP_EXTERN_CLASS_ATTRIBUTES Float         __object_hash_get_float(Dynamic inHa
 HXCPP_EXTERN_CLASS_ATTRIBUTES cpp::Int64    __object_hash_get_int64(Dynamic inHash,Dynamic inKey);
 inline bool  __object_hash_get_bool(Dynamic inHash,Dynamic inKey) { return __object_hash_get_int(inHash,inKey); }
 
+// --- Bool values a cppia script puts in a map ---------------------------------------
+//
+// The Haxe standard library gives scripts a setBool on IntMap, StringMap and ObjectMap
+// that calls the Int setter with a bool, so the value was stored as an Int and read back
+// as 1 wherever it was not read as a Bool. A bool given to the Int setter is stored as
+// compiled code stores it, as a Bool. The overloads take a bool and nothing that
+// converts to one, so every other caller still reaches the Int setter.
+namespace hx { template<typename T> struct MapBoolValue { }; template<> struct MapBoolValue<bool> { typedef void Type; }; }
+#ifdef HXCPP_GC_GENERATIONAL
+   #define HX_MAP_THIS_PASS owner, ioHash
+#else
+   #define HX_MAP_THIS_PASS ioHash
+#endif
+template<typename T> inline typename ::hx::MapBoolValue<T>::Type __int_hash_set_int(HX_MAP_THIS_ARG,int inKey,T inValue) { __int_hash_set(HX_MAP_THIS_PASS,inKey,Dynamic(inValue)); }
+template<typename T> inline typename ::hx::MapBoolValue<T>::Type __string_hash_set_int(HX_MAP_THIS_ARG,String inKey,T inValue) { __string_hash_set(HX_MAP_THIS_PASS,inKey,Dynamic(inValue)); }
+template<typename T> inline typename ::hx::MapBoolValue<T>::Type __object_hash_set_int(HX_MAP_THIS_ARG,Dynamic inKey,T inValue) { __object_hash_set(HX_MAP_THIS_PASS,inKey,Dynamic(inValue)); }
+#undef HX_MAP_THIS_PASS
+
 // --- Date --------------------------------------------------------------------------
 
 // returns Epoch UTC timestamp (in seconds); assumes that input date parts are considered to be in local timezone date/time representation
