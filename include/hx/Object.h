@@ -130,6 +130,7 @@ enum
    clsIdSslConf,
    clsIdSslKey,
    clsIdZLib,
+   clsIdSslDigest,
 
 };
 

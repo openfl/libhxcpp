@@ -1,0 +1,35 @@
+MD5 split at every point matches Digest.make: true
+MD5 split in three matches Digest.make: true
+MD5 one byte at a time matches Digest.make: true
+MD5 in three large updates matches Digest.make: true
+MD5 in one large update matches Digest.make: true
+MD5 of no input matches Digest.make of empty bytes: true
+MD5 with zero-length updates between others matches Digest.make: true
+MD5 of zero-length updates alone matches Digest.make of empty bytes: true
+SHA1 split at every point matches Digest.make: true
+SHA1 split in three matches Digest.make: true
+SHA1 one byte at a time matches Digest.make: true
+SHA1 in three large updates matches Digest.make: true
+SHA1 in one large update matches Digest.make: true
+SHA1 of no input matches Digest.make of empty bytes: true
+SHA1 with zero-length updates between others matches Digest.make: true
+SHA1 of zero-length updates alone matches Digest.make of empty bytes: true
+SHA256 split at every point matches Digest.make: true
+SHA256 split in three matches Digest.make: true
+SHA256 one byte at a time matches Digest.make: true
+SHA256 in three large updates matches Digest.make: true
+SHA256 in one large update matches Digest.make: true
+SHA256 of no input matches Digest.make of empty bytes: true
+SHA256 with zero-length updates between others matches Digest.make: true
+SHA256 of zero-length updates alone matches Digest.make of empty bytes: true
+SHA512 split at every point matches Digest.make: true
+SHA512 split in three matches Digest.make: true
+SHA512 one byte at a time matches Digest.make: true
+SHA512 in three large updates matches Digest.make: true
+SHA512 in one large update matches Digest.make: true
+SHA512 of no input matches Digest.make of empty bytes: true
+SHA512 with zero-length updates between others matches Digest.make: true
+SHA512 of zero-length updates alone matches Digest.make of empty bytes: true
+SHA256 of abc is the FIPS 180-2 value: true
+MD5 of abc is the RFC 1321 value: true
+input bytes are left unchanged: true

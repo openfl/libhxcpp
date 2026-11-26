@@ -396,6 +396,52 @@ struct sslpkey : public hx::Object
 	String toString() HXCPP_OVERRIDE { return HX_CSTRING("sslpkey"); }
 };
 
+// A digest fed in pieces, for hxcpp.ssl.DigestStream. Finishing it frees
+// its mbedTLS context, and the finalizer frees the context of a digest that
+// is never finished.
+struct ssldgst : public hx::Object
+{
+   HX_IS_INSTANCE_OF enum { _hx_ClassId = hx::clsIdSslDigest };
+
+   // Null until set up, and once finished
+   mbedtls_md_context_t *ctx;
+   // The size of the digest finish gives
+   int size;
+   // The native memory ctx holds, which the collector counts towards
+   // collection pressure: ctx itself and the hash state mbedTLS allocates
+   // for it
+   size_t reported;
+
+   void create()
+   {
+      ctx = 0;
+      size = 0;
+      reported = 0;
+      _hx_set_finalizer(this, finalize);
+   }
+
+   // Safe in a finalizer
+   void destroy()
+   {
+      SslCount pause(true);
+      if (ctx)
+      {
+         mbedtls_md_free(ctx);
+         free(ctx);
+         ctx = 0;
+      }
+      hx::GCReleaseManagedMemory(reported);
+      reported = 0;
+   }
+
+   static void finalize(Dynamic obj)
+   {
+      ((ssldgst *)(obj.mPtr))->destroy();
+   }
+
+   String toString() HXCPP_OVERRIDE { return HX_CSTRING("ssldgst"); }
+};
+
 template<typename T>
 static T *ssl_handle_of( const Dynamic &o )
 {
@@ -437,6 +483,16 @@ static sslpkey *ssl_open_pkey( const Dynamic &o )
 	if( !pk || !pk->k )
 		hx::Throw( HX_CSTRING("Invalid key") );
 	return pk;
+}
+
+static ssldgst *ssl_open_dgst(const Dynamic &o)
+{
+   ssldgst *dgst = ssl_handle_of<ssldgst>(o);
+   if (!dgst)
+      hx::Throw(HX_CSTRING("Invalid digest"));
+   if (!dgst->ctx)
+      hx::Throw(HX_CSTRING("digest: the digest is finished"));
+   return dgst;
 }
 
 // The bytes of a Haxe byte array, read only. &buf[0] resized an empty array
@@ -1342,6 +1398,69 @@ bool _hx_ssl_dgst_verify( Array<unsigned char> buf, Array<unsigned char> sign, D
 		return false;
 
 	return true;
+}
+
+// A digest taken in pieces: _hx_ssl_dgst_new starts one, each
+// _hx_ssl_dgst_update adds len bytes of buf from pos, and _hx_ssl_dgst_finish
+// gives the digest and frees the context, after which the handle throws.
+// Only mbedTLS's md API, as _hx_ssl_dgst_make uses, so a provider's mbedTLS
+// serves it as well as the bundled one.
+Dynamic _hx_ssl_dgst_new(String alg)
+{
+   if (alg == null())
+      hx::Throw(HX_CSTRING("Invalid hash algorithm"));
+   hx::strbuf ubuf;
+   const mbedtls_md_info_t *md = mbedtls_md_info_from_string(alg.utf8_str(&ubuf));
+   if (md == NULL)
+      hx::Throw(HX_CSTRING("Invalid hash algorithm"));
+
+   ssldgst *dgst = new ssldgst();
+   dgst->create();
+   dgst->ctx = (mbedtls_md_context_t *)malloc(sizeof(mbedtls_md_context_t));
+   if (!dgst->ctx)
+      hx::Throw(HX_CSTRING("digest: out of memory"));
+   mbedtls_md_init(dgst->ctx);
+   dgst->size = mbedtls_md_get_size(md);
+
+   SslCount count;
+   int r = mbedtls_md_setup(dgst->ctx, md, 0);
+   if (r == 0)
+      r = mbedtls_md_starts(dgst->ctx);
+   ptrdiff_t bytes = count.take();
+   if (r != 0)
+   {
+      dgst->destroy();
+      ssl_error(r);
+   }
+   dgst->reported = sizeof(mbedtls_md_context_t) + (bytes > 0 ? bytes : 0);
+   hx::GCChangeManagedMemory(static_cast<int>(dgst->reported), "ssl");
+   return dgst;
+}
+
+// A zero-length update is allowed, at any pos up to the end
+void _hx_ssl_dgst_update(Dynamic hdgst, Array<unsigned char> buf, int pos, int len)
+{
+   ssldgst *dgst = ssl_open_dgst(hdgst);
+   if (buf == null())
+      hx::Throw(HX_CSTRING("Invalid data"));
+   int length = buf->length;
+   // As differences, so that no sum can overflow
+   if (pos < 0 || len < 0 || pos > length || len > length - pos)
+      hx::Throw(HX_CSTRING("digest: out of bounds"));
+   int r = mbedtls_md_update(dgst->ctx, bytes_data(buf) + pos, len);
+   if (r != 0)
+      ssl_error(r);
+}
+
+Array<unsigned char> _hx_ssl_dgst_finish(Dynamic hdgst)
+{
+   ssldgst *dgst = ssl_open_dgst(hdgst);
+   Array<unsigned char> out = Array_obj<unsigned char>::__new(dgst->size, dgst->size);
+   int r = mbedtls_md_finish(dgst->ctx, (unsigned char *)out->GetBase());
+   dgst->destroy();
+   if (r != 0)
+      ssl_error(r);
+   return out;
 }
 
 #if defined(MBEDTLS_THREADING_ALT) && defined(_WIN32) && !defined(HXCPP_MBEDTLS_PROVIDER)
