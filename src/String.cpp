@@ -1511,17 +1511,11 @@ String::String(const cpp::UInt64 &inRHS)
 
 String::String(const float &inRHS)
 {
-   const char *nonFinite = _hx_non_finite_str(inRHS);
-   if (nonFinite)
-   {
-      __s = GCStringDup(nonFinite,-1,&length);
-      return;
-   }
-   char buf[100];
-   HxCNumericScope cNumeric;
-   HX_SNPRINTF_C(buf,100,HX_DOUBLE_PATTERN,inRHS);
-   buf[99]='\0';
-   __s = GCStringDup(buf,-1,&length);
+   // As the Float of the same value prints: this had its own copy of the
+   // formatting, which stayed "%.15g" when a Float got its shortest digits
+   String asFloat((double)inRHS);
+   __s = asFloat.__s;
+   length = asFloat.length;
 }
 
 String::String(const bool &inRHS)

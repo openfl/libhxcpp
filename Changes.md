@@ -3,6 +3,7 @@ libhxcpp 6.0.1 (unreleased)
 ------------------------------------------------------------
 
 * Fixed a Bool that a cppia script puts in a Map reading back as 1: the Haxe standard library's setBool for scripts stores it through the Int setter, so read as a Dynamic the value was 1 or 0, Std.isOfType(value, Bool) was false, map.get(key) == true was false and toString printed 1, interpreted and under the JIT, for String, Int and object keys. It is stored as a Bool, as compiled code stores it, so a script now reads true or false where it read 1 or 0 (libhxcpp #485, HaxeFoundation/haxe#13246)
+* Fixed a 32-bit float joined straight to a String printing 15 significant digits where a Float prints the shortest digits that read back: "" + bytes.getFloat(0) printed 0.333333343267441, and the same value held in a Float first 0.3333333432674408, which cppia already printed for both. Native code now prints such a float as the Float of its value, so output made that way, Lime's Matrix3.toString among it, can show more digits than it did (libhxcpp #486)
 
 libhxcpp 6.0.0
 ------------------------------------------------------------
