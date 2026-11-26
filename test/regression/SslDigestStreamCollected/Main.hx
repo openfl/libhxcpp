@@ -60,6 +60,9 @@ class Main {
 		// Each holds a SHA-512 context, some 200 bytes
 		final grown = collect() - baseline;
 		Sys.stderr().writeString('kept $STREAMS streams: $grown bytes\n');
+		// The byte count assumes libhxcpp's own mbedTLS. On a build that takes another
+		// library's (hxcpp_mbedtls_provider), what mbedTLS allocates is not counted, each
+		// stream reports only its context, and this line prints false
 		Sys.println("unfinished streams contribute to GC pressure: " + (grown > STREAMS * 100));
 		Sys.println("kept streams digest correctly after collections: " + verifyHalf());
 		Sys.println("finishing half the streams frees their memory: " + (collect() - baseline < grown * 0.75));
