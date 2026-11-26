@@ -1,0 +1,28 @@
+float 0.3333333432674408
+float 0.3333333432674408
+float 0.10000000149011612
+float 0.10000000149011612
+float 16777216
+float 16777216
+float 1.0000000116860974e-7
+float 1.0000000116860974e-7
+float 123456.7890625
+float 123456.7890625
+float -2.5
+float -2.5
+float 3.4028234663852886e+38
+float 3.4028234663852886e+38
+float 1.401298464324817e-45
+float 1.401298464324817e-45
+float 0
+float 0
+negative zero -0
+negative zero -0
+infinity Infinity
+infinity Infinity
+negative infinity -Infinity
+negative infinity -Infinity
+nan NaN
+nan NaN
+format 0.333
+format 0.333
