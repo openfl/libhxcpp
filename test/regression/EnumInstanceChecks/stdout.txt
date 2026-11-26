@@ -1,0 +1,66 @@
+catches
+  throw B.OnlyB, A then B: the B branch
+  throw B.WithValue(1), A then B: the B branch
+  throw A.OnlyA, A then B: the A branch
+  throw A.OnlyA, B then A: the A branch
+  throw B.OnlyB, B then A: the B branch
+  throw B.OnlyB, A alone: passed the A catch
+  throw A.OnlyA, A alone: the A branch
+  throw a String, A then B: the Dynamic branch
+  throw Some(1), A then B: the Dynamic branch
+  throw Held(1), A then B: the Dynamic branch
+  throw a Dynamic B, A then B: the B branch
+  throw B.OnlyB, A then Exception: the Exception branch with OnlyB
+  throw A.OnlyA, A then Exception: the A branch
+  throw B.OnlyB, A then Thing: the Dynamic branch with OnlyB
+  throw a Thing, A then Thing: the Thing branch
+Std.isOfType
+  B.OnlyB, A: false
+  B.OnlyB, B: true
+  B.WithValue(1), A: false
+  B.WithValue(1), B: true
+  A.OnlyA, A: true
+  A.OnlyA, B: false
+  Dynamic B, A: false
+  Dynamic B, B: true
+  a String, A: false
+  a Thing, A: false
+  A.OnlyA, Thing: false
+  null, A: false
+enums with type parameters
+  Some(1), Option: true
+  None, Option: true
+  Some(1), Either: false
+  Left(1), Either: true
+  Left(1), Option: false
+  Some(1), A: false
+  A.OnlyA, Option: false
+  Held(1), Holds: true
+  Held(1), B: false
+is
+  B.OnlyB is A: false
+  B.OnlyB is B: true
+  Dynamic B is A: false
+  Dynamic B is B: true
+  Some(1) is Option: true
+  Some(1) is A: false
+safe casts
+  B.OnlyB to A throws
+  B.OnlyB to B = OnlyB
+  A.OnlyA to A = OnlyA
+  A.OnlyA to B throws
+  Dynamic B.WithValue(2) to A throws
+  Dynamic B.WithValue(2) to B = WithValue(2)
+  Some(1) to Option = Some(1)
+  Some(1) to A throws
+  7 to A throws
+  a Thing to A throws
+  A.OnlyA to Thing throws
+Enum and Type.getEnum
+  B.OnlyB, Enum: false
+  B, Enum: true
+  Option, Enum: true
+  getEnum(B.OnlyB) == B: true
+  getEnum(B.OnlyB) == A: false
+  getEnum(Some(1)): haxe.ds.Option
+  getEnum(Held(1)): Holds
