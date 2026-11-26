@@ -1,0 +1,56 @@
+string true true true
+string false true false false
+string compared true true
+string typed true false
+string missing null
+string iterated true true true
+string toString [a => true]
+string overwritten true false false
+string index true true true
+string literal true true true
+int true true true
+int false true false false
+int compared true true
+int typed true
+int toString [7 => true]
+object true true true
+object compared true
+object typed true
+object false true false false
+mixed bool true true true
+mixed int false false 1
+mixed zero false false 0
+mixed float false false 1.5
+mixed string false false s
+nullable true true true
+int value false false 1
+int value zero false false 0
+int key int value false false 1
+string true true true
+string false true false false
+string compared true true
+string typed true false
+string missing null
+string iterated true true true
+string toString [a => true]
+string overwritten true false false
+string index true true true
+string literal true true true
+int true true true
+int false true false false
+int compared true true
+int typed true
+int toString [7 => true]
+object true true true
+object compared true
+object typed true
+object false true false false
+mixed bool true true true
+mixed int false false 1
+mixed zero false false 0
+mixed float false false 1.5
+mixed string false false s
+nullable true true true
+int value false false 1
+int value zero false false 0
+int key int value false false 1

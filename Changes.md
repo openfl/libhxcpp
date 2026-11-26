@@ -2,6 +2,8 @@
 libhxcpp 6.0.1 (unreleased)
 ------------------------------------------------------------
 
+* Fixed a Bool that a cppia script puts in a Map reading back as 1: the Haxe standard library's setBool for scripts stores it through the Int setter, so read as a Dynamic the value was 1 or 0, Std.isOfType(value, Bool) was false, map.get(key) == true was false and toString printed 1, interpreted and under the JIT, for String, Int and object keys. It is stored as a Bool, as compiled code stores it, so a script now reads true or false where it read 1 or 0 (libhxcpp #485, HaxeFoundation/haxe#13246)
+
 libhxcpp 6.0.0
 ------------------------------------------------------------
 
