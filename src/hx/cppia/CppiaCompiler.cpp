@@ -17,7 +17,9 @@ namespace hx
 
 // On Apple Silicon, MAP_JIT memory is either writable or executable for the
 // current thread, never both: generating or freeing code makes it writable for
-// that long, and executable again before anything runs it.
+// that long, and executable again before anything runs it. sljit's allocator
+// switches it itself on macOS, but not on iOS and tvOS, and its alloc_chunk
+// leaves the thread on writable.
 struct JitWritable
 {
    JitWritable() { set(true); }
@@ -36,6 +38,10 @@ bool CppiaCompiler::canRun()
    static int sCanRun = -1;
    if (sCanRun<0)
    {
+      #ifdef HX_JIT_CPU_UNSUPPORTED
+      sCanRun = 0;
+      #else
+      JitWritable writable;
       #if (defined SLJIT_EXECUTABLE_ALLOCATOR && SLJIT_EXECUTABLE_ALLOCATOR)
       // A chunk mapped and released as sljit's allocator maps its own, MAP_JIT
       //  included. Allocating through the allocator left its free list as if a
@@ -45,12 +51,12 @@ bool CppiaCompiler::canRun()
       if (probe)
          free_chunk(probe, CHUNK_SIZE);
       #else
-      JitWritable writable;
-      void *probe = SLJIT_MALLOC_EXEC(16);
+      void *probe = SLJIT_MALLOC_EXEC(16, NULL);
       if (probe)
-         SLJIT_FREE_EXEC(probe);
+         SLJIT_FREE_EXEC(probe, NULL);
       #endif
       sCanRun = probe ? 1 : 0;
+      #endif
    }
    return sCanRun==1;
 }
@@ -68,108 +74,112 @@ void CppiaCompiler::reportCannotRun()
    if (!sReported)
    {
       sReported = true;
+      #ifdef HX_JIT_CPU_UNSUPPORTED
+      JIT_NOTICE("cppia: the JIT is enabled but does not support " HX_JIT_CPU_UNSUPPORTED ", so scripts run in the interpreter\n");
+      #else
       JIT_NOTICE("cppia: the JIT is enabled but cannot get executable memory here, so scripts run in the interpreter\n");
+      #endif
    }
 }
 
-static void SLJIT_CALL my_trace_func(const char *inText)
+static void SLJIT_FUNC my_trace_func(const char *inText)
 {
    printf("trace: %s\n", inText);
 }
-static void SLJIT_CALL my_trace_strings(const char *inText, const char *inValue)
+static void SLJIT_FUNC my_trace_strings(const char *inText, const char *inValue)
 {
    printf("%s%s\n", inText, inValue);
 }
-static void SLJIT_CALL my_trace_string(const char *inText, String *inValue)
+static void SLJIT_FUNC my_trace_string(const char *inText, String *inValue)
 {
    printf("%s%s\n", inText, JitLoad(inValue).out_str());
 }
 
-static void SLJIT_CALL my_trace_ptr_func(const char *inText, hx::Object **inPtr)
+static void SLJIT_FUNC my_trace_ptr_func(const char *inText, hx::Object **inPtr)
 {
    printf("%s = %p\n",inText, inPtr);
    //printf("*= %s\n", (*inPtr)->toString().out_str());
    //*(int *)0=0;
 }
-static void SLJIT_CALL my_trace_int_func(const char *inText, int inValue)
+static void SLJIT_FUNC my_trace_int_func(const char *inText, int inValue)
 {
    printf("%s = %d\n",inText, inValue);
 }
-static void SLJIT_CALL my_trace_float_func(const char *inText, double *inValue)
+static void SLJIT_FUNC my_trace_float_func(const char *inText, double *inValue)
 {
    printf("%s = %f\n",inText, JitLoad(inValue));
 }
 
-static void SLJIT_CALL my_trace_obj_func(const char *inText, hx::Object *inPtr)
+static void SLJIT_FUNC my_trace_obj_func(const char *inText, hx::Object *inPtr)
 {
    printf("%s = %s\n",inText, inPtr ? inPtr->__ToString().out_str() : "NULL" );
 }
 
-static hx::Object *SLJIT_CALL intToObj(int inVal)
+static hx::Object *SLJIT_FUNC intToObj(int inVal)
 {
    return Dynamic(inVal).mPtr;
 }
-static void SLJIT_CALL intToStr(int inVal, String *outString)
+static void SLJIT_FUNC intToStr(int inVal, String *outString)
 {
    JitStore(outString, String(inVal));
 }
-static void SLJIT_CALL objToStr(hx::Object *inVal, String *outString)
+static void SLJIT_FUNC objToStr(hx::Object *inVal, String *outString)
 {
    JitStore(outString, inVal ? inVal->toString() : String());
 }
-int SLJIT_CALL objToInt(hx::Object *inVal)
+int SLJIT_FUNC objToInt(hx::Object *inVal)
 {
    return inVal ? inVal->__ToInt() : 0;
 }
-static void SLJIT_CALL objToFloat(hx::Object *inVal,double *outFloat)
+static void SLJIT_FUNC objToFloat(hx::Object *inVal,double *outFloat)
 {
    JitStore(outFloat, inVal ? inVal->__ToDouble() : 0.0);
 }
 
-static void *SLJIT_CALL strToObj(String *inStr)
+static void *SLJIT_FUNC strToObj(String *inStr)
 {
    return Dynamic(JitLoad(inStr)).mPtr;
 }
-static void *SLJIT_CALL floatToObj(double *inDouble)
+static void *SLJIT_FUNC floatToObj(double *inDouble)
 {
    return Dynamic(JitLoad(inDouble)).mPtr;
 }
 
-static void SLJIT_CALL floatToStr(double *inDouble, String *outStr)
+static void SLJIT_FUNC floatToStr(double *inDouble, String *outStr)
 {
    JitStore(outStr, String(JitLoad(inDouble)));
 
 }
 
-static hx::Object * SLJIT_CALL variantToObject(cpp::Variant *inVariant)
+static hx::Object * SLJIT_FUNC variantToObject(cpp::Variant *inVariant)
 {
    return Dynamic( JitLoad(inVariant) ).mPtr;
 }
 
 
-static int SLJIT_CALL variantToInt(cpp::Variant *inVariant)
+static int SLJIT_FUNC variantToInt(cpp::Variant *inVariant)
 {
    return JitLoad(inVariant);
 }
 
-static void SLJIT_CALL variantToFloat(cpp::Variant *inVariant, double *outValue)
+static void SLJIT_FUNC variantToFloat(cpp::Variant *inVariant, double *outValue)
 {
    JitStore(outValue, (double)JitLoad(inVariant));
 }
 
-static void SLJIT_CALL variantToString(cpp::Variant *inVariant, String *outValue)
+static void SLJIT_FUNC variantToString(cpp::Variant *inVariant, String *outValue)
 {
    String value;
    value = JitLoad(inVariant);
    JitStore(outValue, value);
 }
 
-static int SLJIT_CALL strEqual(const String *inS0, const String *inS1)
+static int SLJIT_FUNC strEqual(const String *inS0, const String *inS1)
 {
    return JitLoad(inS0) == JitLoad(inS1);
 }
 
-static int SLJIT_CALL strNotEqual(const String *inS0, const String *inS1)
+static int SLJIT_FUNC strNotEqual(const String *inS0, const String *inS1)
 {
    return JitLoad(inS0) != JitLoad(inS1);
 }
@@ -251,10 +261,10 @@ int sThisReg = SLJIT_S2;
 // Called from jitted prologues when a frame would pass stackEnd, to commit
 // more of the script stack.  When it cannot grow, as jitted code cannot
 // unwind C++ exceptions, follow the runtime convention: store the exception
-// and let the emitted checkException route it.  Declared SLJIT_CALL like
-// every function jitted code calls: on 32-bit x86 that is fastcall, and a
-// plain function would read its context from the stack
-static void SLJIT_CALL cppiaJitGrowStack(CppiaCtx *inCtx)
+// and let the emitted checkException route it.  Declared SLJIT_FUNC like
+// every function jitted code calls: the C calling convention, cdecl on
+// 32-bit x86
+static void SLJIT_FUNC cppiaJitGrowStack(CppiaCtx *inCtx)
 {
    if (!inCtx->growScriptStack(0))
       inCtx->exception = Dynamic(HX_CSTRING("Stack Overflow")).mPtr;
@@ -364,15 +374,13 @@ public:
    }
 
 
-   void beginGeneration(int inArgs) HXCPP_OVERRIDE
+   void beginGeneration() HXCPP_OVERRIDE
    {
       compiler = sljit_create_compiler(NULL);
 
       int options = 0;
-      // S0 is stack
-      int saveds = inArgs;
-      if (usesCtx && saveds<1)
-         saveds = 1;
+      // S0 is the context, the function's one argument
+      int saveds = 1;
       if (usesFrame && saveds<2)
          saveds = 2;
       if (usesThis && saveds<3)
@@ -381,15 +389,14 @@ public:
          saveds = 3;
       }
       saveds = 3;
-      int fsaveds = 0;
       #ifdef HXCPP_M64
       // Add shadow space for native calls
-      int scratches = std::max(maxTempCount + (makesNativeCalls?4:0) ,inArgs);
+      int scratches = std::max(maxTempCount + (makesNativeCalls?4:0) ,1);
       #else
-      int scratches = std::max(maxTempCount,inArgs);
+      int scratches = std::max(maxTempCount,1);
       #endif
 
-      sljit_emit_enter(compiler, options, inArgs, scratches, saveds, maxFTempCount, fsaveds, maxLocalSize);
+      sljit_emit_enter(compiler, options, SLJIT_ARGS1V(P), scratches | SLJIT_ENTER_FLOAT(maxFTempCount), saveds, maxLocalSize);
       usesCtx = true;
 
       if (usesFrame)
@@ -426,11 +433,11 @@ public:
       if (onReturn)
          onReturn(this, onReturnStackSize);
 
-      sljit_emit_return(compiler, SLJIT_UNUSED, SLJIT_UNUSED, 0);
+      sljit_emit_return_void(compiler);
       CppiaFunc func;
       {
          JitWritable writable;
-         func = (CppiaFunc)sljit_generate_code(compiler);
+         func = (CppiaFunc)sljit_generate_code(compiler, 0, NULL);
       }
       sljit_free_compiler(compiler);
       compiler = 0;
@@ -521,15 +528,21 @@ public:
          onReturn(this, onReturnStackSize);
 
       if (compiler)
-         sljit_emit_return(compiler, SLJIT_UNUSED, SLJIT_UNUSED, 0);
+         sljit_emit_return_void(compiler);
    }
 
 
-   void emit_ijump(const JitVal &inVal,int inArgs=1)
+   // Calls a function that takes word or pointer arguments in R0, R1 and R2,
+   // and leaves a word or pointer result, if it has one, in R0
+   void emit_icall(sljit_s32 inArgTypes, sljit_s32 inType, sljit_sw inWhere)
    {
-      sljit_sw t = getTarget(inVal);
       if (compiler)
-         sljit_emit_ijump(compiler, SLJIT_CALL0+inArgs, t, getData(inVal));
+         sljit_emit_icall(compiler, SLJIT_CALL, inArgTypes, inType, inWhere);
+   }
+
+   void emit_call_native(void *func, sljit_s32 inArgTypes)
+   {
+      emit_icall(inArgTypes, SLJIT_IMM, SLJIT_FUNC_ADDR(func));
    }
 
    JumpId jump(LabelId inTo=0) HXCPP_OVERRIDE
@@ -573,6 +586,8 @@ public:
       sljit_sw t1 = getTarget(v1);
       if (compiler)
       {
+         // With a NaN, only != holds, so only != jumps; reversed, the test is
+         // the negation, which jumps on NaN unless it is ==
          bool jumpOnNan = condition==cmpD_NOT_EQUAL;
          if (inReverse)
          {
@@ -580,42 +595,31 @@ public:
             condition = (JitCompare)( (int)condition ^ 0x01 );
          }
 
-         if (jumpOnNan)
+         // sljit's ordered and unordered types say what a NaN does, which its
+         // plain ones leave unspecified
+         sljit_s32 type = 0;
+         switch( (int)condition & ~SLJIT_32 )
          {
-            JumpId passed = sljit_emit_fcmp(compiler, condition, t0, getData(v0), t1, getData(v1) );
-
-            // test failed, but test nan
-            JumpId notNan = sljit_emit_jump(compiler,SLJIT_ORDERED_F64);
-
-            // is nan - fallthough
-            // test passed, but was nan
-            comeFrom(passed);
-            JumpId good = sljit_emit_jump(compiler,SLJIT_JUMP);
-            if (andJump)
-               sljit_set_label(good, andJump);
-
-            comeFrom(notNan);
-            return good;
+            case cmpD_EQUAL:
+               type = jumpOnNan ? SLJIT_UNORDERED_OR_EQUAL : SLJIT_ORDERED_EQUAL; break;
+            case cmpD_NOT_EQUAL:
+               type = jumpOnNan ? SLJIT_UNORDERED_OR_NOT_EQUAL : SLJIT_ORDERED_NOT_EQUAL; break;
+            case cmpD_LESS:
+               type = jumpOnNan ? SLJIT_UNORDERED_OR_LESS : SLJIT_ORDERED_LESS; break;
+            case cmpD_GREATER_EQUAL:
+               type = jumpOnNan ? SLJIT_UNORDERED_OR_GREATER_EQUAL : SLJIT_ORDERED_GREATER_EQUAL; break;
+            case cmpD_GREATER:
+               type = jumpOnNan ? SLJIT_UNORDERED_OR_GREATER : SLJIT_ORDERED_GREATER; break;
+            case cmpD_LESS_EQUAL:
+               type = jumpOnNan ? SLJIT_UNORDERED_OR_LESS_EQUAL : SLJIT_ORDERED_LESS_EQUAL; break;
+            default:
+               setError("Unknown float compare");
          }
-         else
-         {
-            JumpId userCmpPassed = sljit_emit_fcmp(compiler, condition, t0, getData(v0), t1, getData(v1) );
-            // user test failed - will also fail with nan, so done.
-            JumpId userCmpFailed = sljit_emit_jump(compiler,SLJIT_JUMP);
 
-            // user test passed - unless nan ...
-            comeFrom(userCmpPassed);
-
-            // Result is not-nan when user test passed
-            JumpId notNan = sljit_emit_jump(compiler,SLJIT_ORDERED_F64);
-            if (andJump)
-               sljit_set_label(notNan, andJump);
-            // is nan ..
-
-            comeFrom(userCmpFailed);
-
-            return notNan;
-         }
+         JumpId result = sljit_emit_fcmp(compiler, type | ((int)condition & SLJIT_32), t0, getData(v0), t1, getData(v1) );
+         if (andJump)
+            sljit_set_label(result, andJump);
+         return result;
       }
       return 0;
    }
@@ -1289,7 +1293,7 @@ public:
       }
       else
       {
-         emit_op1(SLJIT_NEG32, inDest,  inSrc);
+         emit_op2(SLJIT_SUB32, inDest, JitVal(0), inSrc);
       }
    }
 
@@ -1321,7 +1325,7 @@ public:
 
    void bitNot(const JitVal &inDest, const JitVal &v0) HXCPP_OVERRIDE
    {
-      emit_op1(SLJIT_NOT32, inDest, v0);
+      emit_op2(SLJIT_XOR32, inDest, v0, JitVal(-1));
    }
 
    void bitOp(BitOp inOp, const JitVal &inDest, const JitVal &v0, const JitVal &v1 ) HXCPP_OVERRIDE
@@ -1427,7 +1431,8 @@ public:
    void call(const JitVal &func,const JitVal &inArg0) HXCPP_OVERRIDE
    {
       move(sJitArg0,inArg0);
-      emit_ijump(func,1);
+      sljit_s32 t = getTarget(func);
+      emit_icall(SLJIT_ARGS1(W, P), t, getData(func));
    }
 
    void callNative(void *func) HXCPP_OVERRIDE
@@ -1437,7 +1442,7 @@ public:
          maxTempCount =1;
       if (compiler)
       {
-         sljit_emit_ijump(compiler, SLJIT_CALL1, SLJIT_IMM, SLJIT_FUNC_OFFSET(func));
+         emit_call_native(func, SLJIT_ARGS1(W, P));
       }
    }
    void callNative(void *func, const JitVal &inArg0) HXCPP_OVERRIDE
@@ -1463,7 +1468,7 @@ public:
          move( sJitArg0, inArg0);
 
       if (compiler)
-         sljit_emit_ijump(compiler, SLJIT_CALL1, SLJIT_IMM, SLJIT_FUNC_OFFSET(func));
+         emit_call_native(func, SLJIT_ARGS1(W, P));
 
       if (restoreLocal>=0)
          localSize = restoreLocal;
@@ -1522,7 +1527,7 @@ public:
 
 
       if (compiler)
-         sljit_emit_ijump(compiler, SLJIT_CALL2, SLJIT_IMM, SLJIT_FUNC_OFFSET(func));
+         emit_call_native(func, SLJIT_ARGS2(W, P, P));
 
       if (restoreLocal>=0)
          localSize = restoreLocal;
@@ -1603,7 +1608,7 @@ public:
 
       if (compiler)
       {
-         sljit_emit_ijump(compiler, SLJIT_CALL3, SLJIT_IMM, SLJIT_FUNC_OFFSET(func));
+         emit_call_native(func, SLJIT_ARGS3(W, P, P, P));
       }
 
       if (restoreLocal>=0)
@@ -1646,7 +1651,7 @@ void CppiaCompiler::freeCompiled(CppiaFunc inFunc)
 {
    // The allocator keeps its free list inside the executable chunks
    JitWritable writable;
-   sljit_free_code((void *)inFunc);
+   sljit_free_code((void *)inFunc, NULL);
 }
 
 CppiaCompiler *CppiaCompiler::create(int inFrameSize)

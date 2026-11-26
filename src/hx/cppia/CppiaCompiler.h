@@ -2,7 +2,10 @@
 #define HX_CPPIA_COMPILER_H_INCLUDED
 
 #if HXCPP_ARMV5
-  #define SLJIT_CONFIG_ARM_V5 1
+  // sljit's oldest ARM back end is ARMv6. It is built so that this compiles,
+  // and canRun says no, so scripts run in the interpreter
+  #define SLJIT_CONFIG_ARM_V6 1
+  #define HX_JIT_CPU_UNSUPPORTED "ARMv5"
 #elif HXCPP_ARMV7
   #define SLJIT_CONFIG_ARM_V7 1
 #elif HXCPP_ARM64
@@ -11,11 +14,9 @@
    #ifdef HXCPP_M64
       #define SLJIT_CONFIG_X86_64 1
    #else
+      // sljit keeps x86-32 frames 16-byte aligned at every call, as the
+      // System V i386 ABI wants, and calls with cdecl
       #define SLJIT_CONFIG_X86_32 1
-      #ifndef _WIN32
-      // The System V i386 ABI has the stack 16-byte aligned at every call
-      #define SLJIT_X86_32_ALIGN_STACK_16 1
-      #endif
    #endif
 #endif
 
@@ -222,9 +223,6 @@ enum JitCompare
    cmpP_OVERFLOW =          10,
    cmpP_NOT_OVERFLOW =      11,
 
-   cmpP_MUL_OVERFLOW =      12,
-   cmpP_MUL_NOT_OVERFLOW =  13,
-
 
    // Integer compares
    cmpI_EQUAL =             0 | 0x100,
@@ -243,9 +241,6 @@ enum JitCompare
 
    cmpI_OVERFLOW =          10 | 0x100,
    cmpI_NOT_OVERFLOW =      11 | 0x100,
-
-   cmpI_MUL_OVERFLOW =      12 | 0x100,
-   cmpI_MUL_NOT_OVERFLOW =  13 | 0x100,
 
    /* Floating point comparison types - double. */
    cmpD_EQUAL =             16,
@@ -303,7 +298,7 @@ extern JitVal sJitCtxFrame;
 typedef sljit_label *LabelId;
 typedef sljit_jump  *JumpId;
 
-typedef void (SLJIT_CALL *CppiaFunc)(CppiaCtx *inCtx);
+typedef void (SLJIT_FUNC *CppiaFunc)(CppiaCtx *inCtx);
 typedef void (*OnReturnFunc)(class CppiaCompiler *inCompiler, int stackSize);
 
 typedef std::vector<JumpId> ThrowList;
@@ -342,7 +337,7 @@ public:
    virtual void genVariantValueTemp0(int inOffset, const JitVal &inDest, ExprType destType) = 0;
    virtual void returnNull(const JitVal &inTarget, ExprType inToType) = 0;
 
-   virtual void beginGeneration(int inArgs=1) = 0;
+   virtual void beginGeneration() = 0;
    virtual CppiaFunc finishGeneration() = 0;
 
    virtual void setFunctionDebug() = 0;

@@ -1,0 +1,10 @@
+sljit for the cppia JIT, vendored by libhxcpp
+
+Upstream: https://github.com/zherczeg/sljit
+Commit:   39c508d1b8fbae332d60c7450db20236913089da (2026-09-30, "Abort stack allocation on mprotect fail (#378)")
+
+sljit has no release tags; sljitLir.h calls this version 0.95. It is the
+commit HaxeFoundation/hxcpp#1434 vendors. The files here are upstream's
+sljit_src directory, README.md and LICENSE, unchanged, with no local
+patches. To update, replace them with another commit's and record it here
+(openfl/libhxcpp#419).
