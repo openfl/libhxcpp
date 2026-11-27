@@ -1,0 +1,20 @@
+<xml>
+	<!-- A cached group linked as a library, and a cached group with a precompiled header -->
+	<files id="lib">
+		<cache value="1" project="trim_test" asLibrary="true" />
+		<file name="lib.cpp" />
+	</files>
+
+	<files id="main">
+		<compilerflag value="-I." />
+		<precompiledheader name="pre" dir="." />
+		<cache value="1" project="trim_test" />
+		<file name="main.cpp" />
+		<file name="other.cpp" />
+	</files>
+
+	<target id="default" tool="linker" toolid="exe" output="prog">
+		<files id="lib" />
+		<files id="main" />
+	</target>
+</xml>

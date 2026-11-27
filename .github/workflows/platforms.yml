@@ -44,6 +44,20 @@ jobs:
       scope: ${{ inputs.pr && 'smoke' || 'full' }}
       stress: '["default generational verify", "generational-verify moving big-blocks", "always-move check-pointer", "big-generational big-verify nursery dynamic-size debug-level"]'
 
+  # Haxe has no Windows arm64 build, so the x64 Haxe and Neko run emulated,
+  # and the C++ compiles with the ARM64-hosted compiler
+  WindowsArm64:
+    if: ${{ !inputs.pr }}
+    uses: ./.github/workflows/test.yml
+    name: Windows arm64
+    with:
+      haxe: ${{ inputs.haxe }}
+      arch: Arm64
+      sep: \
+      ext: .dll
+      os: windows-11-arm
+      scope: smoke
+
   MacOS64:
     if: ${{ !inputs.pr }}
     uses: ./.github/workflows/test.yml

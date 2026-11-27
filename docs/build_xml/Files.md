@@ -13,8 +13,8 @@ The files node defines a group of files that all share the same attributes, incl
 
   + `c_standard` = Default C standard for the file group
   + `cxx_standard` = Default C++ standard for the file group
-  + `objc_standard` = Default Objective-C standard for the file group
-  + `objcxx_standard` = Default Objective-C++ standard for the file group
+  + `objc_standard` = Default Objective-C standard for the file group. Without one, Objective-C follows the C standard
+  + `objcxx_standard` = Default Objective-C++ standard for the file group. Without one, Objective-C++ follows the C++ standard
 #### Nodes
 - *depend* - Declare that all files in the group depend on another file or another file group.
   ```xml
@@ -103,8 +103,8 @@ The files node defines a group of files that all share the same attributes, incl
      + tags = optional override of group tags.  See [Tags.md](Tags.md).
      + `c_standard` = C standard for the file
      + `cxx_standard` = C++ standard for the file
-     + `objc_standard` = Objective-C standard for the file
-     + `objcxx_standard` = Objective-C++ standard for the file
+     + `objc_standard` = Objective-C standard for the file. Without one, the file follows its own `c_standard` if it has one, else its group
+     + `objcxx_standard` = Objective-C++ standard for the file. Without one, the file follows its own `cxx_standard` if it has one, else its group
      + filterout = allows files to be skipped at compile-time if the named define exists.
        This is useful when the define is set sometime after the file list is parsed.
      + depend name = filename of additional dependency

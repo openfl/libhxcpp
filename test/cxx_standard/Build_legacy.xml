@@ -4,6 +4,7 @@
 	<files id="test">
 		<compilerflag value="/Zc:__cplusplus" if="isMsvc" />
 		<file name="main.cpp" />
+		<file name="objcxx17.mm" if="macos||emscripten" />
 	</files>
 
 	<target id="default" tool="linker" toolid="exe" output="main">

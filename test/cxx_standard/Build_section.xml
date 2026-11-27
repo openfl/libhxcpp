@@ -3,6 +3,8 @@
 		<compilerflag value="/Zc:__cplusplus" if="isMsvc" />
 		<section>
 			<file name="main.cpp" />
+			<!-- An Objective-C++ standard of its own wins over the C++ one -->
+			<file name="objcxx14.mm" objcxx_standard="14" if="macos||emscripten" />
 		</section>
 	</files>
 

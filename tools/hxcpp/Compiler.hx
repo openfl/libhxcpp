@@ -184,13 +184,17 @@ class Compiler
 						args.push('-std=c${inFile.mCStandard}');
 					}
 				}
+			// With no Objective-C or Objective-C++ standard of its own, a file
+			//  follows its C or C++ one
 			case ObjC:
-				if (inFile.mObjCStandard != null) {
-					args.push('-std=c${inFile.mObjCStandard}');
+				var standard = inFile.mObjCStandard != null ? inFile.mObjCStandard : inFile.mCStandard;
+				if (standard != null) {
+					args.push('-std=c${standard}');
 				}
 			case ObjCxx:
-				if (inFile.mObjCxxStandard != null) {
-					args.push('-std=c++${inFile.mObjCxxStandard}');
+				var standard = inFile.mObjCxxStandard != null ? inFile.mObjCxxStandard : inFile.mCxxStandard;
+				if (standard != null) {
+					args.push('-std=c++${standard}');
 				}
 			case Cxx:
 				if (inFile.mCxxStandard != null) {
@@ -631,6 +635,39 @@ class Compiler
       return CompileCache.getPchDir(inGroup.getCacheProject(),md5);
    }
 
+   // Clang keeps the date of each header in a precompiled header, and refuses
+   //  it once one differs, though the content is the same. The cache finds a
+   //  precompiled header by content, so a fresh clone, a branch switched and
+   //  back, or a restored CI cache stopped the next compile with "has been
+   //  modified since the precompiled header was built". The dates it was made
+   //  with are kept beside it, and it is made again when one differs, earlier
+   //  or later. Clang-cl's /Yu does the same; cl.exe and gcc do not check
+   function pchChecksDates()
+   {
+      return mPCH=="clang" || (mPCH=="msvc" && BuildTool.isMsvcLlvm());
+   }
+
+   // The precompiled header and every header the group depends on, which
+   //  for hxcpp.h is every header it includes (libhxcpp #469)
+   function getPchDates(inGroup:FileGroup)
+   {
+      var header = inGroup.mPrecompiledHeaderDir + "/" + inGroup.mPrecompiledHeader + ".h";
+      var paths = inGroup.mCacheDepends.indexOf(header)<0 ? [header].concat(inGroup.mCacheDepends) : inGroup.mCacheDepends;
+      var lines = new Array<String>();
+      for(path in paths)
+         lines.push( (FileSystem.exists(path) ? Std.string(FileSystem.stat(path).mtime.getTime()) : "missing") + " " + path );
+      return lines.join("\n");
+   }
+
+   static function readDates(inName:String):String
+   {
+      try {
+         if (FileSystem.exists(inName))
+            return sys.io.File.getContent(inName);
+      } catch(e:Dynamic) { }
+      return null;
+   }
+
    public function precompile(inGroup:FileGroup, inReuseIfPossible:Bool)
    {
       // header will be like "hxcpp" or "wx/wx"
@@ -645,13 +682,19 @@ class Compiler
 
       // Like objs/hxcpp.pch or objs/wx.gch
       var pch_name = dir + "/" + file + mPCHExt;
+      var dates = inGroup.isCached() && pchChecksDates() ? getPchDates(inGroup) : null;
+      var datesName = dir + "/" + file + ".dates";
       mPCHRebuilt = false;
       if (inGroup.isCached() || inReuseIfPossible)
       {
           // No obj needed for gcc
           var obj = mPCH=="msvc" ? PathManager.combine(dir, file + mExt) : null;
           if (FileSystem.exists(pch_name) && (obj==null || FileSystem.exists(obj)) )
-             return obj;
+          {
+             if (dates==null || readDates(datesName)==dates)
+                return obj;
+             Log.v('Headers of $pch_name have other dates than when it was made');
+          }
       }
       mPCHRebuilt = true;
 
@@ -708,6 +751,12 @@ class Compiler
          }
          Log.error("Could not create PCH");
          //throw "Error creating pch: " + result + " - build cancelled";
+      }
+
+      if (dates!=null)
+      {
+         try { sys.io.File.saveContent(datesName, dates); }
+         catch(e:Dynamic) { Log.v('Could not write $datesName: $e'); }
       }
 
       if (mPCH == "msvc")
