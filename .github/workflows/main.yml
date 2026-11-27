@@ -93,6 +93,12 @@ jobs:
       working-directory: test/haxe
       run: bin\TestMain
 
+    # clang-cl's /Yu reads a clang precompiled header, which keeps each
+    # header's date, so the compile cache must make it again when one changes
+    - name: Build with the cached precompiled header after a header's date changes
+      shell: bash
+      run: bash test/compile_cache/pch_dates.sh -D HXCPP_MSVC_LLVM -D HXCPP_M64
+
   check-android:
     name: Build for Android (${{ matrix.abi }})
     if: github.event_name != 'pull_request'
@@ -284,6 +290,10 @@ jobs:
           haxelib run hxcpp $xml -Demscripten
           haxelib run hxcpp $xml clean -Demscripten
         done
+
+    - name: Build with the cached precompiled header after a header's date changes
+      if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+      run: bash test/compile_cache/pch_dates.sh -D emscripten
 
     - name: Run the memory and stack test
       if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
