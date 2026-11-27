@@ -1,0 +1,33 @@
+-- compiled
+items [1,null,3,null,null,null,null,null,null]
+fields 1 4 true true object
+as Dynamic 3 object null
+Dynamic elements [Int,Bool,Float,Int,String,null,Array,object,Int,null,null]
+Dynamic values 7 true 2.5 3 s 100000
+nested 2 3 0 true Array
+Null<Int> [Int,null,Int,null] 1 300
+boxed elements Int Int Int Bool Bool String null Float Int
+growing 24990001 9 true 10
+chain 10
+-- script, JIT off
+items [1,null,3,null,null,null,null,null,null]
+fields 1 4 true true object
+as Dynamic 3 object null
+Dynamic elements [Int,Bool,Float,Int,String,null,Array,object,Int,null,null]
+Dynamic values 7 true 2.5 3 s 100000
+nested 2 3 0 true Array
+Null<Int> [Int,null,Int,null] 1 300
+boxed elements Int Int Int Bool Bool String null Float Int
+growing 24990001 9 true 10
+chain 10
+-- script, JIT on
+items [1,null,3,null,null,null,null,null,null]
+fields 1 4 true true object
+as Dynamic 3 object null
+Dynamic elements [Int,Bool,Float,Int,String,null,Array,object,Int,null,null]
+Dynamic values 7 true 2.5 3 s 100000
+nested 2 3 0 true Array
+Null<Int> [Int,null,Int,null] 1 300
+boxed elements Int Int Int Bool Bool String null Float Int
+growing 24990001 9 true 10
+chain 10
