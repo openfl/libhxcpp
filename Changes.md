@@ -1,4 +1,9 @@
 
+libhxcpp 6.1.0 (unreleased)
+------------------------------------------------------------
+
+* A cppia script's calls to the functions of a private host class, of the class behind an abstract, and of Math are typed calls now, as its calls to a public class's functions always were. The Haxe compiler writes script functions for public classes only, so a call that an inline function of a public abstract or class puts into a script, as vector[i] = x on an openfl.Vector does, was made by name: the function was looked up each time the call ran, and every argument was boxed. A host built with -D scriptable now makes a typed entry for each such function from its C++ signature, and cppia links to it. The update loop of OpenFL's BunnyMark with 10,000 bunnies took 0.68 ms a frame under the JIT and takes 0.14, and took 1.64 ms interpreted and takes 1.04; a host with Lime and OpenFL grows by 704 KB, 2.6%. Results do not change. Calls through a private interface, and to a name that is overloaded in C++, are still made by name, and the new __scriptable_cppia_calls_by_name() lists the host functions that the scripts loaded so far call that way (docs/CppiaHostCalls.md)
+
 libhxcpp 6.0.1
 ------------------------------------------------------------
 

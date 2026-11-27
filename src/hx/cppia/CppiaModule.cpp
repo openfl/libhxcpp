@@ -1596,6 +1596,16 @@ String __scriptable_host_fingerprint()
    return String::create(hx::HaxeNativeClass::hostFingerprint().c_str());
 }
 
+Array<String> __scriptable_cppia_calls_by_name()
+{
+   // Copied out under the lock, and turned into Haxe values after it
+   std::vector<std::string> calls = hx::HaxeNativeClass::callsByName();
+   Array<String> result = Array_obj<String>::__new(0,(int)calls.size());
+   for(size_t i=0;i<calls.size();i++)
+      result->push( String::create(calls[i].c_str()) );
+   return result;
+}
+
 bool __scriptable_cppia_jit_active()
 {
    #ifdef CPPIA_JIT

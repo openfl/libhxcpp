@@ -72,6 +72,7 @@
   <depend name="${HXCPP}/include/cpp/encoding/Utf8.hpp"/>
   <depend name="${HXCPP}/include/cpp/encoding/Utf16.hpp"/>
   <depend name="${HXCPP}/include/hx/Scriptable.h"/>
+  <depend name="${HXCPP}/include/hx/ScriptCall.h"/>
   <depend name="${HXCPP}/include/hx/zip/Zip.hpp"/>
   <depend name="${HXCPP}/include/hx/zip/Compress.hpp"/>
   <depend name="${HXCPP}/include/hx/zip/Uncompress.hpp"/>

@@ -16,6 +16,100 @@ typedef std::map<std::string, HaxeNativeInterface *> HaxeNativeIntefaceMap;
 static HaxeNativeIntefaceMap *sScriptRegisteredInterface = 0;
 
 
+// -- ScriptCallEntry ---
+
+// Zero before any constructor runs, and the entries are static objects, so the list
+//  is whole by the time main starts whatever order the files initialise in
+static ScriptCallEntry *sScriptCallEntries = 0;
+
+ScriptCallEntry::ScriptCallEntry(hx::Class *inClass, const char *inName, StackExecute inExecute, const char *inSignature, bool inIsStatic)
+   : classRef(inClass), name(inName), execute(inExecute), signature(inSignature), isStatic(inIsStatic)
+{
+   next = sScriptCallEntries;
+   sScriptCallEntries = this;
+}
+
+// A host has thousands of entries and a script can link as many calls, so the entries
+//  are indexed by name when a script first asks for one. Modules load on any thread:
+//  the lock is held for the lookup alone, and the collector's memory is not touched
+//  under it, so a thread never waits for a collection while holding it.
+typedef std::unordered_map<std::string, std::vector<ScriptCallEntry *> > ScriptCallIndex;
+static ScriptCallIndex sScriptCallIndex;
+static ScriptCallEntry *sScriptCallIndexed = 0;
+static std::mutex sScriptCallLock;
+
+static ScriptCallEntry *findScriptCallEntry(hx::Class_obj *inClass, const std::string &inName, bool inStatic)
+{
+   std::lock_guard<std::mutex> lock(sScriptCallLock);
+   // A library loaded since registered more
+   if (sScriptCallIndexed!=sScriptCallEntries)
+   {
+      sScriptCallIndex.clear();
+      sScriptCallIndexed = sScriptCallEntries;
+      for(ScriptCallEntry *e = sScriptCallIndexed; e; e = e->next)
+         sScriptCallIndex[e->name].push_back(e);
+   }
+
+   ScriptCallIndex::iterator named = sScriptCallIndex.find(inName);
+   if (named!=sScriptCallIndex.end())
+   {
+      // A class is compared through the entry's own reference to it, which is filled
+      //  in when the class registers
+      std::vector<ScriptCallEntry *> &entries = named->second;
+      for(size_t i=0;i<entries.size();i++)
+         if (entries[i]->isStatic==inStatic && entries[i]->classRef->mPtr==inClass)
+            return entries[i];
+   }
+   return 0;
+}
+
+ScriptNamedFunction HaxeNativeClass::findScriptCall(hx::Class inClass, const String &inName, bool inStatic)
+{
+   std::string name = inName.utf8_str();
+   // An entry is named as the function is in C++, where the Haxe compiler puts _hx_
+   //  before a name C++ could not take. A script asks by the Haxe name.
+   std::string remapped = "_hx_" + name;
+
+   for(hx::Class_obj *cls = inClass.mPtr; cls; cls = cls->mSuper ? cls->mSuper->mPtr : 0)
+   {
+      ScriptCallEntry *entry = findScriptCallEntry(cls, name, inStatic);
+      if (!entry)
+         entry = findScriptCallEntry(cls, remapped, inStatic);
+      if (entry)
+         return ScriptNamedFunction(entry->name, entry->execute, entry->signature, entry->isStatic);
+
+      if (inStatic)
+         break;
+
+      // A function it inherits from a class that does have script functions. Those
+      //  call through the vtable, so a function the class overrides is still reached.
+      HaxeNativeClass *registered = findClass(cls->mName.utf8_str());
+      if (registered)
+         return registered->findFunction(name);
+   }
+   return ScriptNamedFunction(0,0,0,0,0);
+}
+
+
+// The calls into the host that had no typed function to link to, for
+//  __scriptable_cppia_calls_by_name
+static std::set<std::string> sCallsByName;
+static std::mutex sCallsByNameLock;
+
+void HaxeNativeClass::callByName(const String &inClass, const String &inName)
+{
+   std::string call = std::string(inClass.utf8_str()) + "." + inName.utf8_str();
+   std::lock_guard<std::mutex> lock(sCallsByNameLock);
+   sCallsByName.insert(call);
+}
+
+std::vector<std::string> HaxeNativeClass::callsByName()
+{
+   std::lock_guard<std::mutex> lock(sCallsByNameLock);
+   return std::vector<std::string>(sCallsByName.begin(), sCallsByName.end());
+}
+
+
 
 
 

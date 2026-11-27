@@ -224,6 +224,12 @@ bool __scriptable_cppia_jit_active();
 // scripts. A module with a "__cppia_host" resource loads only into the host
 // whose fingerprint that resource holds
 String __scriptable_host_fingerprint();
+// The host functions that the scripts loaded so far call by name, each as
+// "package.Class.function", sorted. Such a call looks the function up and boxes
+// its arguments each time it runs: it is one cppia found no typed function for,
+// as with a function whose name is overloaded in C++, or one whose class the
+// script knows only as a private interface
+Array<String> __scriptable_cppia_calls_by_name();
 // Sets the size in bytes of the script stack, which holds script frames, for
 // threads that attach from now on and for the calling thread if no script frame
 // is on it (docs/ThreadsAndStacks.md). The size starts at HXCPP_CPPIA_STACK_SIZE,
@@ -329,5 +335,7 @@ inline ::String _hx_scriptable_super_toString(T *inSelf, ...)
 
 
 
+
+#include <hx/ScriptCall.h>
 
 #endif
