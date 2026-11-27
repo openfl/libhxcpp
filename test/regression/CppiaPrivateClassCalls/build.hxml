@@ -1,0 +1,13 @@
+--main Main
+-cpp bin
+-D scriptable
+-D dll_export=bin/host.info
+--dce no
+--next
+--main Script
+-D dll_import=bin/host.info
+# Haxe 5.0.0-preview.1 stops on haxe.macro.Error, which DCE leaves without its
+# constructor, when the host's classes include haxe.Exception
+# (HaxeFoundation/haxe#12208, fixed after preview.1)
+--macro addGlobalMetadata('haxe.macro.Expr.Error', '@:keep')
+-cppia bin/script.cppia

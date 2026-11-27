@@ -12,6 +12,26 @@
 ::foreach PARAMS::
 #define HX_ARG_LIST::ARG:: ::ARG_LIST::::end::
 
+// In a scriptable host, a function of a class the Haxe compiler wrote no script
+//  functions for also gets a typed entry cppia can call (hx/ScriptCall.h)
+#ifdef HXCPP_SCRIPTABLE
+// Most functions register nothing, and -Wall would name each of them
+#if defined(__GNUC__) || defined(__clang__)
+#define HX_SCRIPT_CALL_UNUSED __attribute__((unused))
+#else
+#define HX_SCRIPT_CALL_UNUSED
+#endif
+// The first form is chosen only when the name is one function: an overloaded name,
+//  as the maps' set is, has no single address and gets no entry
+#define HX_SCRIPT_CALL_ENTRY(class,func) \
+template<typename T_> static auto __hx_call_pick_##class##func(int) \
+   -> ::hxNS::ScriptCallRegister< T_, decltype(&T_::func), &T_::func >; \
+template<typename T_> static ::hxNS::ScriptCallNone __hx_call_pick_##class##func(...); \
+HX_SCRIPT_CALL_UNUSED static decltype(__hx_call_pick_##class##func< class >(0)) __hx_call_##class##func(#func);
+#else
+#define HX_SCRIPT_CALL_ENTRY(class,func)
+#endif
+
 #define HX_DEFINE_DYNAMIC_FUNC0(class,func,ret) \
 static ::NS::Dynamic __##class##func(::hxNS::Object *inObj) \
 { \
@@ -20,7 +40,8 @@ static ::NS::Dynamic __##class##func(::hxNS::Object *inObj) \
  ::NS::Dynamic class::func##_dyn() \
 {\
    return ::hxNS::CreateMemberFunction0(#func,this,__##class##func); \
-}
+} \
+HX_SCRIPT_CALL_ENTRY(class,func)
 
 
 #define HX_DEFINE_DYNAMIC_FUNC(class,N,func,ret,array_list,dynamic_arg_list,arg_list) \
@@ -31,7 +52,8 @@ static ::NS::Dynamic __##class##func(::hxNS::Object *inObj, dynamic_arg_list) \
  ::NS::Dynamic class::func##_dyn() \
 {\
    return ::hxNS::CreateMemberFunction##N(#func,this,__##class##func); \
-}
+} \
+HX_SCRIPT_CALL_ENTRY(class,func)
 
 
 #define HX_DEFINE_DYNAMIC_FUNC_EXTRA(class,N,func,ret,array_list,dynamic_arg_list,arg_list) \
@@ -42,7 +64,8 @@ static ::NS::Dynamic __##class##func(::hxNS::Object *inObj, const ::NS::Array< :
  ::NS::Dynamic class::func##_dyn() \
 {\
    return ::hxNS::CreateMemberFunctionVar(#func,this,__##class##func,N); \
-}
+} \
+HX_SCRIPT_CALL_ENTRY(class,func)
 
 
 #define DELEGATE_0(ret,func) ret func() { return mDelegate->func(); }
@@ -81,7 +104,8 @@ static ::NS::Dynamic __##class##func() \
  ::NS::Dynamic class::func##_dyn() \
 {\
    return ::hxNS::CreateStaticFunction0(#func,__##class##func); \
-}
+} \
+HX_SCRIPT_CALL_ENTRY(class,func)
 
 
 #define STATIC_HX_DEFINE_DYNAMIC_FUNC(class,N,func,ret,array_list,dynamic_arg_list,arg_list) \
@@ -92,7 +116,8 @@ static ::NS::Dynamic __##class##func(dynamic_arg_list) \
  ::NS::Dynamic class::func##_dyn() \
 {\
    return ::hxNS::CreateStaticFunction##N(#func,__##class##func); \
-}
+} \
+HX_SCRIPT_CALL_ENTRY(class,func)
 
 
 #define STATIC_HX_DEFINE_DYNAMIC_FUNC_EXTRA(class,N,func,ret,array_list,dynamic_arg_list,arg_list) \
@@ -103,7 +128,8 @@ static ::NS::Dynamic __##class##func(const ::NS::Array< ::NS::Dynamic> &inArgs) 
  ::NS::Dynamic class::func##_dyn() \
 {\
    return ::hxNS::CreateStaticFunctionVar(#func,__##class##func,N); \
-}
+} \
+HX_SCRIPT_CALL_ENTRY(class,func)
 
 
 

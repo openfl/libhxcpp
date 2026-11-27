@@ -704,6 +704,11 @@ public:
 
    static HaxeNativeClass *findClass(const std::string &inName);
    static HaxeNativeClass *hxObject();
+   // The typed entry of a function of a host class that has no script functions
+   static ScriptNamedFunction findScriptCall(hx::Class inClass, const String &inName, bool inStatic);
+   // Notes a call to a host function that a script makes by name, and lists them
+   static void callByName(const String &inClass, const String &inName);
+   static std::vector<std::string> callsByName();
    static void link();
    static const std::string &hostFingerprint();
 #ifndef NATIVE_CLASS_OVERRIDES_MARKED

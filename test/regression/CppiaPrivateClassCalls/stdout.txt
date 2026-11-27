@@ -1,0 +1,73 @@
+true
+1
+2
+4.5
+6
+2
+false
+values [1.5,4.5]
+3,9
+36
+[0.5,1.5,4.5]
+from the base
+store
+6
+false
+text
+7
+null
+caught: thrown in the host
+2
+2
+true
+false
+after delete [4.5]
+0
+filled [0.5,0.5,0.5]
+42
+2.5
+QUIET!
+true
+1
+2
+-3
+1.5
+3
+true
+true
+1
+2
+4.5
+6
+2
+false
+values [1.5,4.5]
+3,9
+36
+[0.5,1.5,4.5]
+from the base
+store
+6
+false
+text
+7
+null
+caught: thrown in the host
+2
+2
+true
+false
+after delete [4.5]
+0
+filled [0.5,0.5,0.5]
+42
+2.5
+QUIET!
+true
+1
+2
+-3
+1.5
+3
+true
+called by name: _Store.Counted.count

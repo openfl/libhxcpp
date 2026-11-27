@@ -2145,6 +2145,8 @@ struct CallStatic : public CppiaExpr
          // A host interface has a class but no script glue, and only a
          //  malformed file calls a static on one
          ScriptNamedFunction func = type->haxeBase ? type->haxeBase->findStaticFunction(field) : ScriptNamedFunction();
+         if (!func.signature)
+            func = HaxeNativeClass::findScriptCall(type->haxeClass, field, true);
          if (func.signature)
          {
             //CPPIALOG(" found function %s\n", func.signature );
@@ -2158,6 +2160,7 @@ struct CallStatic : public CppiaExpr
             Dynamic func = type->haxeClass.mPtr->__Field( field, HX_PROP_NEVER );
             if (func.mPtr)
             {
+               HaxeNativeClass::callByName(type->name, field);
                replace = new CallDynamicFunction(inModule, this, func, args );
             }
          }
@@ -3696,6 +3699,15 @@ struct CallMember : public CppiaExpr
          }
       }
 
+      // A host class the compiler wrote no script functions for: a private class, or
+      //  the class behind an abstract, reached through code inlined into the script
+      if (!replace && !callSuperField && !type->cppiaClass && type->haxeClass.mPtr)
+      {
+         ScriptNamedFunction func = HaxeNativeClass::findScriptCall(type->haxeClass, field, false);
+         if (func.signature)
+            replace = new CallHaxe( this, func, thisExpr, args, false, false, type->name );
+      }
+
       if (!replace && type->name==HX_CSTRING("String"))
       {
          replace = createStringBuiltin(this, thisExpr, field, args);
@@ -3760,6 +3772,9 @@ struct CallMember : public CppiaExpr
       }
 
       {
+         // The script named a host class, so this call could have been typed
+         if (!type->isDynamic && !type->cppiaClass && type->haxeClass.mPtr)
+            HaxeNativeClass::callByName(type->name, field);
          replace = new Call( this, fieldId, thisExpr, args );
          replace->link(inModule);
          delete this;
