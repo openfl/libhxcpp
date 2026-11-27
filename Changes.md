@@ -2,6 +2,8 @@
 libhxcpp 6.0.3 (unreleased)
 ------------------------------------------------------------
 
+* Fixed the cppia interpreter reading an argument's slot in place in the script frame when it fills in the argument's default value, and writing a Float or Dynamic default the same way: a frame keeps 4-byte alignment, so on 64-bit an argument after an Int, as b in f(a:Int, ?b:String = "x"), sits at an odd multiple of 4, which is undefined behaviour, reported by UBSan, and a fault on a CPU that requires alignment. The slots are copied in and out now, as the interpreter's other frame accesses have been since 6.0.0. The JIT, which compiles defaults into the function, was not affected
+
 libhxcpp 6.0.2
 ------------------------------------------------------------
 
