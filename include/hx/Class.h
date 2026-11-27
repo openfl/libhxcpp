@@ -271,7 +271,7 @@ inline void RegisterClass(const String &inClassName, hx::Class inClass)
 template<typename T>
 inline bool TCanCast(hx::Object *inPtr)
 {
-	return inPtr && inPtr->_hx_isInstanceOf(T::_hx_ClassId);
+   return inPtr && ::hx::IsInstanceOfType<T>(inPtr, 0);
 }
 
 

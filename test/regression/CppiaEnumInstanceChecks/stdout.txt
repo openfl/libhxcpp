@@ -1,0 +1,67 @@
+compiled
+  HostB.HostOnlyB: caught HostB, isOfType HostA false, HostB true, is HostA false, cast HostA throws, cast HostB HostOnlyB
+  HostB.HostWith(1): caught HostB, isOfType HostA false, HostB true, is HostA false, cast HostA throws, cast HostB HostWith(1)
+  HostA.HostOnlyA: caught HostA, isOfType HostA true, HostB false, is HostA true, cast HostA HostOnlyA, cast HostB throws
+  a String: caught Dynamic, isOfType HostA false, HostB false, is HostA false, cast HostA throws, cast HostB throws
+interpreted
+  HostB.HostOnlyB: caught by host first HostB, by script first HostB
+    isOfType HostA false, HostB true, ScriptA false, ScriptB false, Enum false
+    is HostA false, is ScriptB false
+    cast HostA throws, cast HostB HostOnlyB, cast ScriptA throws, cast ScriptB throws
+  HostB.HostWith(1): caught by host first HostB, by script first HostB
+    isOfType HostA false, HostB true, ScriptA false, ScriptB false, Enum false
+    is HostA false, is ScriptB false
+    cast HostA throws, cast HostB HostWith(1), cast ScriptA throws, cast ScriptB throws
+  HostA.HostOnlyA: caught by host first HostA, by script first HostA
+    isOfType HostA true, HostB false, ScriptA false, ScriptB false, Enum false
+    is HostA true, is ScriptB false
+    cast HostA HostOnlyA, cast HostB throws, cast ScriptA throws, cast ScriptB throws
+  ScriptB.ScriptOnlyB: caught by host first ScriptB, by script first ScriptB
+    isOfType HostA false, HostB false, ScriptA false, ScriptB true, Enum false
+    is HostA false, is ScriptB true
+    cast HostA throws, cast HostB throws, cast ScriptA throws, cast ScriptB ScriptOnlyB
+  ScriptB.ScriptWith(1): caught by host first ScriptB, by script first ScriptB
+    isOfType HostA false, HostB false, ScriptA false, ScriptB true, Enum false
+    is HostA false, is ScriptB true
+    cast HostA throws, cast HostB throws, cast ScriptA throws, cast ScriptB ScriptWith(1)
+  ScriptA.ScriptOnlyA: caught by host first ScriptA, by script first ScriptA
+    isOfType HostA false, HostB false, ScriptA true, ScriptB false, Enum false
+    is HostA false, is ScriptB false
+    cast HostA throws, cast HostB throws, cast ScriptA ScriptOnlyA, cast ScriptB throws
+  a String: caught by host first Dynamic, by script first Dynamic
+    isOfType HostA false, HostB false, ScriptA false, ScriptB false, Enum false
+    is HostA false, is ScriptB false
+    cast HostA throws, cast HostB throws, cast ScriptA throws, cast ScriptB throws
+  typed throw of HostB.HostOnlyB reaches the HostB catch: true
+  getEnum(HostB.HostOnlyB) == HostB: true, getEnum(ScriptB.ScriptOnlyB) == ScriptB: true
+jit
+  HostB.HostOnlyB: caught by host first HostB, by script first HostB
+    isOfType HostA false, HostB true, ScriptA false, ScriptB false, Enum false
+    is HostA false, is ScriptB false
+    cast HostA throws, cast HostB HostOnlyB, cast ScriptA throws, cast ScriptB throws
+  HostB.HostWith(1): caught by host first HostB, by script first HostB
+    isOfType HostA false, HostB true, ScriptA false, ScriptB false, Enum false
+    is HostA false, is ScriptB false
+    cast HostA throws, cast HostB HostWith(1), cast ScriptA throws, cast ScriptB throws
+  HostA.HostOnlyA: caught by host first HostA, by script first HostA
+    isOfType HostA true, HostB false, ScriptA false, ScriptB false, Enum false
+    is HostA true, is ScriptB false
+    cast HostA HostOnlyA, cast HostB throws, cast ScriptA throws, cast ScriptB throws
+  ScriptB.ScriptOnlyB: caught by host first ScriptB, by script first ScriptB
+    isOfType HostA false, HostB false, ScriptA false, ScriptB true, Enum false
+    is HostA false, is ScriptB true
+    cast HostA throws, cast HostB throws, cast ScriptA throws, cast ScriptB ScriptOnlyB
+  ScriptB.ScriptWith(1): caught by host first ScriptB, by script first ScriptB
+    isOfType HostA false, HostB false, ScriptA false, ScriptB true, Enum false
+    is HostA false, is ScriptB true
+    cast HostA throws, cast HostB throws, cast ScriptA throws, cast ScriptB ScriptWith(1)
+  ScriptA.ScriptOnlyA: caught by host first ScriptA, by script first ScriptA
+    isOfType HostA false, HostB false, ScriptA true, ScriptB false, Enum false
+    is HostA false, is ScriptB false
+    cast HostA throws, cast HostB throws, cast ScriptA ScriptOnlyA, cast ScriptB throws
+  a String: caught by host first Dynamic, by script first Dynamic
+    isOfType HostA false, HostB false, ScriptA false, ScriptB false, Enum false
+    is HostA false, is ScriptB false
+    cast HostA throws, cast HostB throws, cast ScriptA throws, cast ScriptB throws
+  typed throw of HostB.HostOnlyB reaches the HostB catch: true
+  getEnum(HostB.HostOnlyB) == HostB: true, getEnum(ScriptB.ScriptOnlyB) == ScriptB: true

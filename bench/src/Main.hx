@@ -38,7 +38,7 @@ class Main {
 		return [
 			new AllocSmall(), new AllocStrings(), new AllocArrays(), new GcPauses(), new GcFrames(), new MapInt(), new MapString(), new MapObject(),
 			new StringBuild(), new StringIndex(), new StringSubstr(), new StringSplit(), new StringCase(), new SortInt(), new SortString(),
-			new SortObject(), new DequePush(), new DequeBurst(), new CffiCallVector(), new CffiStringView(), new EnumFormat(),
+			new SortObject(), new DequePush(), new DequeBurst(), new CffiCallVector(), new CffiStringView(), new EnumFormat(), new EnumIsOfType(), new EnumTypedCatch(), new ClassTypedCatch(),
 			new MapInt64(), new MapInt64Values(), new ArrayPushDynamic(), new ArrayReserveDynamic(), new ArrayPop(),
 			new SearchFrom(), new StringLongNeedle(), new ParseNumbers(), new FloatFormat(), new AnonFieldSmall(), new AnonFieldWide(), new SqliteRows(),
 			new SocketRead(), new CffiBuffer(), new LargeResize(), new LargeRecycle(), new LargeCopy(), new LargeCachePurge(),

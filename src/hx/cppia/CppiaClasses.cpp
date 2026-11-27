@@ -360,13 +360,15 @@ void SLJIT_FUNC createEnum(hx::Class_obj *inClass, String *inName, int inArgs)
 
    // ctx.pointer points to end-of-args
    unsigned char *oldPointer = ctx->pointer;
+   // The arguments are frame slots, which can be unaligned (see
+   //  StackContext::getSlot), and so is the slot the result goes back to
    hx::Object **base = ((hx::Object **)(ctx->frame) );
    Array<Dynamic> args = Array_obj<Dynamic>::__new(inArgs);
 
    TRY_NATIVE
       for(int i=0;i<inArgs;i++)
-         args[i] = Dynamic(base[i]);
-      base[0] = inClass->ConstructEnum(*inName, args).mPtr;
+         args[i] = Dynamic(JitArg(base,i));
+      JitStore(base, inClass->ConstructEnum(*inName, args).mPtr);
   
    CATCH_NATIVE
    ctx->pointer = oldPointer;
