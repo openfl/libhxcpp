@@ -1111,10 +1111,11 @@ class BuildTool
             Log.warn('Increasing default Obj-C++ standard to Obj-C++11 instead of Obj-C++${defaultObjCxxStandard}');
             defaultObjCxxStandard = 11;
          }
-      } else {
-         defaultObjCxxStandard = 11;
       }
 
+      // An Objective-C or Objective-C++ standard left null follows the file's
+      //  C or C++ one (Compiler.addStandard), so -D objc, which makes every
+      //  generated file .mm, compiles them with the C++ standard asked for
       if (inXML.has.c_standard)
          group.mCStandard = Std.parseInt(substitute(inXML.att.c_standard));
       else if (group.mCStandard == null)
@@ -1123,7 +1124,7 @@ class BuildTool
       if (inXML.has.objc_standard)
          group.mObjCStandard = Std.parseInt(substitute(inXML.att.objc_standard));
       else if (group.mObjCStandard == null)
-         group.mObjCStandard = defaultObjCStandard != null ? defaultObjCStandard : group.mCStandard;
+         group.mObjCStandard = defaultObjCStandard;
 
       if (inXML.has.cxx_standard)
          group.mCxxStandard = Std.parseInt(substitute(inXML.att.cxx_standard));
@@ -1133,7 +1134,7 @@ class BuildTool
       if (inXML.has.objcxx_standard)
          group.mObjCxxStandard = Std.parseInt(substitute(inXML.att.objcxx_standard));
       else if (group.mObjCxxStandard == null)
-         group.mObjCxxStandard = defaultObjCxxStandard != null ? defaultObjCxxStandard : group.mCxxStandard;
+         group.mObjCxxStandard = defaultObjCxxStandard;
 
       for(el in inXML.elements)
       {
@@ -1149,10 +1150,14 @@ class BuildTool
                      group.addFile( file );
                   }
 
+                  // A file's own C or C++ standard is nearer than its group's
+                  //  Objective-C or Objective-C++ one, so it takes the file's
                   file.mCStandard = el.has.c_standard ? Std.parseInt(substitute(el.att.c_standard)) : group.mCStandard;
-                  file.mObjCStandard = el.has.objc_standard ? Std.parseInt(substitute(el.att.objc_standard)) : group.mObjCStandard;
+                  file.mObjCStandard = el.has.objc_standard ? Std.parseInt(substitute(el.att.objc_standard)) :
+                                       el.has.c_standard ? null : group.mObjCStandard;
                   file.mCxxStandard = el.has.cxx_standard ? Std.parseInt(substitute(el.att.cxx_standard)) : group.mCxxStandard;
-                  file.mObjCxxStandard = el.has.objcxx_standard ? Std.parseInt(substitute(el.att.objcxx_standard)) : group.mObjCxxStandard;
+                  file.mObjCxxStandard = el.has.objcxx_standard ? Std.parseInt(substitute(el.att.objcxx_standard)) :
+                                         el.has.cxx_standard ? null : group.mObjCxxStandard;
 
                   if (el.has.tag)
                   {

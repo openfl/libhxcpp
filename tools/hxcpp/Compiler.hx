@@ -184,13 +184,17 @@ class Compiler
 						args.push('-std=c${inFile.mCStandard}');
 					}
 				}
+			// With no Objective-C or Objective-C++ standard of its own, a file
+			//  follows its C or C++ one
 			case ObjC:
-				if (inFile.mObjCStandard != null) {
-					args.push('-std=c${inFile.mObjCStandard}');
+				var standard = inFile.mObjCStandard != null ? inFile.mObjCStandard : inFile.mCStandard;
+				if (standard != null) {
+					args.push('-std=c${standard}');
 				}
 			case ObjCxx:
-				if (inFile.mObjCxxStandard != null) {
-					args.push('-std=c++${inFile.mObjCxxStandard}');
+				var standard = inFile.mObjCxxStandard != null ? inFile.mObjCxxStandard : inFile.mCxxStandard;
+				if (standard != null) {
+					args.push('-std=c++${standard}');
 				}
 			case Cxx:
 				if (inFile.mCxxStandard != null) {

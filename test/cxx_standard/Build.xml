@@ -5,6 +5,12 @@
 		<file name="cxx14.cpp" cxx_standard="14" />
 		<file name="c11.c" c_standard="11" />
 		<file name="c17.c" c_standard="17" />
+		<!-- Objective-C and Objective-C++ follow the C and C++ standards, the group's or the file's own -->
+		<section if="macos||emscripten">
+			<file name="objcxx17.mm" />
+			<file name="objcxx14.mm" cxx_standard="14" />
+			<file name="objc17.m" c_standard="17" />
+		</section>
 	</files>
 
 	<set name="EXESUFFIX" value=".exe" if="windows" />

@@ -67,8 +67,8 @@ Defines affecting how the code is compiled.  These can be on the command line wh
 | *HXCPP_C_STANDARD*      | Set default C standard |
 | *HXCPP_CXX_STANDARD*    | Set default C++ standard |
 | *HXCPP_CPP17*           | Use C++17, as HXCPP_CXX_STANDARD=17 does |
-| *HXCPP_OBJC_STANDARD*   | Set default Objective-C standard |
-| *HXCPP_OBJCXX_STANDARD* | Set default Objective-C++ standard |
+| *HXCPP_OBJC_STANDARD*   | Set default Objective-C standard. Without it, Objective-C follows the C standard |
+| *HXCPP_OBJCXX_STANDARD* | Set default Objective-C++ standard. Without it, Objective-C++ follows the C++ standard |
 | *exe_link*              | Generate executable file (rather than dynamic library on android) |
 | *static_link*           | Generate static library |
 | *dll_link*              | Generate dynamic library |
