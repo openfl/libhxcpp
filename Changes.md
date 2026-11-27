@@ -2,6 +2,8 @@
 libhxcpp 6.0.2 (unreleased)
 ------------------------------------------------------------
 
+* Fixed Emscripten builds ignoring the C++ standard: the toolchain added --std=c++11 after the build tool's own -std, so HXCPP_CXX_STANDARD, HXCPP_CPP14, HXCPP_CPP17 and cxx_standard did nothing there and every file, the precompiled header included, compiled as C++11. Each file gets the standard it asks for now, C++11 by default as before, so an Emscripten build compiles everything once more after updating. The GCW Zero toolchain had the same flag (HaxeFoundation/hxcpp#1232)
+
 libhxcpp 6.0.1
 ------------------------------------------------------------
 

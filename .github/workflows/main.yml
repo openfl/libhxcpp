@@ -273,6 +273,18 @@ jobs:
       working-directory: test/regression
       run: haxe --run Run -D emscripten
 
+    # Each file must compile with the standard its group, its own
+    # cxx_standard or HXCPP_CPP17 asks for: the toolchain once pinned C++11
+    # after the build tool's -std, so all three built as C++11
+    - name: Build with each file's C++ standard
+      if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+      working-directory: test/cxx_standard
+      run: |
+        for xml in *.xml; do
+          haxelib run hxcpp $xml -Demscripten
+          haxelib run hxcpp $xml clean -Demscripten
+        done
+
     - name: Run the memory and stack test
       if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
       run: timeout 600 sh test/emscripten/run.sh
