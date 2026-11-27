@@ -32,10 +32,10 @@ class Int64Handler
          }
          else if (op==dhoIs)
          {
+            // Every Int64 boxes as one, small values included, so a boxed Int
+            //  is not one, as on the other targets
             StructHandlerDynamicParams *params = (StructHandlerDynamicParams *)outResult;
-            hx::Object *obj = params->inData;
-            int type = obj->__GetType();
-            params->outProcessed = type==vtInt || type==vtInt64;
+            params->outProcessed = params->inData->__GetType()==vtInt64;
          }
          else
             return DefaultStructHandler::handler(op,ioValue,inSize, outResult);

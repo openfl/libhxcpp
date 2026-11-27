@@ -1,0 +1,22 @@
+isInt64 of the Int 100 is false: true
+isInt64 of the Int 0 is false: true
+isInt64 of 1.0 is false: true
+isInt64 of null is false: true
+isInt64 of a String is false: true
+isInt64 of the Int64 100 is true: true
+isInt64 of the Int64 -1 is true: true
+isInt64 of the Int64 255 is true: true
+isInt64 of the Int64 -2 is true: true
+isInt64 of the Int64 256 is true: true
+isInt64 of the Int64 4294967296 is true: true
+the handler says the Int 100 is not an Int64: true
+the handler says the Int64 100 is one: true
+the class says the Int 100 is not an Int64: true
+the class says the Int64 100 is one: true
+the Int64 100 is still an Int: true
+script: isInt64 of the Int 100 is false: true
+script: isInt64 of the Int64 100 is true: true
+script: isInt64 of the Int64 2^32 is true: true
+script: isInt64 of the Int 100 is false: true
+script: isInt64 of the Int64 100 is true: true
+script: isInt64 of the Int64 2^32 is true: true
