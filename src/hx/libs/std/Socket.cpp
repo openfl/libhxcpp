@@ -1038,16 +1038,30 @@ static DynamicInetFunc dynamic_inet_ntop = { "inet_ntop" };
 #endif
 
 
+// The 16 bytes of an IPv6 address, copied out of its array, which may move
+//  once a GC-free zone is entered. False for a null array or one of another
+//  length, which reading 16 bytes from would run past
+static bool ipv6_address( Array<unsigned char> inHost, void *outAddr )
+{
+   if (!inHost.mPtr || inHost->length!=16)
+      return false;
+   memcpy(outAddr, inHost->GetBase(), 16);
+   return true;
+}
+
 String _hx_std_host_to_string_ipv6( Array<unsigned char> ip )
 {
+   unsigned char addr[16];
+   if (!ipv6_address(ip, addr))
+      return String();
    char buf[100];
    #ifdef DYNAMIC_INET_FUNCS
    inet_ntop_func ntop = (inet_ntop_func)dynamic_inet_ntop.get();
    if (!ntop)
       return String();
-   return String( ntop(AF_INET6, &ip[0], buf, 100) );
+   return String( ntop(AF_INET6, addr, buf, 100) );
    #else
-   return String( inet_ntop(AF_INET6, &ip[0], buf, 100) );
+   return String( inet_ntop(AF_INET6, addr, buf, 100) );
    #endif
 }
 
@@ -1077,12 +1091,10 @@ String _hx_std_host_reverse( int host )
 
 String _hx_std_host_reverse_ipv6( Array<unsigned char> host )
 {
-   if (!host.mPtr || host->length!=16)
+   unsigned char addr[16];
+   if (!ipv6_address(host, addr))
       return String();
 
-   // Out of the array first: it may move once the zone is entered
-   unsigned char addr[16];
-   memcpy(addr, host->GetBase(), 16);
    struct hostent *h = 0;
    hx::EnterGCFreeZone();
    #if defined(NEKO_WINDOWS) || defined(NEKO_MAC) || defined(ANDROID) || defined(BLACKBERRY) || defined(__EMSCRIPTEN__) || defined(NEKO_BSD)
@@ -1163,9 +1175,10 @@ void _hx_std_socket_connect_ipv6( Dynamic o, Array<unsigned char> host, int port
 {
    struct sockaddr_in6 addr;
    memset(&addr,0,sizeof(addr));
+   if (!ipv6_address(host, &addr.sin6_addr))
+      hx::Throw(HX_CSTRING("Invalid IPv6 address"));
    addr.sin6_family = AF_INET6;
    addr.sin6_port = htons(port);
-   memcpy(&addr.sin6_addr,&host[0],16);
 
    SOCKET sock = val_sock(o);
    hx::EnterGCFreeZone();
@@ -1601,9 +1614,10 @@ void _hx_std_socket_bind_ipv6( Dynamic o, Array<unsigned char> host, int port )
 
    struct sockaddr_in6 addr;
    memset(&addr,0,sizeof(addr));
+   if (!ipv6_address(host, &addr.sin6_addr))
+      hx::Throw(HX_CSTRING("Invalid IPv6 address"));
    addr.sin6_family = AF_INET6;
    addr.sin6_port = htons(port);
-   memcpy(&addr.sin6_addr,&host[0], 16);
    #ifndef NEKO_WINDOWS
    if (isStreamSocket(sock))
       setsockopt(sock,SOL_SOCKET,SO_REUSEADDR,(char*)&opt,sizeof(opt));

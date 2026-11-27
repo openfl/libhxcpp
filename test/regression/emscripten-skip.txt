@@ -105,6 +105,7 @@ SemaphoreLoopCollect: threads
 SleepLongDuration: threads
 SocketEmptyBytes: sockets
 SocketIpv6Accept: sockets
+SocketIpv6AddressLength: sockets
 SocketIpv6ConcurrentFormat: threads (std::thread, which needs a pthreads build)
 SocketLibraryHandle: sockets
 SocketReadAhead: sockets

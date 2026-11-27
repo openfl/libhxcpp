@@ -1,0 +1,11 @@
+to_string of 0 bytes: null
+to_string of 4 bytes: null
+to_string of 15 bytes: null
+to_string of 17 bytes: null
+to_string of 16 bytes: ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+reverse of 4 bytes: null
+connect to 4 bytes threw: Invalid IPv6 address
+bind to 4 bytes threw: Invalid IPv6 address
+connect to null threw: Invalid IPv6 address
+bind to null threw: Invalid IPv6 address
+to_string of null: null
