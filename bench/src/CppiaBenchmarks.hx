@@ -23,6 +23,7 @@ class CppiaBenchmarks extends Benchmark {
 			result.push(new CppiaBenchmarks("closure_call", "calls", 200000, 10, jit));
 			result.push(new CppiaBenchmarks("native_call", "calls", 200000, 50, jit));
 			result.push(new CppiaBenchmarks("native_callback", "callbacks", 200000, 10, jit));
+			result.push(new CppiaBenchmarks("bunny_update", "bunny updates", 20000, 10, jit));
 		}
 		return result;
 	}
