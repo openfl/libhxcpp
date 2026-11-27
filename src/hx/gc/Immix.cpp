@@ -4998,12 +4998,15 @@ public:
           hx::sMakeZombieSet.insert(inTo);
        }
 
+       // Erased before the insert, as above: the insert can rehash the map,
+       //  which leaves id no iterator to erase through
        hx::ObjectIdMap::iterator id = hx::sObjectIdMap.find(inFrom);
        if (id!=hx::sObjectIdMap.end())
        {
-          hx::sIdObjectMap[id->second] = inTo;
-          hx::sObjectIdMap[inTo] = id->second;
+          int objectId = id->second;
           hx::sObjectIdMap.erase(id);
+          hx::sObjectIdMap[inTo] = objectId;
+          hx::sIdObjectMap[objectId] = inTo;
        }
 
        // Maybe do something faster with weakmaps

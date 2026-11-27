@@ -2,6 +2,8 @@
 libhxcpp 6.0.3 (unreleased)
 ------------------------------------------------------------
 
+* Fixed undefined behaviour in HXCPP_GC_MOVING when a compaction moved an object that has an id, as an ObjectMap key does: the move inserted the new address into the id table, then erased the old entry through an iterator found before the insert, which a rehash during the insert leaves invalid. The old entry is erased first now (HaxeFoundation/hxcpp#1468)
+
 libhxcpp 6.0.2
 ------------------------------------------------------------
 
