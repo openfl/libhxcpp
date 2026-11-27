@@ -2,6 +2,8 @@
 libhxcpp 6.0.3 (unreleased)
 ------------------------------------------------------------
 
+* Fixed the collector marking and moving the variables a cppia closure captures in place in the closure: a closure packs its captures at 4-byte offsets, so on 64-bit a String or object captured after an Int, as text in var count = 1; var text = "x"; function() return count + text, sits at an odd multiple of 4, which is undefined behaviour, reported by UBSan, and a fault on a CPU that requires alignment. Each capture is copied out to be marked or visited now, and written back if the moving collector moved it. Interpreted and jitted closures were both affected
+
 libhxcpp 6.0.2
 ------------------------------------------------------------
 

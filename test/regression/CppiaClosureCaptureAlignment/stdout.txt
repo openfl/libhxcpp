@@ -1,0 +1,4 @@
+captures after moving collections: true
+closures checked: 2000
+captures after moving collections: true
+closures checked: 2000
