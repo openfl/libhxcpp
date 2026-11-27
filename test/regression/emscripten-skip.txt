@@ -39,6 +39,7 @@ FinalizerExceptionState: threads (std::thread, which needs a pthreads build)
 FinalizersAcrossFreeZones: threads
 GcConcurrentCensus: threads (std::thread, which needs a pthreads build)
 GcFinalizerPromotion: threads (std::thread, which needs a pthreads build)
+GcFreeZoneAllocationReported: threads and processes
 GcFreeZoneLeafNatives: threads and processes
 GcFreeZoneNestedGuard: single-threaded Emscripten builds have no GC-free zones, so a guard enters none
 GcFreeZoneThreadWaits: threads
