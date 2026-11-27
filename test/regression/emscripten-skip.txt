@@ -6,6 +6,7 @@
 
 AnonConcurrentString: threads
 ArrayConcurrentString: threads
+AtomicFieldSpinSafePoint: threads (std::thread, which needs a pthreads build)
 AtomicSafePointUnregisteredThread: threads (std::thread, which needs a pthreads build)
 AtomicSpinSafePoint: threads (std::thread, which needs a pthreads build)
 AttachedThreadId: threads (std::thread, which needs a pthreads build)

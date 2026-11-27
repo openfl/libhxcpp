@@ -574,21 +574,33 @@ T *StarOf(T &x) { return &x; }
 }
 
 
-// Haxe 4's haxe.atomic.AtomicInt is a cpp.Pointer<Int>, and its methods call
-//  these. A thread spinning on one never otherwise reached a safe point, so a
-//  collection on another thread waited for it for ever, as Haxe 5's
-//  hx::atomic::AtomicInt does not (libhxcpp #455). The runtime's own spinlocks
-//  call the volatile int * forms, which do not stop.
+// The forms of these that stop for a pending collection, for an int * and a
+//  cpp::Pointer<int>. Haxe 4's haxe.atomic.AtomicInt is a cpp.Pointer<Int>, and
+//  Haxe 5.0.0-preview.1's keeps an Int field and passes its address, a plain
+//  int *. A thread spinning on either never otherwise reached a safe point, so
+//  a collection on another thread waited for it for ever (libhxcpp #455).
+//  Later Haxe 5's hx::atomic::AtomicInt stops by itself. The runtime's own
+//  spinlocks call the volatile int * forms in hx/StdLibs.h, which do not stop.
 #define HX_ATOMIC_SAFE_POINT if (::hx::gPauseForCollect) __hxcpp_gc_safe_point();
-inline int _hx_atomic_add(::cpp::Pointer<int> a, int b) { HX_ATOMIC_SAFE_POINT return _hx_atomic_add((volatile int *)a.ptr, b); }
-inline int _hx_atomic_sub(::cpp::Pointer<int> a, int b) { HX_ATOMIC_SAFE_POINT return _hx_atomic_sub((volatile int *)a.ptr, b); }
-inline int _hx_atomic_and(::cpp::Pointer<int> a, int b) { HX_ATOMIC_SAFE_POINT return _hx_atomic_and((volatile int *)a.ptr, b); }
-inline int _hx_atomic_or(::cpp::Pointer<int> a, int b) { HX_ATOMIC_SAFE_POINT return _hx_atomic_or((volatile int *)a.ptr, b); }
-inline int _hx_atomic_xor(::cpp::Pointer<int> a, int b) { HX_ATOMIC_SAFE_POINT return _hx_atomic_xor((int *)a.ptr, b); }
-inline int _hx_atomic_compare_exchange(::cpp::Pointer<int> a, int expected, int replacement) { HX_ATOMIC_SAFE_POINT return _hx_atomic_compare_exchange((volatile int *)a.ptr, expected, replacement); }
-inline int _hx_atomic_exchange(::cpp::Pointer<int> a, int replacement) { HX_ATOMIC_SAFE_POINT return _hx_atomic_exchange((volatile int *)a.ptr, replacement); }
-inline int _hx_atomic_load(::cpp::Pointer<int> a) { HX_ATOMIC_SAFE_POINT return _hx_atomic_load((volatile int *)a.ptr); }
-inline int _hx_atomic_store(::cpp::Pointer<int> a, int value) { HX_ATOMIC_SAFE_POINT return _hx_atomic_store((volatile int *)a.ptr, value); }
+inline int _hx_atomic_add(int *a, int b) { HX_ATOMIC_SAFE_POINT return _hx_atomic_add((volatile int *)a, b); }
+inline int _hx_atomic_sub(int *a, int b) { HX_ATOMIC_SAFE_POINT return _hx_atomic_sub((volatile int *)a, b); }
+inline int _hx_atomic_and(int *a, int b) { HX_ATOMIC_SAFE_POINT return _hx_atomic_and((volatile int *)a, b); }
+inline int _hx_atomic_or(int *a, int b) { HX_ATOMIC_SAFE_POINT return _hx_atomic_or((volatile int *)a, b); }
+inline int _hx_atomic_xor(int *a, int b) { HX_ATOMIC_SAFE_POINT return _hx_atomic_xor((volatile int *)a, b); }
+inline int _hx_atomic_compare_exchange(int *a, int expected, int replacement) { HX_ATOMIC_SAFE_POINT return _hx_atomic_compare_exchange((volatile int *)a, expected, replacement); }
+inline int _hx_atomic_exchange(int *a, int replacement) { HX_ATOMIC_SAFE_POINT return _hx_atomic_exchange((volatile int *)a, replacement); }
+inline int _hx_atomic_load(int *a) { HX_ATOMIC_SAFE_POINT return _hx_atomic_load((volatile int *)a); }
+inline int _hx_atomic_store(int *a, int value) { HX_ATOMIC_SAFE_POINT return _hx_atomic_store((volatile int *)a, value); }
 #undef HX_ATOMIC_SAFE_POINT
+
+inline int _hx_atomic_add(::cpp::Pointer<int> a, int b) { return _hx_atomic_add(a.ptr, b); }
+inline int _hx_atomic_sub(::cpp::Pointer<int> a, int b) { return _hx_atomic_sub(a.ptr, b); }
+inline int _hx_atomic_and(::cpp::Pointer<int> a, int b) { return _hx_atomic_and(a.ptr, b); }
+inline int _hx_atomic_or(::cpp::Pointer<int> a, int b) { return _hx_atomic_or(a.ptr, b); }
+inline int _hx_atomic_xor(::cpp::Pointer<int> a, int b) { return _hx_atomic_xor(a.ptr, b); }
+inline int _hx_atomic_compare_exchange(::cpp::Pointer<int> a, int expected, int replacement) { return _hx_atomic_compare_exchange(a.ptr, expected, replacement); }
+inline int _hx_atomic_exchange(::cpp::Pointer<int> a, int replacement) { return _hx_atomic_exchange(a.ptr, replacement); }
+inline int _hx_atomic_load(::cpp::Pointer<int> a) { return _hx_atomic_load(a.ptr); }
+inline int _hx_atomic_store(::cpp::Pointer<int> a, int value) { return _hx_atomic_store(a.ptr, value); }
 
 #endif
