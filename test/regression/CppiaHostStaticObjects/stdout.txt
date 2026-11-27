@@ -1,0 +1,2 @@
+script reads its stores: true, host reads them: true
+script reads its stores: true, host reads them: true

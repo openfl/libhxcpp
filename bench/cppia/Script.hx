@@ -11,6 +11,7 @@ class Script {
 			case "closure_call": new ClosureCall();
 			case "native_call": new NativeCall();
 			case "native_callback": new NativeCallback();
+			case "host_statics": new HostStatics();
 			default: throw 'Unknown CPPIA workload ${CppiaBridge.name}';
 		};
 	}
@@ -145,5 +146,20 @@ class NativeCallback implements CppiaWorkload {
 			bias = (bias + 3) & 1023;
 			return (value & 1023) + bias;
 		});
+	}
+}
+
+class HostStatics implements CppiaWorkload {
+	public function new() {}
+
+	public function run():Int {
+		var sum = 0;
+		for (i in 0...200000) {
+			// A read and a write of host static objects each pass
+			var values = CppiaBridge.values;
+			sum += values[i & 15];
+			CppiaBridge.last = values;
+		}
+		return sum;
 	}
 }
