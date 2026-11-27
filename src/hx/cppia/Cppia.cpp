@@ -6632,12 +6632,12 @@ struct TVars : public CppiaVoidExpr
       return this;
    }
 
+   // By index: a file can declare no vars, and vars[0] of an empty vector is
+   //  undefined behaviour, which checked library builds trap
    void runVoid(CppiaCtx *ctx) HXCPP_OVERRIDE
    {
-      CppiaExpr **v = &vars[0];
-      CppiaExpr **end = v + vars.size();
-      for(;v<end && !ctx->breakContReturn && !ctx->exception;v++)
-         (*v)->runVoid(ctx);
+      for(size_t v=0; v<vars.size() && !ctx->breakContReturn && !ctx->exception; v++)
+         vars[v]->runVoid(ctx);
    }
 
    #ifdef CPPIA_JIT

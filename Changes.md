@@ -4,6 +4,7 @@ libhxcpp 6.0.3 (unreleased)
 
 * Fixed undefined behaviour in HXCPP_GC_MOVING when a compaction moved an object that has an id, as an ObjectMap key does: the move inserted the new address into the id table, then erased the old entry through an iterator found before the insert, which a rehash during the insert leaves invalid. The old entry is erased first now (HaxeFoundation/hxcpp#1468)
 * Fixed cpp.NativeSocket's host_to_string_ipv6, socket_connect_ipv6 and socket_bind_ipv6 reading 16 bytes from an address array of any length: a shorter one was read past its end, so it formatted, connected to or bound whatever followed it in memory, and a null one crashed. An array that is not 16 bytes long now gives null from host_to_string_ipv6, as it already did from host_reverse_ipv6, and connect and bind throw "Invalid IPv6 address". sys.net.Host always passes 16 bytes (HaxeFoundation/hxcpp@a8a5724f)
+* Fixed cppia's interpreter running a var statement with no declarations, which a malformed file can hold, from the first element of its empty list: undefined behaviour, on which a standard library that checks indexing stops the program (HaxeFoundation/hxcpp@a8a5724f)
 
 libhxcpp 6.0.2
 ------------------------------------------------------------
