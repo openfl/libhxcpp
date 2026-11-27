@@ -243,6 +243,23 @@ public:
    static void __boot();
 };
 
+// Whether inPtr, not null, is a T, for ObjectPtr<T> casts and TCanCast<T>. A
+// class id says that, but a generated enum has none of its own: it inherits
+// EnumBase_obj's clsIdEnum, which every enum value has, so a value of any enum
+// passed for every enum. HX_DO_ENUM_RTTI gives such an enum
+// _hx_isEnumValueOf, which compares the value's class with the enum's.
+template <typename T>
+inline auto IsInstanceOfType(hx::Object *inPtr, int) -> decltype(T::_hx_isEnumValueOf(inPtr))
+{
+   return T::_hx_isEnumValueOf(inPtr);
+}
+
+template <typename T>
+inline bool IsInstanceOfType(hx::Object *inPtr, long)
+{
+   return inPtr->_hx_isInstanceOf(T::_hx_ClassId);
+}
+
 // --- hx::ObjectPtr ---------------------------------------------------------------
 //
 // This class simply provides syntax so that pointers can be written as objects,
@@ -263,7 +280,7 @@ protected:
    {
       if (inPtr)
       {
-         mPtr = inPtr->_hx_isInstanceOf(OBJ_::_hx_ClassId) ? reinterpret_cast<OBJ_*>(inPtr) : 0;
+         mPtr = ::hx::IsInstanceOfType<OBJ_>(inPtr, 0) ? reinterpret_cast<OBJ_ *>(inPtr) : 0;
 
          if (inThrowOnInvalid && !mPtr)
             ::hx::BadCast();

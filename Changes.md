@@ -2,6 +2,9 @@
 libhxcpp 6.0.2 (unreleased)
 ------------------------------------------------------------
 
+* Fixed a typed catch of one enum catching a value of any enum in compiled code, and Std.isOfType(v, SomeEnum), v is SomeEnum and cast(v, SomeEnum) taking one too: a generated enum has no class id of its own, so each of these tested the one that every enum value has. With catch (e:A) before catch (e:B), a thrown B reached the A branch, a catch of A alone caught it, Std.isOfType(B.OnlyB, A) was true and cast(B.OnlyB, A) returned the value instead of throwing. cppia did the same, interpreted and under the JIT, when the type was an enum of the host. Each now compares the value's enum with the one named, as Haxe's interpreter does, so a value of another enum passes to the next catch, Std.isOfType is false and the cast throws. A program that caught every enum with a catch of one of them now sees the others pass it. The check is in the headers, so code compiled against the old ones, such as a prebuilt static library, keeps the old answer until it is rebuilt (libhxcpp #491, HaxeFoundation/haxe#12151)
+* Fixed the cppia JIT reading the arguments of a host enum's constructor in place in the script frame, and writing the new value back the same way: a frame keeps 4-byte alignment, so on 64-bit those slots can sit at an odd multiple of 4, which is undefined behaviour, reported by UBSan, and a fault on a CPU that requires alignment. A jitted script reached it by building a host enum value with arguments, HostEnum.With(1), where the frame before them held an odd number of 4-byte slots. The helper now copies the slots in and out, as the JIT's other helpers have since 6.0.0
+
 libhxcpp 6.0.1
 ------------------------------------------------------------
 
