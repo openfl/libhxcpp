@@ -2,6 +2,8 @@
 libhxcpp 6.0.3 (unreleased)
 ------------------------------------------------------------
 
+* Fixed the C++ build tool, built with haxe compile-cpp.hxml in tools/hxcpp, not compiling since 6.0.0: ThreadPool.hx declared the class that ends a compile thread's job before one of its imports, which Haxe refuses with "import and using may not appear after a declaration". The neko build tool, hxcpp.n, was unaffected, and run.n uses a C++ build tool only once one is built, so only rebuilding it failed. CI now type-checks it (libhxcpp #471)
+
 libhxcpp 6.0.2
 ------------------------------------------------------------
 
