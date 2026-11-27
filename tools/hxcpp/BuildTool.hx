@@ -477,6 +477,9 @@ class BuildTool
       //  more after them all: any of them can call into it, as hxcpp_std does
       var linkAgain = new Array<String>();
       var runtimeAgain:String = null;
+      // What this target takes from the compile cache, compiled, found there
+      //  or reused in place, so trimming keeps it (CompileCache.recordUse)
+      var cacheUsed = new Array<String>();
       for(group in target.mFileGroups)
       {
          var useCache = CompileCache.hasCache && group.mUseCache;
@@ -556,6 +559,8 @@ class BuildTool
             Profile.push("pch");
 
             var obj = mCompiler.precompile(group,cached || to_be_compiled.length==0);
+            if (useCache)
+               cacheUsed.push(mCompiler.getPchDir(group) + "/");
             if (obj!=null)
             {
                pchStamp = FileSystem.stat(obj).mtime.getTime();
@@ -732,6 +737,11 @@ class BuildTool
             var libTarget = new Target(libName, "linker", "static_link" );
             linker.link(libTarget,groupObjs, mCompiler, [] );
             target.mAutoLibs.push(linker.mLastOutName);
+            if (useCache)
+            {
+               cacheUsed.push(linker.mLastOutName);
+               cacheUsed.push(linker.mLastHashName);
+            }
             // Linux the libraries must be added again if the references were not resolved the firs time
             if (group.mAddTwice)
             {
@@ -754,10 +764,14 @@ class BuildTool
          {
             objs = objs.concat(groupObjs);
          }
+         if (useCache)
+            cacheUsed = cacheUsed.concat(groupObjs);
 
          if (group.mDir!="." && group.mSetImportDir)
             Sys.setCwd( baseDir );
       }
+      if (cacheUsed.length>0)
+         CompileCache.recordUse(mCompiler.mObjDir + " " + targetKey, cacheUsed);
       if (runtimeAgain!=null)
          linkAgain.push(runtimeAgain);
       for(lib in linkAgain)

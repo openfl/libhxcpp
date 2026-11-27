@@ -21,6 +21,8 @@ class Linker
    public var mLastOutName:String;
    // The record of the last link this call made, or null when it linked nothing
    public var mLastHashFile:String;
+   // The record of what the last output is linked from, linked this call or not
+   public var mLastHashName:String;
    public var mAddLibPath:String;
 
    public function new(inExe:String)
@@ -106,6 +108,7 @@ class Linker
 
       mLastOutName = out_name;
       mLastHashFile = null;
+      mLastHashName = hashFile;
 
       var lastLib = "";
       var libs = new Array<String>();

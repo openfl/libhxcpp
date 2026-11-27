@@ -210,6 +210,11 @@ jobs:
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         shell: bash
         run: bash test/compile_cache/pch_dates.sh -D $HXCPP_ARCH_FLAG
+      - name: build tool compile cache trimming keeps what builds use
+        continue-on-error: ${{ inputs.warn_only }}
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        shell: bash
+        run: bash test/compile_cache/trim.sh -D$HXCPP_ARCH_FLAG
       - name: build tool MSVC setup scripts with ! in the Visual Studio path
         continue-on-error: ${{ inputs.warn_only }}
         if: ${{ !cancelled() && steps.setup.outcome == 'success' && runner.os == 'Windows' }}
