@@ -466,6 +466,10 @@ public:
    std::vector< std::string >      linkMisses;
 
    ScriptCallable                  *main;
+   // Every function the module links. Classes compile their own functions, but
+   //  a local function, written inside a function or an initializer, belongs
+   //  to no class, so the JIT finds it only here
+   std::vector< ScriptCallable * > functions;
    std::vector< hx::Resource >     resources;
 
    // The module's CppiaObject: what keeps it alive once released

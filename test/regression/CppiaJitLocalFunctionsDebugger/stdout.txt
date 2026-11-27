@@ -1,0 +1,39 @@
+-- compiled
+captured Int 1002432 959
+this 6 11 25 n:15
+nested 123 456
+recursive 6765
+returns 4.5 hey! false true true 9 [1,2]
+defaults 6d 3d 3x 6d 8d
+throws [0,1,2,big 3,big 4,from a callee,in a callback 2] 1 -1
+loop [0,1,4,9]
+host calls [30,10,20,50,40] [3,1,5] [5,4,3,2,1] 115
+initializer 42
+captured Float and String 3.75 abc
+dynamic call 4.5 2.25
+-- script, JIT off
+captured Int 1002432 959
+this 6 11 25 n:15
+nested 123 456
+recursive 6765
+returns 4.5 hey! false true true 9 [1,2]
+defaults 6d 3d 3x 6d 8d
+throws [0,1,2,big 3,big 4,from a callee,in a callback 2] 1 -1
+loop [0,1,4,9]
+host calls [30,10,20,50,40] [3,1,5] [5,4,3,2,1] 115
+initializer 42
+captured Float and String 3.75 abc
+dynamic call 4.5 2.25
+-- script, JIT on
+captured Int 1002432 959
+this 6 11 25 n:15
+nested 123 456
+recursive 6765
+returns 4.5 hey! false true true 9 [1,2]
+defaults 6d 3d 3x 6d 8d
+throws [0,1,2,big 3,big 4,from a callee,in a callback 2] 1 -1
+loop [0,1,4,9]
+host calls [30,10,20,50,40] [3,1,5] [5,4,3,2,1] 115
+initializer 42
+captured Float and String 3.75 abc
+dynamic call 4.5 2.25

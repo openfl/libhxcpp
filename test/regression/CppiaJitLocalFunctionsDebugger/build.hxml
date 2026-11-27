@@ -1,0 +1,10 @@
+-cp ../CppiaJitLocalFunctions
+--main Script
+-cppia bin/script.cppia
+--next
+-cp ../CppiaJitLocalFunctions
+--main Main
+-cpp bin
+-D scriptable
+-D HXCPP_DEBUGGER
+--dce no

@@ -1,6 +1,7 @@
    #include <hxcpp.h>
 #include "Cppia.h"
 #include "CppiaStream.h"
+#include <algorithm>
 #include <atomic>
 #include <mutex>
 
@@ -168,6 +169,8 @@ CppiaExpr *ScriptCallable::link(CppiaModule &inModule)
    StackLayout layout(oldLayout);
    inModule.layout = &layout;
    data = &inModule;
+   // A local function belongs to no class, so the JIT finds it here
+   inModule.functions.push_back(this);
 
    // A module's main, which names no type, uses the first, which a malformed
    //  module may not have
@@ -432,16 +435,34 @@ static void SLJIT_FUNC zeroLocals(unsigned char *inLocals, void *inSize)
 }
 
 // The interpreter zeroes a frame's locals; jitted code writes each before
-// reading it, but the debugger can read any of them at any time
+// reading it, but the debugger can read any of them at any time. A closure's
+// captured variables are copied into its frame before its code runs, so only
+// the locals around them are cleared
 void ScriptCallable::genZeroLocals(CppiaCompiler *compiler)
 {
    int argEnd = sizeof(void *);
    for(int i=0;i<args.size();i++)
       argEnd += sTypeSize[args[i].argType];
-   if (stackSize > argEnd)
+
+   std::vector< std::pair<int,int> > captured;
+   for(int i=0;i<captureVars.size();i++)
    {
-      compiler->add(sJitArg1.as(jtPointer), sJitFrame.as(jtPointer), argEnd );
-      compiler->callNative( (void *)zeroLocals, sJitArg1.as(jtPointer), JitVal((void *)(size_t)(stackSize - argEnd)) );
+      CppiaStackVar *var = captureVars[i];
+      captured.push_back( std::make_pair(var->stackPos, var->stackPos + sTypeSize[var->expressionType]) );
+   }
+   std::sort(captured.begin(), captured.end());
+
+   int from = argEnd;
+   for(int i=0;i<=(int)captured.size();i++)
+   {
+      int to = i<(int)captured.size() ? captured[i].first : stackSize;
+      if (to > from)
+      {
+         compiler->add(sJitArg1.as(jtPointer), sJitFrame.as(jtPointer), from );
+         compiler->callNative( (void *)zeroLocals, sJitArg1.as(jtPointer), JitVal((void *)(size_t)(to - from)) );
+      }
+      if (i<(int)captured.size() && captured[i].second > from)
+         from = captured[i].second;
    }
 }
 #endif

@@ -2,6 +2,8 @@
 libhxcpp 6.0.3 (unreleased)
 ------------------------------------------------------------
 
+* The cppia JIT compiles a script's local functions, the closures written inside a function or an initializer, as it compiles class functions, when each is first called. No class holds them, so they were never compiled: under the JIT their bodies ran in the interpreter, whether jitted code called them or the host called them back. Jitted code calling a closure is 1.9x faster (closure_call), and the host calling one back 2.5x (native_callback). HXCPP_CPPIA_EAGER_JIT compiles them as the module loads, with the rest (HaxeFoundation/hxcpp#1213)
+
 libhxcpp 6.0.2
 ------------------------------------------------------------
 
