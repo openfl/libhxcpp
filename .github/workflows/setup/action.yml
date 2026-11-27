@@ -7,7 +7,17 @@ runs:
   using: composite
   steps:
     - name: install haxe
+      if: runner.os != 'Windows' || runner.arch != 'ARM64'
       uses: krdlab/setup-haxe@v2
+      with:
+        haxe-version: ${{ inputs.haxe }}
+
+    # setup-haxe's releases, v2.1.1 the latest, have no Windows arm64 support.
+    # The commit that added it, merged on 2026-10-18, installs the x64 Haxe
+    # and Neko there, which Windows runs emulated; use a release once one has it
+    - name: install haxe (Windows arm64)
+      if: runner.os == 'Windows' && runner.arch == 'ARM64'
+      uses: krdlab/setup-haxe@2158bbdec718708920c54ab91fb19d8ddfa28f32
       with:
         haxe-version: ${{ inputs.haxe }}
 

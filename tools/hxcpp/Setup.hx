@@ -857,7 +857,11 @@ class Setup
             Sys.putEnv("HXCPP_WINXP_COMPAT","1");
             xpCompat = true;
          }
-         Sys.putEnv("msvc_host_arch", ioDefines.exists("windows_arm_host") ? "x86" : "x64" );
+         // The hosts of the compilers to use for arm64, best first: the ARM64
+         //  scripts take the first that is installed. On an ARM64 machine the
+         //  x86-hosted compiler runs emulated in 32 bits, and can run out of
+         //  memory on a precompiled header
+         Sys.putEnv("msvc_host_arch", ioDefines.exists("windows_arm_host") ? "arm64 x64 x86" : "x64" );
 
          var vc_setup_proc = new Process("cmd.exe", ["/C", BuildTool.HXCPP + "\\toolchain\\msvc" + extra + "-setup.bat" ]);
          var vars_found = false;
