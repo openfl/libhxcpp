@@ -411,6 +411,17 @@ CppiaExpr *createStaticAccess(CppiaExpr *inSrc, FieldStorage inType, void *inPtr
 hx::Object * CPPIA_CALL createClosure(CppiaCtx *ctx, ScriptCallable *inFunction);
 hx::Object *createMemberClosure(hx::Object *, ScriptCallable *inFunction);
 ScriptCallable *getClosureFunction(hx::Object *inObj);
+// The function inFunction runs when it is a script closure, bound method or not, or 0
+//  for any other object
+ScriptCallable *scriptClosureTarget(hx::Object *inFunction);
+// Runs a script closure, which scriptClosureTarget gave a function for, in the frame
+//  at ctx->frame: a slot for this, then its first inArgCount arguments as the function's
+//  own types, with ctx->pointer past them. The result is left at ctx->frame as the
+//  function's return type. An exception from compiled code is thrown, or with !inThrow
+//  left in ctx->exception
+void runScriptClosure(CppiaCtx *ctx, hx::Object *inClosure, int inArgCount, bool inThrow);
+// The result runScriptClosure left, boxed as a call through __run returns it
+hx::Object *boxScriptClosureResult(CppiaCtx *ctx, ScriptCallable *inFunction);
 CppiaClassInfo *getScriptClassInfo(hx::Object *inClass);
 hx::Object *createEnumClosure(struct CppiaEnumConstructor &inContructor);
 

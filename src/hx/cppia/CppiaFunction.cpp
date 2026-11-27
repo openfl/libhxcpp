@@ -876,6 +876,11 @@ void CppiaFunction::markLazy()
 
 
 
+// The vtable every CppiaClosure has, which each stores as it is made, so a call can
+//  tell a script closure from another function object by its first word, without a
+//  dynamic_cast. Nothing can be a closure while this is still null
+static std::atomic<void *> sClosureVTable(0);
+
 class CppiaClosure : public hx::Object
 {
 public:
@@ -888,6 +893,7 @@ public:
    CppiaClosure(CppiaCtx *ctx, ScriptCallable *inFunction)
    {
       function = inFunction;
+      noteVTable();
 
       unsigned char *base = ((unsigned char *)this) + sizeof(CppiaClosure);
 
@@ -911,11 +917,23 @@ public:
    CppiaClosure(hx::Object *inThis, ScriptCallable *inFunction)
    {
       function = inFunction;
+      noteVTable();
       *getThis() = inThis;
    }
 
+   void noteVTable()
+   {
+      void *vtable = *(void **)this;
+      if (sClosureVTable.load(std::memory_order_relaxed)!=vtable)
+         sClosureVTable.store(vtable, std::memory_order_relaxed);
+   }
 
-   Dynamic doRun(CppiaCtx *ctx, int inHaveArgs)
+
+   // Runs the function in the frame at ctx->frame, which holds a slot for this and
+   //  the first inHaveArgs arguments, with ctx->pointer past them, and leaves its result
+   //  at ctx->frame. An exception from compiled code is thrown, or with !inThrow left in
+   //  ctx->exception
+   void runInFrame(CppiaCtx *ctx, int inHaveArgs, bool inThrow)
    {
       function->addExtraDefaults(ctx,inHaveArgs);
       function->addStackVarsSpace(ctx);
@@ -944,53 +962,44 @@ public:
          AutoFrame frame(ctx);
          code(ctx);
          }
-         if (ctx->exception)
+         if (ctx->exception && inThrow)
          {
             Dynamic caught = fromPendingException(ctx->exception);
             ctx->exception = nullptr;
             HX_STACK_DO_THROW(caught);
          }
-
-         {
-            switch(function->returnType)
-            {
-               case etFloat:
-                  return ctx->getFloat();
-               case etInt:
-                  if (function->isBoolReturn)
-                     return (bool)ctx->getInt();
-                  return ctx->getInt();
-               case etString:
-                  return ctx->getString();
-               case etObject:
-                  return ctx->getObject();
-               default: ;
-            }
-         }
-         return null();
+         return;
       }
-      //printf("Not compiled %d!\n", function->captureVars.size());
       #endif
 
       function->runFunctionClosure(ctx);
       ctx->breakContReturn = 0;
+   }
 
-      switch(function->returnType)
+   // The result runInFrame left, boxed
+   static hx::Object *boxResult(CppiaCtx *ctx, ScriptCallable *inFunction)
+   {
+      switch(inFunction->returnType)
       {
          case etFloat:
-            return ctx->getFloat( );
+            return Dynamic(ctx->getFloat()).mPtr;
          case etInt:
-            if (function->isBoolReturn)
-               return (bool)ctx->getInt( );
-            return ctx->getInt( );
+            if (inFunction->isBoolReturn)
+               return Dynamic((bool)ctx->getInt()).mPtr;
+            return Dynamic(ctx->getInt()).mPtr;
          case etString:
-            return ctx->getString( );
+            return Dynamic(ctx->getString()).mPtr;
          case etObject:
-            return ctx->getObject( );
-         default: break;
+            return ctx->getObjectPtr();
+         default: ;
       }
+      return 0;
+   }
 
-      return null();
+   Dynamic doRun(CppiaCtx *ctx, int inHaveArgs)
+   {
+      runInFrame(ctx, inHaveArgs, true);
+      return boxResult(ctx, function);
    }
 
    void pushArgDynamic(CppiaCtx *ctx, int a, Dynamic inValue)
@@ -1169,6 +1178,24 @@ ScriptCallable *getClosureFunction(hx::Object *inObj)
    if (!closure || (!*closure->getThis() && closure->function->captureSize <= (int)sizeof(hx::Object *)))
       return 0;
    return closure->function;
+}
+
+ScriptCallable *scriptClosureTarget(hx::Object *inFunction)
+{
+   void *vtable = sClosureVTable.load(std::memory_order_relaxed);
+   if (!inFunction || !vtable || *(void **)inFunction!=vtable)
+      return 0;
+   return ((CppiaClosure *)inFunction)->function;
+}
+
+void runScriptClosure(CppiaCtx *ctx, hx::Object *inClosure, int inArgCount, bool inThrow)
+{
+   ((CppiaClosure *)inClosure)->runInFrame(ctx, inArgCount, inThrow);
+}
+
+hx::Object *boxScriptClosureResult(CppiaCtx *ctx, ScriptCallable *inFunction)
+{
+   return CppiaClosure::boxResult(ctx, inFunction);
 }
 
 

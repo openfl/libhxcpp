@@ -3,6 +3,7 @@ libhxcpp 6.0.3 (unreleased)
 ------------------------------------------------------------
 
 * The cppia JIT compiles a script's local functions, the closures written inside a function or an initializer, as it compiles class functions, when each is first called. No class holds them, so they were never compiled: under the JIT their bodies ran in the interpreter, whether jitted code called them or the host called them back. Jitted code calling a closure is 1.9x faster (closure_call), and the host calling one back 2.5x (native_callback). HXCPP_CPPIA_EAGER_JIT compiles them as the module loads, with the rest (HaxeFoundation/hxcpp#1213)
+* A cppia script calling one of its closures, or a bound method held as a value, passes the arguments and takes the result as they are when the function takes the same types, interpreted and under the JIT. Each argument was boxed into a Dynamic for __run and unboxed into the function's frame, and the result boxed and unboxed again, which allocated for most Ints and every Float. Calling a closure that takes and returns an Int is 1.8x faster under the JIT and 1.2x interpreted (closure_call). An argument of another type, more arguments than the function takes, and host functions are boxed as before
 
 libhxcpp 6.0.2
 ------------------------------------------------------------
