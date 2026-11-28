@@ -1,0 +1,36 @@
+-- compiled
+plain to first in a closure passes
+plain to second in a closure throws
+both to second in a closure passes
+plain to both in a closure throws
+plain to second in a method throws
+both to second in a method passes
+plain to both in a method throws
+both to both in a method passes
+plain to second, used throws
+a statement after a failed cast throws
+ran on past it 0
+-- script, JIT off
+plain to first in a closure passes
+plain to second in a closure throws
+both to second in a closure passes
+plain to both in a closure throws
+plain to second in a method throws
+both to second in a method passes
+plain to both in a method throws
+both to both in a method passes
+plain to second, used throws
+a statement after a failed cast throws
+ran on past it 0
+-- script, JIT on
+plain to first in a closure passes
+plain to second in a closure throws
+both to second in a closure passes
+plain to both in a closure throws
+plain to second in a method throws
+both to second in a method passes
+plain to both in a method throws
+both to both in a method passes
+plain to second, used throws
+a statement after a failed cast throws
+ran on past it 0
