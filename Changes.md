@@ -3,6 +3,7 @@ libhxcpp 6.0.3 (unreleased)
 ------------------------------------------------------------
 
 * Fixed the cppia interpreter reading an argument's slot in place in the script frame when it fills in the argument's default value, and writing a Float or Dynamic default the same way: a frame keeps 4-byte alignment, so on 64-bit an argument after an Int, as b in f(a:Int, ?b:String = "x"), sits at an odd multiple of 4, which is undefined behaviour, reported by UBSan, and a fault on a CPU that requires alignment. The slots are copied in and out now, as the interpreter's other frame accesses have been since 6.0.0. The JIT, which compiles defaults into the function, was not affected
+* Fixed Semaphore.tryAcquire(-1) waiting for ever where any other negative timeout returns at once, so a timeout worked out in whole seconds as deadline - now could wait with no limit once the deadline had passed. It was kept for Haxe 5.0.0-preview.1's Lock.wait() (libhxcpp #461), but preview.1's Lock waits through the runtime's own lock, which still takes a negative timeout as no limit, as Haxe 4's does. Only Haxe 5 nightlies from March to November 2026, which libhxcpp does not support, passed -1 to the semaphore; later ones call acquire() for no timeout. Every negative timeout returns at once now, as with stock hxcpp on Linux and macOS (HaxeFoundation/haxe#13114)
 
 libhxcpp 6.0.2
 ------------------------------------------------------------
