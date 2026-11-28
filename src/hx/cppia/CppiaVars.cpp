@@ -522,18 +522,20 @@ void CppiaStackVar::linkDefault()
 
 void CppiaStackVar::setDefault(CppiaCtx *inCxt, const CppiaConst &inDefault)
 {
+   // The argument's slots are frame slots, which can be unaligned (see
+   //  StackContext::getSlot), so they are copied in and out
    if (argType==etString)
    {
       if (inDefault.type == CppiaConst::cString)
       {
-         String *s = (String *)(inCxt->frame + defaultStackPos);
-         if (!s->raw_ptr())
-            *s = module->strings[ inDefault.ival ];
+         unsigned char *slot = inCxt->frame + defaultStackPos;
+         if (!CppiaCtx::getSlot<String>(slot).raw_ptr())
+            CppiaCtx::setSlot(slot, module->strings[ inDefault.ival ]);
       }
    }
    else
    {
-      hx::Object *src = *(hx::Object **)(inCxt->frame + defaultStackPos);
+      hx::Object *src = CppiaCtx::getSlot<hx::Object *>(inCxt->frame + defaultStackPos);
 
       if (src)
       {
@@ -550,19 +552,22 @@ void CppiaStackVar::setDefault(CppiaCtx *inCxt, const CppiaConst &inDefault)
                  inDefault.type==CppiaConst::cInt ? inDefault.ival :
                                                     inDefault.dval;
                  break;
-            case fsFloat: *(Float *)ptr =
+            case fsFloat: SetFloatAligned(ptr,
                  inDefault.type==CppiaConst::cInt ? inDefault.ival :
-                                                    inDefault.dval;
+                                                    inDefault.dval);
                break;
             case fsObject:
                {
-                  Dynamic &d = *(Dynamic *)ptr;
+                  Dynamic d;
                   if (inDefault.type==CppiaConst::cInt)
                      d = inDefault.ival;
                   else if (inDefault.type==CppiaConst::cFloat)
                      d = inDefault.dval;
                   else if (inDefault.type==CppiaConst::cString)
                      d =  module->strings[ inDefault.ival ];
+                  else
+                     break;
+                  CppiaCtx::setSlot(ptr, d.mPtr);
                }
                break;
             case fsString:
