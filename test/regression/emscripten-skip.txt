@@ -122,6 +122,7 @@ SslNativeMemoryPressure: threads (std::thread, which needs a pthreads build)
 SslPeerCertificateLifetime: sockets
 SslSniLifetime: sockets
 SslSniName: sockets
+ThreadDetachFailure: threads
 ThreadEndsAtExit: threads
 ThreadEndsAtExitDebugger: threads
 ThreadEndsWhileCollecting: threads

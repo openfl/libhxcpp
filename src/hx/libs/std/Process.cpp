@@ -37,6 +37,7 @@
 #if !defined(HX_WINRT) && !defined(EPPC) && !defined(NEKO_WINDOWS) && !defined(__EMSCRIPTEN__) && !defined(HXCPP_SINGLE_THREADED_APP)
 #define HX_PROCESS_REAPER
 #include <thread>
+#include "../../thread/Detach.hpp"
 #include <mutex>
 #include <chrono>
 #endif
@@ -174,7 +175,8 @@ namespace
       {
          try
          {
-            std::thread(reaperLoop).detach();
+            std::thread thread(reaperLoop);
+            hx::DetachThread(thread);
             sReaper.running = true;
          }
          catch(...)

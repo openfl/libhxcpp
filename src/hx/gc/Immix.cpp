@@ -6,6 +6,7 @@
 #include <hx/thread/Thread.hpp>
 #include "../Hash.h"
 #include "../FastMutex.h"
+#include "../thread/Detach.hpp"
 #include "GcRegCapture.h"
 #include <unordered_set>
 #include <unordered_map>
@@ -4316,7 +4317,7 @@ public:
             try
             {
                std::thread thread(SReleaseLoop, this);
-               thread.detach();
+               hx::DetachThread(thread);
                mReleaseStarted = true;
             }
             catch(...)
@@ -5739,7 +5740,7 @@ public:
 
          std::thread thread(SThreadLoop, info);
 
-         thread.detach();
+         hx::DetachThread(thread);
       #endif
    }
 
