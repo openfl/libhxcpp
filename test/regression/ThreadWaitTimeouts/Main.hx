@@ -42,10 +42,10 @@ class Main {
 		var empty = new Semaphore(0);
 		var full = new Semaphore(3);
 
-		// -1 waits with no limit, which Haxe 5.0.0-preview.1's Lock.wait() relies on
-		releaseLater(() -> empty.release());
-		check("semaphore minus one", attempt(() -> empty.tryAcquire(-1) && full.tryAcquire(-1)));
-		// Any other negative timeout has run out, and returns at once (libhxcpp #461)
+		// A negative timeout has run out, and returns at once (libhxcpp #461). -1
+		// waited with no limit before; on an empty semaphore that nobody releases,
+		// the watchdog stops it
+		check("semaphore minus one", attempt(() -> !empty.tryAcquire(-1) && full.tryAcquire(-1)));
 		check("semaphore negative", attempt(() -> !empty.tryAcquire(-0.5) && full.tryAcquire(-0.5)));
 		check("semaphore nan", attempt(() -> !empty.tryAcquire(Math.NaN) && full.tryAcquire(Math.NaN)));
 

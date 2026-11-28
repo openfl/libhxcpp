@@ -2,6 +2,8 @@
 libhxcpp 6.0.3 (unreleased)
 ------------------------------------------------------------
 
+* Fixed Semaphore.tryAcquire(-1) waiting for ever where any other negative timeout returns at once, so a timeout worked out in whole seconds as deadline - now could wait with no limit once the deadline had passed. It was kept for Haxe 5.0.0-preview.1's Lock.wait() (libhxcpp #461), but preview.1's Lock waits through the runtime's own lock, which still takes a negative timeout as no limit, as Haxe 4's does. Only Haxe 5 nightlies from March to November 2026, which libhxcpp does not support, passed -1 to the semaphore; later ones call acquire() for no timeout. Every negative timeout returns at once now, as with stock hxcpp on Linux and macOS (HaxeFoundation/haxe#13114)
+
 libhxcpp 6.0.2
 ------------------------------------------------------------
 
