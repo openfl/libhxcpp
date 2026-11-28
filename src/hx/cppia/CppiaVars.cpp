@@ -462,15 +462,25 @@ Dynamic CppiaStackVar::getInFrame(const unsigned char *inFrame)
 }
 
 
+// A closure packs its captures at 4-byte offsets, as a frame does, so on 64-bit
+//  a String or object after an Int is unaligned: each is copied out to be
+//  marked or visited, and written back if the visit moved it
 void CppiaStackVar::markClosure(char *inBase, hx::MarkContext *__inCtx)
 {
+   char *slot = inBase + capturePos;
    switch(storeType)
    {
       case fsString:
-         HX_MARK_MEMBER(*(String *)(inBase + capturePos));
+         {
+            String value = CppiaCtx::getSlot<String>(slot);
+            HX_MARK_MEMBER(value);
+         }
          break;
       case fsObject:
-         HX_MARK_MEMBER(*(hx::Object **)(inBase + capturePos));
+         {
+            hx::Object *value = CppiaCtx::getSlot<hx::Object *>(slot);
+            HX_MARK_MEMBER(value);
+         }
          break;
       default: ;
    }
@@ -478,13 +488,26 @@ void CppiaStackVar::markClosure(char *inBase, hx::MarkContext *__inCtx)
 
 void CppiaStackVar::visitClosure(char *inBase, hx::VisitContext *__inCtx)
 {
+   char *slot = inBase + capturePos;
    switch(storeType)
    {
       case fsString:
-         HX_VISIT_MEMBER(*(String *)(inBase + capturePos));
+         {
+            String value = CppiaCtx::getSlot<String>(slot);
+            const char *before = value.raw_ptr();
+            HX_VISIT_MEMBER(value);
+            if (value.raw_ptr()!=before)
+               CppiaCtx::setSlot(slot, value);
+         }
          break;
       case fsObject:
-         HX_VISIT_MEMBER(*(hx::Object **)(inBase + capturePos));
+         {
+            hx::Object *value = CppiaCtx::getSlot<hx::Object *>(slot);
+            hx::Object *before = value;
+            HX_VISIT_MEMBER(value);
+            if (value!=before)
+               CppiaCtx::setSlot(slot, value);
+         }
          break;
       default: ;
    }
