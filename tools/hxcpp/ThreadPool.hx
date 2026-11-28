@@ -14,15 +14,15 @@
   #end
 #end
 
+#if cpp
+import cpp.AtomicInt;
+#end
+
 // Thrown by Tools.exit on a compile thread, to end its job
 class WorkerExit
 {
    public function new() { }
 }
-
-#if cpp
-import cpp.AtomicInt;
-#end
 
 class ThreadPool
 {
