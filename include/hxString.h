@@ -7,6 +7,7 @@
 
 #include <hx/StringAlloc.h>
 #include <atomic>
+#include <type_traits>
 
 #ifdef __OBJC__
 #import <Foundation/Foundation.h>
@@ -170,6 +171,13 @@ public:
     int lastIndexOf(const ::String &inValue, int inStart) const;
     inline int indexOf(const ::String &inValue, const null &) const { return indexOf(inValue, 0); }
     inline int lastIndexOf(const ::String &inValue, const null &) const { return lastIndexOf(inValue, length); }
+    // Any other class converts to both as well, as the hx::Val of a Dynamic field
+    // read does, so it takes the Dynamic overload. D stands for Dynamic, which is
+    // not complete here, so that the conversion waits for a use
+    template<typename T, typename D = Dynamic>
+    inline typename std::enable_if<std::is_class<T>::value, int>::type indexOf(const ::String &inValue, const T &inStart) const { return indexOf(inValue, D(inStart)); }
+    template<typename T, typename D = Dynamic>
+    inline typename std::enable_if<std::is_class<T>::value, int>::type lastIndexOf(const ::String &inValue, const T &inStart) const { return lastIndexOf(inValue, D(inStart)); }
     Array<String> split(const ::String &inDelimiter) const;
     ::String substr(int inPos,Dynamic inLen) const;
     ::String substring(int inStartIndex, Dynamic inEndIndex) const;
