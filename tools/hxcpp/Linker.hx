@@ -91,47 +91,17 @@ class Linker
             inObjs.join(";")).substr(0,16);
    }
 
-   // A name of this build's own beside inName, ending as it does
-   static function getTempName(inName:String, inExt:String)
-   {
-      var unique = Md5.encode(Sys.getCwd() + " " + Sys.time() + " " + Math.random()).substr(0,8);
-      var base = inName.endsWith(inExt) ? inName.substr(0, inName.length - inExt.length) : inName;
-      return base + ".tmp-" + unique + inExt;
-   }
-
-   static function tryRename(inFrom:String, inTo:String)
-   {
-      try
-      {
-         FileSystem.rename(inFrom, inTo);
-         return true;
-      }
-      catch(e:Dynamic) { }
-      return false;
-   }
-
    // Moves inMade, a library this build linked, to inName in one step, so no
-   //  build links one half written, and returns the library to link. Windows
-   //  renames onto no file that is there, and deletes none another link has
-   //  open. A library there that is up to date was linked from the same
-   //  objects by another build, which put it there first; one older than the
-   //  objects, which were compiled again since, is replaced. While another
-   //  link has the old one open, this build links its own, and a later build
-   //  replaces it
+   //  build links one half written, and returns the library to link. A
+   //  library there that is up to date was linked from the same objects by
+   //  another build, which put it there first; one older than the objects,
+   //  which were compiled again since, is replaced. While another link has
+   //  the old one open, this build links its own, and a later build replaces
+   //  it
    function putInPlace(inMade:String, inName:String, inObjs:Array<String>)
    {
-      for(attempt in 0...2)
-      {
-         if (tryRename(inMade, inName))
-            return inName;
-         if (FileSystem.exists(inName) && !isOutOfDate(inName, inObjs))
-         {
-            try { FileSystem.deleteFile(inMade); } catch(e:Dynamic) { }
-            return inName;
-         }
-         if (attempt==0)
-            try { FileSystem.deleteFile(inName); } catch(e:Dynamic) { }
-      }
+      if (CompileCache.putInPlace(inMade, inName, function() return !isOutOfDate(inName, inObjs), 0))
+         return inName;
       if (!FileSystem.exists(inName))
          Log.error("Could not move \"" + inMade + "\" to \"" + inName + "\"");
       Log.info("", " - \x1b[1mLinking this build's own copy, as another link has the old library open:\x1b[0m " + inMade);
@@ -254,7 +224,7 @@ class Linker
          }
          // A library in the cache is made under a name of this build's own,
          //  then moved to its name whole
-         var made = inTarget.mInCache ? getTempName(out_name, ext) : out_name;
+         var made = inTarget.mInCache ? CompileCache.getTempName(out_name) : out_name;
          // Build in temp dir, and then move out so all the crap windows
          //  creates stays out of the way
          if (mLibDir!="")

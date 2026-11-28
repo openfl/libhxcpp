@@ -234,6 +234,11 @@ jobs:
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         shell: bash
         run: bash test/compile_cache/shared_lib.sh -D$HXCPP_ARCH_FLAG
+      - name: build tool cached objects and precompiled header that builds make at the same time
+        continue-on-error: ${{ inputs.warn_only }}
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
+        shell: bash
+        run: bash test/compile_cache/same_objects.sh -D$HXCPP_ARCH_FLAG
       - name: build tool fails again after a step after the link failed
         continue-on-error: ${{ inputs.warn_only }}
         if: ${{ !cancelled() && steps.setup.outcome == 'success' && runner.os == 'Windows' }}

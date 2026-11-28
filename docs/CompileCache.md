@@ -6,6 +6,8 @@ The cache uses a hashing mechanism to tell if the contents of a file or its depe
 
 Additional benefits include keeping some files outside the source tree, and being able to remove these temp files easily.
 
+Builds can use one cache at the same time, as two projects built at once do. Each object, precompiled header and library is made under a name of the build's own and then moved into place whole, so no build reads one that another build is still writing, and when two builds make the same one, the first in place is kept.
+
 ### Setup
 A directory needs to be set aside to enable the cache.  If possible, this should be on fast storage, such as a SSD.  This is most easily done with an entry in the .hxcpp_config.xml file:
 ```xml
