@@ -12,6 +12,7 @@ class Script {
 			case "native_call": new NativeCall();
 			case "native_callback": new NativeCallback();
 			case "bunny_update": new BunnyUpdate();
+			case "openfl_frame": new OpenflFrame();
 			default: throw 'Unknown CPPIA workload ${CppiaBridge.name}';
 		};
 	}
@@ -220,5 +221,97 @@ class BunnyUpdate implements CppiaWorkload {
 		for (bunny in bunnies)
 			sum += Std.int(bunny.x) + Std.int(bunny.y) * 3 + bunny.changes;
 		return sum;
+	}
+}
+
+// Shaped like an OpenFL application's frame: a scene of script display objects
+// that extend the host's, moved by a listener the host calls on ENTER_FRAME,
+// one in ten with a listener of its own given as a closure, each update making a
+// small object as a Point would, the dead replaced, and the host rendering the
+// scene by reading every transform
+class Particle extends HostDisplayObject {
+	public var vx:Float = 0;
+	public var vy:Float = 0;
+	public var life:Int = 0;
+
+	public function new() {
+		super();
+	}
+}
+
+class Step {
+	public var dx:Float;
+	public var dy:Float;
+
+	public function new(dx:Float, dy:Float) {
+		this.dx = dx;
+		this.dy = dy;
+	}
+}
+
+class Scene extends HostContainer {
+	public function new() {
+		super();
+	}
+}
+
+class OpenflFrame implements CppiaWorkload {
+	static inline var COUNT = 1000;
+	static inline var FRAMES = 10;
+
+	var seed = 1;
+	var spawned = 0;
+	var spins = 0;
+	var scene:Scene;
+	var particles:Array<Particle>;
+
+	public function new() {}
+
+	function random():Float {
+		seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+		return seed / 2147483647.0;
+	}
+
+	function spawn():Particle {
+		var p = new Particle();
+		p.x = random() * 800;
+		p.y = random() * 600;
+		p.vx = random() * 4 - 2;
+		p.vy = random() * 4 - 2;
+		p.life = 3 + Std.int(random() * 80);
+		if (spawned++ % 10 == 0)
+			p.addEventListener("enterFrame", e -> {
+				p.rotation += 3;
+				spins++;
+			});
+		scene.addChild(p);
+		return p;
+	}
+
+	function onEnterFrame(e:HostEvent):Void {
+		for (i in 0...particles.length) {
+			var p = particles[i];
+			var step = new Step(p.vx, p.vy + 0.1);
+			p.x += step.dx;
+			p.y += step.dy;
+			p.vy = step.dy;
+			p.alpha = p.life / 80;
+			if (--p.life <= 0) {
+				scene.removeChild(p);
+				particles[i] = spawn();
+			}
+		}
+	}
+
+	public function run():Int {
+		seed = 1;
+		spawned = 0;
+		spins = 0;
+		scene = new Scene();
+		particles = [];
+		scene.addEventListener("enterFrame", onEnterFrame);
+		for (i in 0...COUNT)
+			particles.push(spawn());
+		return HostContainer.runFrames(scene, FRAMES) + spins * 1000 + scene.numChildren;
 	}
 }

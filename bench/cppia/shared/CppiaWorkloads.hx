@@ -16,5 +16,6 @@ class CppiaWorkloads {
 		{name: "native_call", unit: "calls", ops: 200000, reps: 50},
 		{name: "native_callback", unit: "callbacks", ops: 200000, reps: 10},
 		{name: "bunny_update", unit: "bunny updates", ops: 20000, reps: 10},
+		{name: "openfl_frame", unit: "object frames", ops: 10000, reps: 5},
 	];
 }

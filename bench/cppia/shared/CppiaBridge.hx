@@ -7,6 +7,7 @@ class CppiaBridge {
 	public static var workload:CppiaWorkload;
 	// Builds HostSprite into the host, for script classes to extend
 	public static var spriteClass:Class<HostSprite> = HostSprite;
+	public static var containerClass:Class<HostContainer> = HostContainer;
 
 	@:noInline
 	public static function step(value:Int):Int {

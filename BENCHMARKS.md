@@ -137,6 +137,7 @@ driver also checks that the interpreter and JIT return the same checksum.
 | `native_call` | Script-to-native calls with an Int argument and result |
 | `native_callback` | A native loop calling a script closure that updates a captured variable |
 | `bunny_update` | The update loop of OpenFL's BunnyMark over 2,000 script objects that extend a host class, moved through its Float properties, in a listener the host calls once a frame |
+| `openfl_frame` | An OpenFL application's frame: 1,000 script objects extending a host display object, moved by an ENTER_FRAME listener the host calls, one in ten with a closure listener of its own, a small object made each update, dead ones replaced, and a host render reading every transform |
 
 The native timing harness loads one script module per process. Loading, linking,
 booting and JIT compilation happen in `setup()`, outside the timed samples.
