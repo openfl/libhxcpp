@@ -15,11 +15,6 @@ static int sTypeSize[] = { 0, 0, sizeof(hx::Object *), sizeof(String), sizeof(Fl
 String sInvalidArgCount = HX_CSTRING("Invalid arguement count");
 
 
-#ifdef CPPIA_JIT
-void SLJIT_FUNC argToInt(CppiaCtx *ctx) { ctx->pushInt( (* (hx::Object **)(ctx->pointer))->__ToInt() ); }
-void SLJIT_FUNC argToDouble(CppiaCtx *ctx) { ctx->pushFloat( (* (hx::Object **)(ctx->pointer))->__ToDouble() ); }
-void SLJIT_FUNC argToString(CppiaCtx *ctx) { ctx->pushString( (* (hx::Object **)(ctx->pointer))->__ToString() ); }
-#endif
 
 
 
@@ -322,22 +317,6 @@ int ScriptCallable::Hash(int value, const char *inString)
 #ifdef CPPIA_JIT
 
 
-int SLJIT_FUNC objectToInt(hx::Object *obj) { return obj->__ToInt(); }
-void SLJIT_FUNC frameToDouble(CppiaCtx *inCtx) { inCtx->returnFloat( inCtx->getObject() ); }
-//void objectToInt(CppiaCtx *inCtx) { inCtx->returnInt( inCtx->getObject() ); }
-void SLJIT_FUNC objectToDouble(CppiaCtx *inCtx) { inCtx->returnFloat( inCtx->getObject() ); }
-void SLJIT_FUNC objectToDoublePointer(CppiaCtx *inCtx)
-{
-   *(double *)inCtx->pointer = (*(hx::Object **)inCtx->pointer)->__ToDouble();
-}
-void SLJIT_FUNC objectToStringPointer(CppiaCtx *inCtx)
-{
-   *(String *)inCtx->pointer = (*(hx::Object **)inCtx->pointer)->toString();
-}
-void SLJIT_FUNC objectToString(CppiaCtx *inCtx) { inCtx->returnString( inCtx->getObject() ); }
-void SLJIT_FUNC stringToObject(CppiaCtx *inCtx) { inCtx->returnObject( inCtx->getString() ); }
-void SLJIT_FUNC intToObject(CppiaCtx *inCtx) { inCtx->returnObject( inCtx->getInt() ); }
-void SLJIT_FUNC doubleToObject(CppiaCtx *inCtx) { inCtx->returnObject( inCtx->getFloat() ); }
 
 
 

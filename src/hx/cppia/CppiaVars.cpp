@@ -462,15 +462,25 @@ Dynamic CppiaStackVar::getInFrame(const unsigned char *inFrame)
 }
 
 
+// A closure packs its captures at 4-byte offsets, as a frame does, so on 64-bit
+//  a String or object after an Int is unaligned: each is copied out to be
+//  marked or visited, and written back if the visit moved it
 void CppiaStackVar::markClosure(char *inBase, hx::MarkContext *__inCtx)
 {
+   char *slot = inBase + capturePos;
    switch(storeType)
    {
       case fsString:
-         HX_MARK_MEMBER(*(String *)(inBase + capturePos));
+         {
+            String value = CppiaCtx::getSlot<String>(slot);
+            HX_MARK_MEMBER(value);
+         }
          break;
       case fsObject:
-         HX_MARK_MEMBER(*(hx::Object **)(inBase + capturePos));
+         {
+            hx::Object *value = CppiaCtx::getSlot<hx::Object *>(slot);
+            HX_MARK_MEMBER(value);
+         }
          break;
       default: ;
    }
@@ -478,13 +488,26 @@ void CppiaStackVar::markClosure(char *inBase, hx::MarkContext *__inCtx)
 
 void CppiaStackVar::visitClosure(char *inBase, hx::VisitContext *__inCtx)
 {
+   char *slot = inBase + capturePos;
    switch(storeType)
    {
       case fsString:
-         HX_VISIT_MEMBER(*(String *)(inBase + capturePos));
+         {
+            String value = CppiaCtx::getSlot<String>(slot);
+            const char *before = value.raw_ptr();
+            HX_VISIT_MEMBER(value);
+            if (value.raw_ptr()!=before)
+               CppiaCtx::setSlot(slot, value);
+         }
          break;
       case fsObject:
-         HX_VISIT_MEMBER(*(hx::Object **)(inBase + capturePos));
+         {
+            hx::Object *value = CppiaCtx::getSlot<hx::Object *>(slot);
+            hx::Object *before = value;
+            HX_VISIT_MEMBER(value);
+            if (value!=before)
+               CppiaCtx::setSlot(slot, value);
+         }
          break;
       default: ;
    }
@@ -522,18 +545,20 @@ void CppiaStackVar::linkDefault()
 
 void CppiaStackVar::setDefault(CppiaCtx *inCxt, const CppiaConst &inDefault)
 {
+   // The argument's slots are frame slots, which can be unaligned (see
+   //  StackContext::getSlot), so they are copied in and out
    if (argType==etString)
    {
       if (inDefault.type == CppiaConst::cString)
       {
-         String *s = (String *)(inCxt->frame + defaultStackPos);
-         if (!s->raw_ptr())
-            *s = module->strings[ inDefault.ival ];
+         unsigned char *slot = inCxt->frame + defaultStackPos;
+         if (!CppiaCtx::getSlot<String>(slot).raw_ptr())
+            CppiaCtx::setSlot(slot, module->strings[ inDefault.ival ]);
       }
    }
    else
    {
-      hx::Object *src = *(hx::Object **)(inCxt->frame + defaultStackPos);
+      hx::Object *src = CppiaCtx::getSlot<hx::Object *>(inCxt->frame + defaultStackPos);
 
       if (src)
       {
@@ -550,19 +575,22 @@ void CppiaStackVar::setDefault(CppiaCtx *inCxt, const CppiaConst &inDefault)
                  inDefault.type==CppiaConst::cInt ? inDefault.ival :
                                                     inDefault.dval;
                  break;
-            case fsFloat: *(Float *)ptr =
+            case fsFloat: SetFloatAligned(ptr,
                  inDefault.type==CppiaConst::cInt ? inDefault.ival :
-                                                    inDefault.dval;
+                                                    inDefault.dval);
                break;
             case fsObject:
                {
-                  Dynamic &d = *(Dynamic *)ptr;
+                  Dynamic d;
                   if (inDefault.type==CppiaConst::cInt)
                      d = inDefault.ival;
                   else if (inDefault.type==CppiaConst::cFloat)
                      d = inDefault.dval;
                   else if (inDefault.type==CppiaConst::cString)
                      d =  module->strings[ inDefault.ival ];
+                  else
+                     break;
+                  CppiaCtx::setSlot(ptr, d.mPtr);
                }
                break;
             case fsString:
