@@ -1066,6 +1066,18 @@ Dynamic _hx_ssl_cert_load_defaults(){
 	return null();
 }
 
+// mbedtls_x509_crt_parse_file and _path give a negative error code, or a
+//  positive count of what they could not parse. ssl_error read that count as
+//  an error code: one certificate gave "ERROR - Generic error", two a BIGNUM
+//  file error. A directory's count is of certificates, and of files with none
+static void cert_parse_error( int r, String inWhere, bool inDirectory ){
+	if( r < 0 )
+		ssl_error(r);
+	const char *what = inDirectory ? (r==1 ? " certificate or file in " : " certificates or files in ")
+	                               : (r==1 ? " certificate in " : " certificates in ");
+	hx::Throw( HX_CSTRING("Could not parse ") + String(r) + String(what) + inWhere );
+}
+
 Dynamic _hx_ssl_cert_load_file( String file ){
 	int r;
 	sslcert *cert = new sslcert();
@@ -1073,7 +1085,7 @@ Dynamic _hx_ssl_cert_load_file( String file ){
    hx::strbuf buf;
 	if( (r = mbedtls_x509_crt_parse_file(cert->c, file.utf8_str(&buf))) != 0 ){
 		cert->destroy();
-		ssl_error(r);
+		cert_parse_error(r, file, false);
 	}
 	return cert;
 }
@@ -1085,7 +1097,7 @@ Dynamic _hx_ssl_cert_load_path( String path ){
    hx::strbuf buf;
 	if( (r = mbedtls_x509_crt_parse_path(cert->c, path.utf8_str(&buf))) != 0 ){
 		cert->destroy();
-		ssl_error(r);
+		cert_parse_error(r, path, true);
 	}
 	return cert;
 }

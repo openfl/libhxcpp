@@ -1,0 +1,5 @@
+a file of good certificates loads: true
+one bad certificate in a file is counted: true
+two bad certificates in a file are counted: true
+a file with no certificate in a directory is counted: true
+a missing file still gives mbedTLS's error: true

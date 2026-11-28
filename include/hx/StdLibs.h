@@ -427,7 +427,7 @@ inline int _hx_atomic_or(volatile int *a, int b) {
 #endif
 }
 
-inline int _hx_atomic_xor(int *a, int b) {
+inline int _hx_atomic_xor(volatile int *a, int b) {
 #if defined(HX_GCC_ATOMICS)
   return __atomic_fetch_xor(a, b, __ATOMIC_SEQ_CST);
 #elif defined(HX_MSVC_ATOMICS)

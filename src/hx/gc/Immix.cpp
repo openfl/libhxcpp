@@ -4998,12 +4998,15 @@ public:
           hx::sMakeZombieSet.insert(inTo);
        }
 
+       // Erased before the insert, as above: the insert can rehash the map,
+       //  which leaves id no iterator to erase through
        hx::ObjectIdMap::iterator id = hx::sObjectIdMap.find(inFrom);
        if (id!=hx::sObjectIdMap.end())
        {
-          hx::sIdObjectMap[id->second] = inTo;
-          hx::sObjectIdMap[inTo] = id->second;
+          int objectId = id->second;
           hx::sObjectIdMap.erase(id);
+          hx::sObjectIdMap[inTo] = objectId;
+          hx::sIdObjectMap[objectId] = inTo;
        }
 
        // Maybe do something faster with weakmaps
@@ -8357,6 +8360,13 @@ public:
 
       if (sgIsCollecting)
          CriticalGCError("Bad Allocation while collecting - from finalizer?");
+
+      // The collector neither waits for a thread in a GC-free zone nor
+      //  releases it, so this would wait for ever. Safe points return before
+      //  this in a zone, so only allocating or collecting in one gets here,
+      //  which debug builds report whether a collection is pending or not
+      if (mGCFreeZone)
+         CriticalGCError("Allocating or collecting from a GC-free thread while another thread collects - was ExitGCFreeZone missed?");
 
       mPausedForCollect = true;
       mReadyForCollect.Set();

@@ -1,0 +1,2 @@
+allocating in a GC-free zone while another thread collects is reported: true
+and ends the program: true

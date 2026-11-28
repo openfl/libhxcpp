@@ -6,6 +6,7 @@
 
 AnonConcurrentString: threads
 ArrayConcurrentString: threads
+AtomicFieldSpinSafePoint: threads (std::thread, which needs a pthreads build)
 AtomicSafePointUnregisteredThread: threads (std::thread, which needs a pthreads build)
 AtomicSpinSafePoint: threads (std::thread, which needs a pthreads build)
 AttachedThreadId: threads (std::thread, which needs a pthreads build)
@@ -38,6 +39,7 @@ FinalizerExceptionState: threads (std::thread, which needs a pthreads build)
 FinalizersAcrossFreeZones: threads
 GcConcurrentCensus: threads (std::thread, which needs a pthreads build)
 GcFinalizerPromotion: threads (std::thread, which needs a pthreads build)
+GcFreeZoneAllocationReported: threads and processes
 GcFreeZoneLeafNatives: threads and processes
 GcFreeZoneNestedGuard: single-threaded Emscripten builds have no GC-free zones, so a guard enters none
 GcFreeZoneThreadWaits: threads
@@ -105,6 +107,7 @@ SemaphoreLoopCollect: threads
 SleepLongDuration: threads
 SocketEmptyBytes: sockets
 SocketIpv6Accept: sockets
+SocketIpv6AddressLength: sockets
 SocketIpv6ConcurrentFormat: threads (std::thread, which needs a pthreads build)
 SocketLibraryHandle: sockets
 SocketReadAhead: sockets

@@ -1,0 +1,4 @@
+interpreter: an empty var statement ran
+interpreter: two in a block ran
+jit: an empty var statement ran
+jit: two in a block ran

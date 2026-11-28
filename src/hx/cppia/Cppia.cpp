@@ -3272,11 +3272,20 @@ struct GetFieldByName : public CppiaDynamicExpr
             return new LinkMissExpr(this);
          }
          const StaticInfo *info = staticClass->GetStaticStorage(name);
+         bool direct = info && info->type!=hx::fsUnknown;
 
-         // Do not use a MemReference for static access to objects.
-         // If the object in question is a hx::Callable_obj, its pointer will be downcasted to a hx::Object* and then updated to a non callable_obj pointer.
-         // This leads to memory exceptions later when then trying to invoke that callable.
-         if (info && info->type!=hx::fsUnknown && info->type != fsObject)
+         // A host static can hold a typed function at API level 500, which a
+         // script closure must be converted to on the way in: stored through
+         // an hx::Object pointer, it is not callable as one
+         // (HaxeFoundation/hxcpp#1365). Below that an object static holds the
+         // object as it is, as an object field does, and statics are roots,
+         // so a store needs no barrier
+         #if (HXCPP_API_LEVEL>=500)
+         if (direct && info->type==fsObject)
+            direct = false;
+         #endif
+
+         if (direct)
          {
              CppiaExpr* replace = createStaticAccess(this, info->type, info->address);
              replace->link(inModule);
@@ -6632,12 +6641,12 @@ struct TVars : public CppiaVoidExpr
       return this;
    }
 
+   // By index: a file can declare no vars, and vars[0] of an empty vector is
+   //  undefined behaviour, which checked library builds trap
    void runVoid(CppiaCtx *ctx) HXCPP_OVERRIDE
    {
-      CppiaExpr **v = &vars[0];
-      CppiaExpr **end = v + vars.size();
-      for(;v<end && !ctx->breakContReturn && !ctx->exception;v++)
-         (*v)->runVoid(ctx);
+      for(size_t v=0; v<vars.size() && !ctx->breakContReturn && !ctx->exception; v++)
+         vars[v]->runVoid(ctx);
    }
 
    #ifdef CPPIA_JIT

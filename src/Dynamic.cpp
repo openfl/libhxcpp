@@ -636,9 +636,11 @@ static bool IsFloat(hx::Object *inPtr)
 {
    return inPtr && (TCanCast<IntData>(inPtr) || TCanCast<DoubleData>(inPtr) || TCanCast<Int64Data>(inPtr) );
 }
+// haxe.Int64.isInt64 asks this from Haxe 4.3 (Int64Handler's dhoIs before).
+//  Every Int64 boxes as one, small values included, so a boxed Int is not one
 static bool IsInt64(hx::Object *inPtr)
 {
-   return inPtr && (TCanCast<Int64Data>(inPtr) || TCanCast<IntData>(inPtr));
+   return TCanCast<Int64Data>(inPtr);
 }
 
 static bool IsPointer(hx::Object *inPtr)
