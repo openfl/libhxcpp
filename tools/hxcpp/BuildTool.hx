@@ -730,6 +730,10 @@ class BuildTool
             var libName = targetDir + "/" + mCompiler.getTargetPrefix() + "_" + group.getCacheProject();
 
             var libTarget = new Target(libName, "linker", "static_link" );
+            // Another build with other defines can link the same group into
+            //  the cache at the same time: the linker names this one by what
+            //  goes in it, so each build links its own
+            libTarget.mInCache = useCache;
             linker.link(libTarget,groupObjs, mCompiler, [] );
             target.mAutoLibs.push(linker.mLastOutName);
             // Linux the libraries must be added again if the references were not resolved the firs time

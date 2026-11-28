@@ -33,6 +33,8 @@ When linking a file group 'asLibrary', the object files are compiled and then th
         then the constructor may not get called, leading to bugs.
    - Can help on some systems where the linker command-line length is an issue.
 
+The library goes in the cache, named by the objects in it and how it is linked. Builds with other defines, which compile other objects, each link a library of their own, so they can share a cache at the same time, and builds with the same objects use one library.
+
 
 ### Management
 When compiling normally, hxcpp will check the cache size and evict the least used files to maintain the specified cache size.

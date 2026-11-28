@@ -79,10 +79,73 @@ class Linker
       return inObjDir + "/" + getSimpleFilename(inTarget);
    }
 
+   // A library in the compile cache is shared by every build that uses the
+   //  cache, at the same time too, and a build with other defines compiles
+   //  other objects for it. Named by its objects, whose names hash their
+   //  sources, flags and compiler, and by how it is linked, each build links
+   //  a library of its own, and builds with the same objects share one
+   function getCacheKey(inTarget:Target, inObjs:Array<String>)
+   {
+      return Md5.encode(mExe + "|" + mFlags.concat(inTarget.mFlags).join(" ") + "|" +
+            inTarget.mAutoLibs.concat(inTarget.mLibs).concat(mLibs).join(";") + "|" +
+            inObjs.join(";")).substr(0,16);
+   }
+
+   // A name of this build's own beside inName, ending as it does
+   static function getTempName(inName:String, inExt:String)
+   {
+      var unique = Md5.encode(Sys.getCwd() + " " + Sys.time() + " " + Math.random()).substr(0,8);
+      var base = inName.endsWith(inExt) ? inName.substr(0, inName.length - inExt.length) : inName;
+      return base + ".tmp-" + unique + inExt;
+   }
+
+   static function tryRename(inFrom:String, inTo:String)
+   {
+      try
+      {
+         FileSystem.rename(inFrom, inTo);
+         return true;
+      }
+      catch(e:Dynamic) { }
+      return false;
+   }
+
+   // Moves inMade, a library this build linked, to inName in one step, so no
+   //  build links one half written, and returns the library to link. Windows
+   //  renames onto no file that is there, and deletes none another link has
+   //  open. A library there that is up to date was linked from the same
+   //  objects by another build, which put it there first; one older than the
+   //  objects, which were compiled again since, is replaced. While another
+   //  link has the old one open, this build links its own, and a later build
+   //  replaces it
+   function putInPlace(inMade:String, inName:String, inObjs:Array<String>)
+   {
+      for(attempt in 0...2)
+      {
+         if (tryRename(inMade, inName))
+            return inName;
+         if (FileSystem.exists(inName) && !isOutOfDate(inName, inObjs))
+         {
+            try { FileSystem.deleteFile(inMade); } catch(e:Dynamic) { }
+            return inName;
+         }
+         if (attempt==0)
+            try { FileSystem.deleteFile(inName); } catch(e:Dynamic) { }
+      }
+      if (!FileSystem.exists(inName))
+         Log.error("Could not move \"" + inMade + "\" to \"" + inName + "\"");
+      Log.info("", " - \x1b[1mLinking this build's own copy, as another link has the old library open:\x1b[0m " + inMade);
+      Tools.addOnExitHook(function(_) try { FileSystem.deleteFile(inMade); } catch(e:Dynamic) { } );
+      return inMade;
+   }
+
    public function link(inTarget:Target,inObjs:Array<String>,inCompiler:Compiler,extraDeps:Array<String> )
    {
       var ext = inTarget.getExt(mExt);
-      var file_name = mNamePrefix + inTarget.mOutput + ext;
+      var output = inTarget.mOutput;
+      if (inTarget.mInCache)
+         output += "_" + getCacheKey(inTarget, inObjs);
+      var file_name = mNamePrefix + output + ext;
 
       var tmpDir = inCompiler.mObjDir;
 
@@ -189,6 +252,9 @@ class Linker
             args.push(out.substr(0,out.length-1));
             out = "";
          }
+         // A library in the cache is made under a name of this build's own,
+         //  then moved to its name whole
+         var made = inTarget.mInCache ? getTempName(out_name, ext) : out_name;
          // Build in temp dir, and then move out so all the crap windows
          //  creates stays out of the way
          if (mLibDir!="")
@@ -198,12 +264,12 @@ class Linker
          }
          else
          {
-            if (mRecreate && FileSystem.exists(out_name))
+            if (mRecreate && FileSystem.exists(made))
             {
-               Log.info("\x1b[1mClean: \x1b[0m" + out_name);
-               FileSystem.deleteFile(out_name);
+               Log.info("\x1b[1mClean: \x1b[0m" + made);
+               FileSystem.deleteFile(made);
             }
-            args.push(out + out_name);
+            args.push(out + made);
          }
 
          args = args.concat(mFlags).concat(inTarget.mFlags);
@@ -282,11 +348,13 @@ class Linker
 
          args = args.concat(libs);
 
-         var lib_name = mLibDir!="" ? mLibDir+"/"+file_name : out_name;
+         var lib_name = mLibDir!="" ? mLibDir+"/"+file_name : made;
          var result = ProcessManager.runCommand("", mExe, args, true, true, false,
-             "\x1b[1mLink: \x1b[0m" + lib_name);
+             "\x1b[1mLink: \x1b[0m" + (mLibDir!="" ? lib_name : out_name));
          if (result!=0)
          {
+            if (made!=out_name)
+               try { FileSystem.deleteFile(made); } catch(e:Dynamic) { }
             Tools.exit(result);
             //throw "Error : " + result + " - build cancelled";
          }
@@ -305,9 +373,11 @@ class Linker
          if (mLibDir!="")
          {
             Log.info("\x1b[1mMove file: \x1b[0m" + mLibDir+"/"+file_name + " to " + out_name);
-            sys.io.File.copy( mLibDir+"/"+file_name, out_name );
+            sys.io.File.copy( mLibDir+"/"+file_name, made );
             FileSystem.deleteFile( mLibDir+"/"+file_name );
          }
+         if (made!=out_name)
+            mLastOutName = putInPlace(made, out_name, inObjs);
 
          sys.io.File.saveContent(hashFile,md5);
          mLastHashFile = hashFile;
