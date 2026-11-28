@@ -60,8 +60,10 @@ class TestSearch extends Test
       return -1;
    }
 
-   // Int starts are taken without boxing them; typed, boxed, omitted, null
-   // and reflected starts must all give the same result
+   // Int starts are taken without boxing them; typed, boxed, omitted, null,
+   // reflected and Dynamic field starts must all give the same result. A
+   // field read converts to both an Int and a Dynamic, so it needs its own
+   // overload in C++ or the call does not compile
    function checkArray(a:Array<Int>, v:Int, ?pos:haxe.PosInfos)
    {
       Assert.equals(arrayIndexOf(a, v, 0), a.indexOf(v), pos);
@@ -79,6 +81,9 @@ class TestSearch extends Test
          Assert.equals(a.lastIndexOf(v, s), a.lastIndexOf(v, boxed), pos);
          Assert.equals(a.indexOf(v, s), Reflect.callMethod(a, indexOf, [v, s]), pos);
          Assert.equals(a.lastIndexOf(v, s), Reflect.callMethod(a, lastIndexOf, [v, s]), pos);
+         var holder:Dynamic = { start: s };
+         Assert.equals(a.indexOf(v, s), a.indexOf(v, holder.start), pos);
+         Assert.equals(a.lastIndexOf(v, s), a.lastIndexOf(v, holder.start), pos);
       }
    }
 
@@ -98,6 +103,9 @@ class TestSearch extends Test
          Assert.equals(text.lastIndexOf(needle, s), text.lastIndexOf(needle, boxed), pos);
          Assert.equals(text.indexOf(needle, s), dyn.indexOf(needle, s), pos);
          Assert.equals(text.lastIndexOf(needle, s), dyn.lastIndexOf(needle, s), pos);
+         var holder:Dynamic = { start: s };
+         Assert.equals(text.indexOf(needle, s), text.indexOf(needle, holder.start), pos);
+         Assert.equals(text.lastIndexOf(needle, s), text.lastIndexOf(needle, holder.start), pos);
       }
    }
 

@@ -924,6 +924,10 @@ public:
       return indexOf(inValue, fromIndex==null() ? 0 : fromIndex->__ToInt());
    }
    int indexOf(ELEM_ inValue, const null &) { return indexOf(inValue, 0); }
+   // Any other class converts to both as well, as the hx::Val of a Dynamic field
+   // read does, so it takes the Dynamic overload
+   template<typename T>
+   typename std::enable_if<std::is_class<T>::value, int>::type indexOf(ELEM_ inValue, const T &fromIndex) { return indexOf(inValue, Dynamic(fromIndex)); }
    int indexOf(ELEM_ inValue, int fromIndex)
    {
       int len = length;
@@ -948,6 +952,8 @@ public:
       return lastIndexOf(inValue, fromIndex==null() ? (int)length-1 : fromIndex->__ToInt());
    }
    int lastIndexOf(ELEM_ inValue, const null &) { return lastIndexOf(inValue, (int)length-1); }
+   template<typename T>
+   typename std::enable_if<std::is_class<T>::value, int>::type lastIndexOf(ELEM_ inValue, const T &fromIndex) { return lastIndexOf(inValue, Dynamic(fromIndex)); }
    int lastIndexOf(ELEM_ inValue, int fromIndex)
    {
       int len = length;
