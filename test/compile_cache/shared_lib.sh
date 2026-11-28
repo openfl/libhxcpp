@@ -73,7 +73,11 @@ if grep -q "Link:.*shared_lib_test" one/build.log; then
 else
   echo "the first build again linked no library"
 fi
-# An object trimmed from the cache is compiled again under the same name
+# An object trimmed from the cache is compiled again under the same name.
+# The build tool reads dates to the second, and links again only for an
+# object newer than the library, which a fast build can compile in the
+# same second as the library was linked
+sleep 1
 rm -f $first_objects
 build one 1 || failed=1
 if grep -q "Link:.*shared_lib_test" one/build.log && [ "$(list_libs | wc -l)" -eq 2 ]; then
