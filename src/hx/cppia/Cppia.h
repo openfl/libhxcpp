@@ -328,6 +328,12 @@ struct ScriptCallable : public CppiaDynamicExpr
    std::vector<CppiaStackVar *> captureVars;
    int                          captureSize;
 
+   // What jitted code calling a closure of this function compares, interned by
+   //  internCallSignature: the arguments' types, and those with the return type.
+   //  0 for a function a closure cannot be made of
+   int callSigArgs;
+   int callSigFull;
+
 
    ScriptCallable(CppiaStream &stream);
    ScriptCallable(CppiaExpr *inBody);
@@ -422,6 +428,16 @@ ScriptCallable *scriptClosureTarget(hx::Object *inFunction);
 void runScriptClosure(CppiaCtx *ctx, hx::Object *inClosure, int inArgCount, bool inThrow);
 // The result runScriptClosure left, boxed as a call through __run returns it
 hx::Object *boxScriptClosureResult(CppiaCtx *ctx, ScriptCallable *inFunction);
+// A number for a call signature, the same for the same text and never 0
+int internCallSignature(const std::string &inSignature);
+// The letter a call signature ends with for a function returning inType
+char callReturnCode(ExprType inType);
+#ifdef CPPIA_JIT
+// The compiled code of the script closure inFunction, with its this and captured
+//  variables written to the frame at ctx->frame, when its function's signature is
+//  inSignature and its frame fits the stack; 0 when the call must go the general way
+CppiaFunc enterScriptClosure(CppiaCtx *ctx, hx::Object *inFunction, int inSignature);
+#endif
 CppiaClassInfo *getScriptClassInfo(hx::Object *inClass);
 hx::Object *createEnumClosure(struct CppiaEnumConstructor &inContructor);
 

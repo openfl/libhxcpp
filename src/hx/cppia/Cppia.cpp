@@ -3440,6 +3440,8 @@ struct Call : public CppiaDynamicExpr
    CppiaExpr   *func;
    // Each argument's CallArgKind
    std::vector<unsigned char> argKinds;
+   // The arguments' types as a script function's signature has them
+   std::string argSignature;
 
    Call(CppiaStream &stream)
    {
@@ -3473,6 +3475,16 @@ struct Call : public CppiaDynamicExpr
             default: argKinds[a] = cakObject;
          }
       }
+      argSignature = "(";
+      for(int a=0;a<args.size();a++)
+         switch(argKinds[a])
+         {
+            case cakInt: case cakBool: argSignature += 'i'; break;
+            case cakFloat: argSignature += 'f'; break;
+            case cakString: argSignature += 's'; break;
+            default: argSignature += 'o';
+         }
+      argSignature += ")";
       return this;
    }
 
@@ -3836,6 +3848,19 @@ struct Call : public CppiaDynamicExpr
       compiler->add(sJitCtxFrame, sJitFrame, compiler->getCurrentFrameSize());
 
       ExprType resultType = destType==etNull ? etVoid : destType;
+
+      // A script closure whose function takes these arguments, and gives the result
+      //  wanted, as they are, and is compiled, is called as a direct call calls,
+      //  with its result where the general way leaves one
+      int signature = internCallSignature(resultType==etVoid ? argSignature : argSignature + callReturnCode(resultType));
+      compiler->callNative((void *)enterScriptClosure, sJitCtx, functionObject, JitVal(signature));
+      compiler->move(sJitTemp1.as(jtPointer), sJitReturnReg.as(jtPointer));
+      JumpId general = compiler->compare(cmpP_EQUAL, sJitTemp1.as(jtPointer), (void *)0);
+      compiler->call(sJitTemp1, sJitCtx);
+      compiler->setMaxPointer();
+      JumpId called = compiler->jump();
+      compiler->comeFrom(general);
+
       void *helper = 0;
       switch(resultType)
       {
@@ -3846,6 +3871,7 @@ struct Call : public CppiaDynamicExpr
          default: helper = (void *)runJit<etVoid>;
       }
       compiler->callNative(helper, sJitCtx, functionObject, JitVal((void *)this));
+      compiler->comeFrom(called);
 
       compiler->checkException();
       if (resultType!=etVoid)
