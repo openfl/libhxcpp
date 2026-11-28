@@ -247,7 +247,9 @@ public:
 // class id says that, but a generated enum has none of its own: it inherits
 // EnumBase_obj's clsIdEnum, which every enum value has, so a value of any enum
 // passed for every enum. HX_DO_ENUM_RTTI gives such an enum
-// _hx_isEnumValueOf, which compares the value's class with the enum's.
+// _hx_isEnumValueOf, which compares the value's class with the enum's. An
+// enum whose class was never registered, as an extern written by hand in
+// C++ may be, has no class to compare, and takes any enum value as before.
 template <typename T>
 inline auto IsInstanceOfType(hx::Object *inPtr, int) -> decltype(T::_hx_isEnumValueOf(inPtr))
 {

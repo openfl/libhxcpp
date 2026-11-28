@@ -1,0 +1,4 @@
+switch: Second Hello, World!
+cast from Dynamic: true
+caught as MyExternEnum
+Generated.One caught as Generated

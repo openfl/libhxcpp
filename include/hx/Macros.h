@@ -81,7 +81,7 @@ static  ::Dynamic Create##enum_obj(::String inName,::hx::DynamicArray inArgs) \
    static ::hx::ObjectPtr< ::hx::Class_obj> __mClass; \
    ::hx::ObjectPtr< ::hx::Class_obj > __GetClass() const HXCPP_OVERRIDE { return __mClass; } \
    static ::hx::ObjectPtr< ::hx::Class_obj> &__SGetClass() { return __mClass; } \
-   static inline bool _hx_isEnumValueOf(::hx::Object *inPtr) { return __mClass.mPtr && inPtr->__GetClass().mPtr == __mClass.mPtr; }
+   static inline bool _hx_isEnumValueOf(::hx::Object *inPtr) { return __mClass.mPtr ? inPtr->__GetClass().mPtr == __mClass.mPtr : inPtr->_hx_isInstanceOf(::hx::clsIdEnum); }
 
 
 #define HX_DECLARE_IMPLEMENT_DYNAMIC   ::Dynamic __mDynamicFields; \
