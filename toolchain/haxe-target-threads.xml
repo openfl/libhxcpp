@@ -1,5 +1,6 @@
 ﻿<xml>
   <depend name="${HXCPP}/src/hx/thread/ThreadImpl.hpp"/>
+  <depend name="${HXCPP}/src/hx/thread/Detach.hpp"/>
 
   <file name="src/hx/thread/RecursiveMutex.cpp"/>
   <file name="src/hx/thread/ConditionVariable.cpp"/>

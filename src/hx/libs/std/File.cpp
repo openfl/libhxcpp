@@ -7,6 +7,7 @@
 #include <thread>
 #include <mutex>
 #include <condition_variable>
+#include "../../thread/Detach.hpp"
 #endif
 
 #include <hx/OS.h>
@@ -109,7 +110,8 @@ struct LateCloser
       {
          try
          {
-            std::thread([this]() { run(); }).detach();
+            std::thread thread([this]() { run(); });
+            hx::DetachThread(thread);
          }
          catch(...)
          {

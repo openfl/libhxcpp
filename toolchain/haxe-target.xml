@@ -208,6 +208,7 @@
   <depend name="${HXCPP}/src/hx/gc/Incremental.h"/>
   <depend name="${HXCPP}/src/hx/gc/IncrementalApi.h"/>
   <depend name="${HXCPP}/src/hx/thread/ThreadImpl.hpp"/>
+  <depend name="${HXCPP}/src/hx/thread/Detach.hpp"/>
   <depend name="${HXCPP}/include/hx/DynamicImpl.h"/>
   <depend name="${HXCPP}/include/hx/Memory.h"/>
   <depend name="${HXCPP}/include/hx/NekoFunc.h"/>

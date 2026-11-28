@@ -6,6 +6,7 @@
 #include <system_error>
 #include <hx/thread/CountingSemaphore.hpp>
 #include "ThreadImpl.hpp"
+#include "Detach.hpp"
 
 namespace
 {
@@ -206,7 +207,7 @@ hx::thread::ThreadImpl_obj::Native::Native(Thread_obj::CreateFunction _job, Thre
 	// This does feel like a bit of a bodge and something which will actually need to be addressed to add name setting on Linux.
 
 #ifndef HX_WINDOWS
-	thread.detach();
+	hx::DetachThread(thread);
 #endif
 }
 
@@ -269,7 +270,7 @@ void hx::thread::ThreadImpl_obj::finalise(hx::Object* obj)
 
 	if (native->thread.joinable())
 	{
-		native->thread.detach();
+		hx::DetachThread(native->thread);
 	}
 }
 

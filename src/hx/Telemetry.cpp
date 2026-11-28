@@ -10,6 +10,7 @@
 #include <mutex>
 #include <thread>
 #include <chrono>
+#include "thread/Detach.hpp"
 
 namespace hx
 {
@@ -70,7 +71,7 @@ public:
         if (gThreadRefCount == 1) {
             std::thread thread(ProfileMainLoop);
 
-            thread.detach();
+            hx::DetachThread(thread);
         }
     }
 

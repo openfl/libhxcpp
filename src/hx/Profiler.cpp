@@ -5,6 +5,7 @@
 #include <mutex>
 #include <thread>
 #include <chrono>
+#include "thread/Detach.hpp"
 
 
 #ifdef HX_WINRT
@@ -51,7 +52,7 @@ public:
 
         if (gThreadRefCount == 1) {
             std::thread thread(ProfileMainLoop);
-            thread.detach();
+            hx::DetachThread(thread);
         }
     }
 

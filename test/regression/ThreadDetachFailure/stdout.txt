@@ -1,0 +1,2 @@
+threads created after a refused detach run to their end: true
+the platform refused to detach them: true
