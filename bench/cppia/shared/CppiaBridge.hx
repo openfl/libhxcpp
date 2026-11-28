@@ -5,10 +5,20 @@ package;
 class CppiaBridge {
 	public static var name:String;
 	public static var workload:CppiaWorkload;
+	// Builds HostSprite into the host, for script classes to extend
+	public static var spriteClass:Class<HostSprite> = HostSprite;
+	public static var containerClass:Class<HostContainer> = HostContainer;
 
 	@:noInline
 	public static function step(value:Int):Int {
 		return value ^ (value >>> 3) ^ 0x1357;
+	}
+
+	// As a stage dispatches ENTER_FRAME to a listener
+	@:noInline
+	public static function frames(count:Int, onFrame:Int->Void):Void {
+		for (i in 0...count)
+			onFrame(i);
 	}
 
 	@:noInline

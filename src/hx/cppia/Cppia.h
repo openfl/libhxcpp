@@ -328,6 +328,12 @@ struct ScriptCallable : public CppiaDynamicExpr
    std::vector<CppiaStackVar *> captureVars;
    int                          captureSize;
 
+   // What jitted code calling a closure of this function compares, interned by
+   //  internCallSignature: the arguments' types, and those with the return type.
+   //  0 for a function a closure cannot be made of
+   int callSigArgs;
+   int callSigFull;
+
 
    ScriptCallable(CppiaStream &stream);
    ScriptCallable(CppiaExpr *inBody);
@@ -411,6 +417,27 @@ CppiaExpr *createStaticAccess(CppiaExpr *inSrc, FieldStorage inType, void *inPtr
 hx::Object * CPPIA_CALL createClosure(CppiaCtx *ctx, ScriptCallable *inFunction);
 hx::Object *createMemberClosure(hx::Object *, ScriptCallable *inFunction);
 ScriptCallable *getClosureFunction(hx::Object *inObj);
+// The function inFunction runs when it is a script closure, bound method or not, or 0
+//  for any other object
+ScriptCallable *scriptClosureTarget(hx::Object *inFunction);
+// Runs a script closure, which scriptClosureTarget gave a function for, in the frame
+//  at ctx->frame: a slot for this, then its first inArgCount arguments as the function's
+//  own types, with ctx->pointer past them. The result is left at ctx->frame as the
+//  function's return type. An exception from compiled code is thrown, or with !inThrow
+//  left in ctx->exception
+void runScriptClosure(CppiaCtx *ctx, hx::Object *inClosure, int inArgCount, bool inThrow);
+// The result runScriptClosure left, boxed as a call through __run returns it
+hx::Object *boxScriptClosureResult(CppiaCtx *ctx, ScriptCallable *inFunction);
+// A number for a call signature, the same for the same text and never 0
+int internCallSignature(const std::string &inSignature);
+// The letter a call signature ends with for a function returning inType
+char callReturnCode(ExprType inType);
+#ifdef CPPIA_JIT
+// The compiled code of the script closure inFunction, with its this and captured
+//  variables written to the frame at ctx->frame, when its function's signature is
+//  inSignature and its frame fits the stack; 0 when the call must go the general way
+CppiaFunc enterScriptClosure(CppiaCtx *ctx, hx::Object *inFunction, int inSignature);
+#endif
 CppiaClassInfo *getScriptClassInfo(hx::Object *inClass);
 hx::Object *createEnumClosure(struct CppiaEnumConstructor &inContructor);
 
@@ -466,6 +493,10 @@ public:
    std::vector< std::string >      linkMisses;
 
    ScriptCallable                  *main;
+   // Every function the module links. Classes compile their own functions, but
+   //  a local function, written inside a function or an initializer, belongs
+   //  to no class, so the JIT finds it only here
+   std::vector< ScriptCallable * > functions;
    std::vector< hx::Resource >     resources;
 
    // The module's CppiaObject: what keeps it alive once released

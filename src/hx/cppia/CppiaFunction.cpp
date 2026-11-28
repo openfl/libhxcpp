@@ -1,6 +1,7 @@
    #include <hxcpp.h>
 #include "Cppia.h"
 #include "CppiaStream.h"
+#include <algorithm>
 #include <atomic>
 #include <mutex>
 
@@ -33,6 +34,8 @@ ScriptCallable::ScriptCallable(CppiaStream &stream)
    hasDefault.resize(argCount);
    initVals.resize(argCount);
    captureSize = 0;
+   callSigArgs = 0;
+   callSigFull = 0;
    hasDefaults = false;
    staticEntry = false;
    #ifdef CPPIA_JIT
@@ -60,6 +63,8 @@ ScriptCallable::ScriptCallable(CppiaExpr *inBody) : CppiaDynamicExpr(inBody)
    argCount = 0;
    stackSize = 0;
    captureSize = 0;
+   callSigArgs = 0;
+   callSigFull = 0;
    hasDefaults = false;
    body = inBody;
    data = 0;
@@ -96,6 +101,8 @@ ScriptCallable::ScriptCallable(CppiaModule &inModule,ScriptNamedFunction *inFunc
    argCount = 0;
    stackSize = 0;
    captureSize = 0;
+   callSigArgs = 0;
+   callSigFull = 0;
    hasDefaults = false;
    //body = inBody;
    data = 0;
@@ -157,12 +164,41 @@ ScriptCallable::~ScriptCallable()
    #endif
 }
 
+// Call signatures are interned once for every module, which may link on any thread
+int internCallSignature(const std::string &inSignature)
+{
+   static std::mutex &lock = *new std::mutex();
+   static std::map<std::string,int> &ids = *new std::map<std::string,int>();
+   std::lock_guard<std::mutex> hold(lock);
+   std::map<std::string,int>::iterator it = ids.find(inSignature);
+   if (it!=ids.end())
+      return it->second;
+   int id = (int)ids.size() + 1;
+   ids[inSignature] = id;
+   return id;
+}
+
+// A Bool comes back as an Int, which a call wanting an Int takes as it is
+char callReturnCode(ExprType inType)
+{
+   switch(inType)
+   {
+      case etInt: return 'i';
+      case etFloat: return 'f';
+      case etString: return 's';
+      case etObject: return 'o';
+      default: return 'v';
+   }
+}
+
 CppiaExpr *ScriptCallable::link(CppiaModule &inModule)
 {
    StackLayout *oldLayout = inModule.layout;
    StackLayout layout(oldLayout);
    inModule.layout = &layout;
    data = &inModule;
+   // A local function belongs to no class, so the JIT finds it here
+   inModule.functions.push_back(this);
 
    // A module's main, which names no type, uses the first, which a malformed
    //  module may not have
@@ -194,6 +230,20 @@ CppiaExpr *ScriptCallable::link(CppiaModule &inModule)
 
    stackSize = layout.size;
    inModule.layout = oldLayout;
+
+   // A call passes an object as it is only where no array conversion is wanted
+   std::string signature = "(";
+   for(int a=0;a<args.size();a++)
+      switch(args[a].argType)
+      {
+         case etInt: signature += 'i'; break;
+         case etFloat: signature += 'f'; break;
+         case etString: signature += 's'; break;
+         default: signature += args[a].type && args[a].type->arrayType!=arrNotArray ? 'a' : 'o';
+      }
+   signature += ")";
+   callSigArgs = internCallSignature(signature);
+   callSigFull = internCallSignature(signature + callReturnCode(returnType));
 
    position.className = className;
    position.functionName = functionName;
@@ -411,16 +461,34 @@ static void SLJIT_FUNC zeroLocals(unsigned char *inLocals, void *inSize)
 }
 
 // The interpreter zeroes a frame's locals; jitted code writes each before
-// reading it, but the debugger can read any of them at any time
+// reading it, but the debugger can read any of them at any time. A closure's
+// captured variables are copied into its frame before its code runs, so only
+// the locals around them are cleared
 void ScriptCallable::genZeroLocals(CppiaCompiler *compiler)
 {
    int argEnd = sizeof(void *);
    for(int i=0;i<args.size();i++)
       argEnd += sTypeSize[args[i].argType];
-   if (stackSize > argEnd)
+
+   std::vector< std::pair<int,int> > captured;
+   for(int i=0;i<captureVars.size();i++)
    {
-      compiler->add(sJitArg1.as(jtPointer), sJitFrame.as(jtPointer), argEnd );
-      compiler->callNative( (void *)zeroLocals, sJitArg1.as(jtPointer), JitVal((void *)(size_t)(stackSize - argEnd)) );
+      CppiaStackVar *var = captureVars[i];
+      captured.push_back( std::make_pair(var->stackPos, var->stackPos + sTypeSize[var->expressionType]) );
+   }
+   std::sort(captured.begin(), captured.end());
+
+   int from = argEnd;
+   for(int i=0;i<=(int)captured.size();i++)
+   {
+      int to = i<(int)captured.size() ? captured[i].first : stackSize;
+      if (to > from)
+      {
+         compiler->add(sJitArg1.as(jtPointer), sJitFrame.as(jtPointer), from );
+         compiler->callNative( (void *)zeroLocals, sJitArg1.as(jtPointer), JitVal((void *)(size_t)(to - from)) );
+      }
+      if (i<(int)captured.size() && captured[i].second > from)
+         from = captured[i].second;
    }
 }
 #endif
@@ -834,6 +902,11 @@ void CppiaFunction::markLazy()
 
 
 
+// The vtable every CppiaClosure has, which each stores as it is made, so a call can
+//  tell a script closure from another function object by its first word, without a
+//  dynamic_cast. Nothing can be a closure while this is still null
+static std::atomic<void *> sClosureVTable(0);
+
 class CppiaClosure : public hx::Object
 {
 public:
@@ -846,6 +919,7 @@ public:
    CppiaClosure(CppiaCtx *ctx, ScriptCallable *inFunction)
    {
       function = inFunction;
+      noteVTable();
 
       unsigned char *base = ((unsigned char *)this) + sizeof(CppiaClosure);
 
@@ -869,25 +943,41 @@ public:
    CppiaClosure(hx::Object *inThis, ScriptCallable *inFunction)
    {
       function = inFunction;
+      noteVTable();
       *getThis() = inThis;
    }
 
-
-   Dynamic doRun(CppiaCtx *ctx, int inHaveArgs)
+   void noteVTable()
    {
-      function->addExtraDefaults(ctx,inHaveArgs);
-      function->addStackVarsSpace(ctx);
+      void *vtable = *(void **)this;
+      if (sClosureVTable.load(std::memory_order_relaxed)!=vtable)
+         sClosureVTable.store(vtable, std::memory_order_relaxed);
+   }
 
+
+   // Writes this and the captured variables into the frame at inFrame
+   void enterFrame(unsigned char *inFrame)
+   {
       unsigned char *base = ((unsigned char *)this) + sizeof(CppiaClosure);
-      // this pointer...
-      CppiaCtx::setSlot(ctx->frame, *(hx::Object **)base);
+      CppiaCtx::setSlot(inFrame, *(hx::Object **)base);
 
       for(int i=0;i<function->captureVars.size();i++)
       {
          CppiaStackVar *var = function->captureVars[i];
          int size = sTypeSize[var->expressionType];
-         memcpy( ctx->frame+var->stackPos, base + var->capturePos, size);
+         memcpy( inFrame+var->stackPos, base + var->capturePos, size);
       }
+   }
+
+   // Runs the function in the frame at ctx->frame, which holds a slot for this and
+   //  the first inHaveArgs arguments, with ctx->pointer past them, and leaves its result
+   //  at ctx->frame. An exception from compiled code is thrown, or with !inThrow left in
+   //  ctx->exception
+   void runInFrame(CppiaCtx *ctx, int inHaveArgs, bool inThrow)
+   {
+      function->addExtraDefaults(ctx,inHaveArgs);
+      function->addStackVarsSpace(ctx);
+      enterFrame(ctx->frame);
 
       #ifdef CPPIA_JIT
       CppiaFunc code = function->getCompiled();
@@ -902,53 +992,44 @@ public:
          AutoFrame frame(ctx);
          code(ctx);
          }
-         if (ctx->exception)
+         if (ctx->exception && inThrow)
          {
             Dynamic caught = fromPendingException(ctx->exception);
             ctx->exception = nullptr;
             HX_STACK_DO_THROW(caught);
          }
-
-         {
-            switch(function->returnType)
-            {
-               case etFloat:
-                  return ctx->getFloat();
-               case etInt:
-                  if (function->isBoolReturn)
-                     return (bool)ctx->getInt();
-                  return ctx->getInt();
-               case etString:
-                  return ctx->getString();
-               case etObject:
-                  return ctx->getObject();
-               default: ;
-            }
-         }
-         return null();
+         return;
       }
-      //printf("Not compiled %d!\n", function->captureVars.size());
       #endif
 
       function->runFunctionClosure(ctx);
       ctx->breakContReturn = 0;
+   }
 
-      switch(function->returnType)
+   // The result runInFrame left, boxed
+   static hx::Object *boxResult(CppiaCtx *ctx, ScriptCallable *inFunction)
+   {
+      switch(inFunction->returnType)
       {
          case etFloat:
-            return ctx->getFloat( );
+            return Dynamic(ctx->getFloat()).mPtr;
          case etInt:
-            if (function->isBoolReturn)
-               return (bool)ctx->getInt( );
-            return ctx->getInt( );
+            if (inFunction->isBoolReturn)
+               return Dynamic((bool)ctx->getInt()).mPtr;
+            return Dynamic(ctx->getInt()).mPtr;
          case etString:
-            return ctx->getString( );
+            return Dynamic(ctx->getString()).mPtr;
          case etObject:
-            return ctx->getObject( );
-         default: break;
+            return ctx->getObjectPtr();
+         default: ;
       }
+      return 0;
+   }
 
-      return null();
+   Dynamic doRun(CppiaCtx *ctx, int inHaveArgs)
+   {
+      runInFrame(ctx, inHaveArgs, true);
+      return boxResult(ctx, function);
    }
 
    void pushArgDynamic(CppiaCtx *ctx, int a, Dynamic inValue)
@@ -1128,6 +1209,46 @@ ScriptCallable *getClosureFunction(hx::Object *inObj)
       return 0;
    return closure->function;
 }
+
+ScriptCallable *scriptClosureTarget(hx::Object *inFunction)
+{
+   void *vtable = sClosureVTable.load(std::memory_order_relaxed);
+   if (!inFunction || !vtable || *(void **)inFunction!=vtable)
+      return 0;
+   return ((CppiaClosure *)inFunction)->function;
+}
+
+void runScriptClosure(CppiaCtx *ctx, hx::Object *inClosure, int inArgCount, bool inThrow)
+{
+   ((CppiaClosure *)inClosure)->runInFrame(ctx, inArgCount, inThrow);
+}
+
+hx::Object *boxScriptClosureResult(CppiaCtx *ctx, ScriptCallable *inFunction)
+{
+   return CppiaClosure::boxResult(ctx, inFunction);
+}
+
+#ifdef CPPIA_JIT
+CppiaFunc SLJIT_FUNC enterScriptClosure(CppiaCtx *ctx, hx::Object *inFunction, int inSignature)
+{
+   void *vtable = sClosureVTable.load(std::memory_order_relaxed);
+   if (!inFunction || !vtable || *(void **)inFunction!=vtable)
+      return 0;
+   CppiaClosure *closure = (CppiaClosure *)inFunction;
+   ScriptCallable *function = closure->function;
+   if (function->callSigFull!=inSignature && function->callSigArgs!=inSignature)
+      return 0;
+   // Not compiled yet, it compiles on the general way. Its captured variables go
+   //  past the arguments, which the caller's frame made room for, so the whole
+   //  frame must fit before the function's own check of the stack
+   CppiaFunc code = function->getCompiled();
+   unsigned char *frame = ctx->frame;
+   if (!code || frame + function->stackSize > ctx->stackEnd)
+      return 0;
+   closure->enterFrame(frame);
+   return code;
+}
+#endif
 
 
 

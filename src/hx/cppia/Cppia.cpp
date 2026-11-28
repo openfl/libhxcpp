@@ -3389,10 +3389,59 @@ struct GetFieldByName : public CppiaDynamicExpr
 
 
 
+// How a call has an argument, so it can pass it to a script closure that takes that
+//  type without boxing it. A Bool goes as an Int but boxes as a Bool
+enum CallArgKind { cakObject, cakInt, cakBool, cakFloat, cakString };
+
+static inline ExprType callArgType(unsigned char inKind)
+{
+   switch(inKind)
+   {
+      case cakInt:
+      case cakBool: return etInt;
+      case cakFloat: return etFloat;
+      case cakString: return etString;
+      default: return etObject;
+   }
+}
+
+// The bytes an argument of the kind takes in a frame
+static inline int callArgSize(unsigned char inKind)
+{
+   switch(inKind)
+   {
+      case cakInt:
+      case cakBool: return sizeof(int);
+      case cakFloat: return sizeof(Float);
+      case cakString: return sizeof(String);
+      default: return sizeof(hx::Object *);
+   }
+}
+
+// Puts back ctx's pointer and frame as they were when it was made. Unlike AutoStack,
+//  it starts no frame, so the arguments still run in the caller's
+struct RestoreStack
+{
+   CppiaCtx *ctx;
+   unsigned char *pointer;
+   unsigned char *frame;
+
+   RestoreStack(CppiaCtx *inCtx) : ctx(inCtx), pointer(inCtx->pointer), frame(inCtx->frame) { }
+   ~RestoreStack()
+   {
+      ctx->pointer = pointer;
+      ctx->frame = frame;
+   }
+};
+
 struct Call : public CppiaDynamicExpr
 {
    Expressions args;
    CppiaExpr   *func;
+   // Each argument's CallArgKind
+   std::vector<unsigned char> argKinds;
+   // The arguments' types as a script function's signature has them
+   std::string argSignature;
 
    Call(CppiaStream &stream)
    {
@@ -3415,15 +3464,94 @@ struct Call : public CppiaDynamicExpr
    {
       func = func->link(inModule);
       LinkExpressions(args,inModule);
+      argKinds.resize(args.size());
+      for(int a=0;a<args.size();a++)
+      {
+         switch(args[a]->getType())
+         {
+            case etInt: argKinds[a] = args[a]->isBoolInt() ? cakBool : cakInt; break;
+            case etFloat: argKinds[a] = cakFloat; break;
+            case etString: argKinds[a] = cakString; break;
+            default: argKinds[a] = cakObject;
+         }
+      }
+      argSignature = "(";
+      for(int a=0;a<args.size();a++)
+         switch(argKinds[a])
+         {
+            case cakInt: case cakBool: argSignature += 'i'; break;
+            case cakFloat: argSignature += 'f'; break;
+            case cakString: argSignature += 's'; break;
+            default: argSignature += 'o';
+         }
+      argSignature += ")";
       return this;
    }
-   hx::Object *runObject(CppiaCtx *ctx) HXCPP_OVERRIDE
+
+   // The function of a script closure that takes each argument as the type the call has
+   //  it in, so the call can put them in its frame as they are; 0 when they must be boxed.
+   //  A closure given more arguments than it takes, which ignores the rest, has them boxed
+   ScriptCallable *directTarget(hx::Object *inFunction)
    {
-      hx::Object *funcVal = func->runObject(ctx);
-      BCR_CHECK;
+      ScriptCallable *target = scriptClosureTarget(inFunction);
+      if (!target)
+         return 0;
+      int n = args.size();
+      if (n > (int)target->args.size())
+         return 0;
+      for(int a=0;a<n;a++)
+         if (target->args[a].argType!=callArgType(argKinds[a]))
+            return 0;
+      return target;
+   }
 
-      CPPIA_CHECK_FUNC(funcVal);
+   // The array type a closure's argument wants an object converted to, as __run converts it
+   static inline ArrayType wantedArray(ScriptCallable *inTarget, int inArg)
+   {
+      TypeData *type = inTarget->args[inArg].type;
+      return type ? type->arrayType : arrNotArray;
+   }
 
+   // Pushes a slot for this and the arguments as they are, then runs the closure in that
+   //  frame, leaving its result at ctx->frame. False if an argument breaks, continues,
+   //  returns or throws, and nothing ran
+   bool runDirect(CppiaCtx *ctx, hx::Object *inFunction, ScriptCallable *inTarget)
+   {
+      unsigned char *frame = ctx->pointer;
+      ctx->push( (hx::Object *)0 );
+      for(int a=0;a<args.size();a++)
+      {
+         switch(argKinds[a])
+         {
+            case cakInt:
+            case cakBool:
+               ctx->pushInt(args[a]->runInt(ctx));
+               break;
+            case cakFloat:
+               ctx->pushFloat(args[a]->runFloat(ctx));
+               break;
+            case cakString:
+               ctx->pushString(args[a]->runString(ctx));
+               break;
+            default:
+               {
+                  hx::Object *value = args[a]->runObject(ctx);
+                  ArrayType want = wantedArray(inTarget, a);
+                  if (value && want!=arrNotArray)
+                     value = DynamicToArrayType(value, want);
+                  ctx->pushObject(value);
+               }
+         }
+         BCR_CHECK_RET(false);
+      }
+      ctx->frame = frame;
+      runScriptClosure(ctx, inFunction, args.size(), true);
+      return true;
+   }
+
+   // Calls inFunction through __run, with each argument boxed
+   hx::Object *runBoxed(CppiaCtx *ctx, hx::Object *funcVal)
+   {
       int size = args.size();
 #if (HXCPP_API_LEVEL>=500)
       Array<Dynamic> argArray = Array_obj<Dynamic>::__new(size, size);
@@ -3507,7 +3635,196 @@ struct Call : public CppiaDynamicExpr
       return 0;
    }
 
+   // Each run below calls a script closure that takes the arguments as they are with
+   //  them unboxed, and reads its result as it is when it has the type wanted. Anything
+   //  else goes through runBoxed and converts the result as it always has
+   hx::Object *runObject(CppiaCtx *ctx) HXCPP_OVERRIDE
+   {
+      hx::Object *funcVal = func->runObject(ctx);
+      BCR_CHECK;
+      CPPIA_CHECK_FUNC(funcVal);
+      ScriptCallable *target = directTarget(funcVal);
+      if (!target)
+         return runBoxed(ctx, funcVal);
+      RestoreStack restore(ctx);
+      if (!runDirect(ctx, funcVal, target))
+         return 0;
+      return target->returnType==etObject ? ctx->getObjectPtr() : boxScriptClosureResult(ctx, target);
+   }
+
+   int runInt(CppiaCtx *ctx) HXCPP_OVERRIDE
+   {
+      hx::Object *funcVal = func->runObject(ctx);
+      BCR_CHECK;
+      CPPIA_CHECK_FUNC(funcVal);
+      ScriptCallable *target = directTarget(funcVal);
+      if (!target)
+         return ValToInt(runBoxed(ctx, funcVal));
+      RestoreStack restore(ctx);
+      if (!runDirect(ctx, funcVal, target))
+         return 0;
+      return target->returnType==etInt ? ctx->getInt() : ValToInt(boxScriptClosureResult(ctx, target));
+   }
+
+   Float runFloat(CppiaCtx *ctx) HXCPP_OVERRIDE
+   {
+      hx::Object *funcVal = func->runObject(ctx);
+      BCR_CHECK;
+      CPPIA_CHECK_FUNC(funcVal);
+      ScriptCallable *target = directTarget(funcVal);
+      if (!target)
+         return ValToFloat(runBoxed(ctx, funcVal));
+      RestoreStack restore(ctx);
+      if (!runDirect(ctx, funcVal, target))
+         return 0;
+      return target->returnType==etFloat ? ctx->getFloat() : ValToFloat(boxScriptClosureResult(ctx, target));
+   }
+
+   String runString(CppiaCtx *ctx) HXCPP_OVERRIDE
+   {
+      hx::Object *funcVal = func->runObject(ctx);
+      BCR_CHECK;
+      CPPIA_CHECK_FUNC(funcVal);
+      ScriptCallable *target = directTarget(funcVal);
+      hx::Object *result = 0;
+      if (!target)
+      {
+         result = runBoxed(ctx, funcVal);
+         BCR_CHECK;
+      }
+      else
+      {
+         RestoreStack restore(ctx);
+         if (!runDirect(ctx, funcVal, target))
+            return String();
+         if (target->returnType==etString)
+            return ctx->getString();
+         result = boxScriptClosureResult(ctx, target);
+      }
+      return result ? result->toString() : String();
+   }
+
+   void runVoid(CppiaCtx *ctx) HXCPP_OVERRIDE
+   {
+      hx::Object *funcVal = func->runObject(ctx);
+      BCR_VCHECK;
+      CPPIA_CHECK_FUNC(funcVal);
+      ScriptCallable *target = directTarget(funcVal);
+      if (!target)
+      {
+         runBoxed(ctx, funcVal);
+         return;
+      }
+      RestoreStack restore(ctx);
+      runDirect(ctx, funcVal, target);
+   }
+
    #ifdef CPPIA_JIT
+   // The result of a call from jitted code, stored at inSlot as inType
+   static void storeResult(unsigned char *inSlot, ExprType inType, hx::Object *inValue)
+   {
+      switch(inType)
+      {
+         case etInt: CppiaCtx::setSlot(inSlot, inValue ? inValue->__ToInt() : 0); break;
+         case etFloat: CppiaCtx::setSlot(inSlot, inValue ? inValue->__ToDouble() : 0.0); break;
+         case etString: CppiaCtx::setSlot(inSlot, inValue ? inValue->toString() : String()); break;
+         case etObject: CppiaCtx::setSlot(inSlot, inValue); break;
+         default: ;
+      }
+   }
+
+   // Boxes the arguments jitted code left after the this slot at inBase, each as its
+   //  kind, and calls inFunction through __run, as callDynamic does
+   hx::Object *runJitBoxed(CppiaCtx *ctx, hx::Object *inFunction, unsigned char *inBase)
+   {
+      int n = args.size();
+      unsigned char *slot = inBase + sizeof(hx::Object *);
+      #define CALL_BOX_ARG(target) \
+         switch(argKinds[a]) \
+         { \
+            case cakInt: target = CppiaCtx::getSlot<int>(slot); break; \
+            case cakBool: target = CppiaCtx::getSlot<int>(slot)!=0; break; \
+            case cakFloat: target = CppiaCtx::getSlot<Float>(slot); break; \
+            case cakString: target = CppiaCtx::getSlot<String>(slot); break; \
+            default: target = CppiaCtx::getSlot<hx::Object *>(slot); \
+         } \
+         slot += callArgSize(argKinds[a]);
+
+      // Each is copied out before the call, whose frame starts at inBase over them
+#if (HXCPP_API_LEVEL<500)
+      if (n<=5)
+      {
+         Dynamic boxed[5];
+         for(int a=0;a<n;a++)
+         {
+            CALL_BOX_ARG(boxed[a])
+         }
+         ctx->pointer = inBase;
+         switch(n)
+         {
+            case 0: return inFunction->__run().mPtr;
+            case 1: return inFunction->__run(boxed[0]).mPtr;
+            case 2: return inFunction->__run(boxed[0],boxed[1]).mPtr;
+            case 3: return inFunction->__run(boxed[0],boxed[1],boxed[2]).mPtr;
+            case 4: return inFunction->__run(boxed[0],boxed[1],boxed[2],boxed[3]).mPtr;
+            default: return inFunction->__run(boxed[0],boxed[1],boxed[2],boxed[3],boxed[4]).mPtr;
+         }
+      }
+#endif
+      Array<Dynamic> argArray = Array_obj<Dynamic>::__new(n,n);
+      for(int a=0;a<n;a++)
+      {
+         Dynamic value;
+         CALL_BOX_ARG(value)
+         argArray[a] = value;
+      }
+      #undef CALL_BOX_ARG
+      ctx->pointer = inBase;
+      return inFunction->__Run(argArray).mPtr;
+   }
+
+   // Called by jitted code with ctx->frame at a slot for this and the arguments after
+   //  it, each as its kind. Leaves the result in that slot as RESULT
+   template<int RESULT>
+   static void SLJIT_FUNC runJit(CppiaCtx *ctx, hx::Object *inFunction, Call *inCall)
+   {
+      if (!inFunction)
+      {
+         ctx->exception = Dynamic(HX_CSTRING("Null Function")).mPtr;
+         __hx_stack_set_last_exception();
+         return;
+      }
+      unsigned char *base = ctx->frame;
+      unsigned char *oldPointer = ctx->pointer;
+      TRY_NATIVE
+         ScriptCallable *target = inCall->directTarget(inFunction);
+         if (target)
+         {
+            unsigned char *slot = base + sizeof(hx::Object *);
+            for(int a=0;a<inCall->args.size();a++)
+            {
+               ExprType type = callArgType(inCall->argKinds[a]);
+               if (type==etObject)
+               {
+                  hx::Object *value = CppiaCtx::getSlot<hx::Object *>(slot);
+                  ArrayType want = wantedArray(target, a);
+                  if (value && want!=arrNotArray)
+                     CppiaCtx::setSlot(slot, DynamicToArrayType(value, want));
+               }
+               slot += callArgSize(inCall->argKinds[a]);
+            }
+            ctx->pointer = slot;
+            runScriptClosure(ctx, inFunction, inCall->args.size(), false);
+            if (!ctx->exception && RESULT!=etVoid && target->returnType!=RESULT)
+               storeResult(base, (ExprType)RESULT, boxScriptClosureResult(ctx, target));
+         }
+         else
+            storeResult(base, (ExprType)RESULT, inCall->runJitBoxed(ctx, inFunction, base));
+      CATCH_NATIVE
+      ctx->pointer = oldPointer;
+      ctx->frame = base;
+   }
+
    void genCode(CppiaCompiler *compiler, const JitVal &inDest,ExprType destType) HXCPP_OVERRIDE
    {
       JitTemp functionObject(compiler, jtPointer);
@@ -3516,21 +3833,49 @@ struct Call : public CppiaDynamicExpr
       {
       AutoFramePos frame(compiler);
 
+      // A slot for this, which a script closure fills, then each argument as the call
+      //  has it
+      compiler->addFrame(etObject);
       for(int a=0;a<args.size();a++)
       {
-         args[a]->genCode(compiler, JitFramePos(compiler->getCurrentFrameSize(),etObject), etObject);
-         compiler->addFrame(etObject);
+         ExprType type = callArgType(argKinds[a]);
+         args[a]->genCode(compiler, JitFramePos(compiler->getCurrentFrameSize(),type), type);
+         compiler->addFrame(type);
       }
       // restore frame size
       }
 
       compiler->add(sJitCtxFrame, sJitFrame, compiler->getCurrentFrameSize());
 
-      compiler->callNative((void *)callDynamic,sJitCtx,functionObject,JitVal( (int)args.size() ) );
+      ExprType resultType = destType==etNull ? etVoid : destType;
+
+      // A script closure whose function takes these arguments, and gives the result
+      //  wanted, as they are, and is compiled, is called as a direct call calls,
+      //  with its result where the general way leaves one
+      int signature = internCallSignature(resultType==etVoid ? argSignature : argSignature + callReturnCode(resultType));
+      compiler->callNative((void *)enterScriptClosure, sJitCtx, functionObject, JitVal(signature));
+      compiler->move(sJitTemp1.as(jtPointer), sJitReturnReg.as(jtPointer));
+      JumpId general = compiler->compare(cmpP_EQUAL, sJitTemp1.as(jtPointer), (void *)0);
+      compiler->call(sJitTemp1, sJitCtx);
+      compiler->setMaxPointer();
+      JumpId called = compiler->jump();
+      compiler->comeFrom(general);
+
+      void *helper = 0;
+      switch(resultType)
+      {
+         case etInt: helper = (void *)runJit<etInt>; break;
+         case etFloat: helper = (void *)runJit<etFloat>; break;
+         case etString: helper = (void *)runJit<etString>; break;
+         case etObject: helper = (void *)runJit<etObject>; break;
+         default: helper = (void *)runJit<etVoid>;
+      }
+      compiler->callNative(helper, sJitCtx, functionObject, JitVal((void *)this));
+      compiler->comeFrom(called);
 
       compiler->checkException();
-      if (destType!=etVoid)
-         compiler->convertResult( etObject, inDest, destType );
+      if (resultType!=etVoid)
+         compiler->convertResult( resultType, inDest, destType );
    }
    #endif
 };

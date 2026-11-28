@@ -42,6 +42,13 @@ using StringTools;
 	  --warmup <n>          untimed samples per process (default 2)
 	  --no-build            reuse the existing builds
 	  --out <file>          results JSON (default .work/results.json)
+	  --hl <hl executable>  also run the CPPIA workloads on HashLink's JIT, as a
+	                        reference for the cppia JIT: bench/hl builds them,
+	                        with the bridge in bench/cppia/shared, straight to
+	                        HashLink, so the host's side runs as HashLink JIT
+	                        code. Its processes take turns with the others on
+	                        the cppia_jit_ benchmarks and must give the same
+	                        checksums, and the CPPIA table gains an HL column
 	  --readme              publish the results: the full tables go into
 	                        BENCHMARKS.md and a summary of the key measures into
 	                        README.md. Needs every benchmark, both runtimes and a
@@ -98,6 +105,8 @@ class Run {
 	static var build = true;
 	static var outFile:Null<String> = null;
 	static var writeReadme = false;
+	static var hlExe:Null<String> = null;
+	static var hl:Null<Runtime> = null;
 
 	static function main() {
 		benchDir = FileSystem.absolutePath(".");
@@ -148,6 +157,14 @@ class Run {
 			Sys.println('${rt.label}: ${rt.env.compiler}, ${rt.env.pointerBits}-bit, API level ${rt.env.apiLevel}');
 		}
 		checkComparable(runtimes);
+		if (hlExe != null && needsCppia()) {
+			hl = new Runtime("hl", hlLabel(), workDir + "/hl");
+			if (build)
+				buildHl();
+			if (!FileSystem.exists(hl.dir + "/bench.hl"))
+				fail('${hl.label}: ${hl.dir}/bench.hl is missing; run without --no-build');
+			Sys.println('${hl.label}: ${hlExe}');
+		}
 
 		var names = listBenchmarks(runtimes[0]);
 		if (needsCppia())
@@ -178,7 +195,7 @@ class Run {
 				failures++;
 				Sys.println('FAILED: ${r.error}');
 			} else
-				Sys.println([for (rt in runtimes) '${rt.label} ${formatRate(r.byRuntime.get(rt.name).rate, r.unit)}'].join(", "));
+				Sys.println([for (rt in (hl != null && r.byRuntime.exists(hl.name) ? runtimes.concat([hl]) : runtimes)) '${rt.label} ${formatRate(r.byRuntime.get(rt.name).rate, r.unit)}'].join(", "));
 			results.push(r);
 		}
 
@@ -188,6 +205,7 @@ class Run {
 			haxe: commandOutput("haxe", ["-version"]),
 			libhxcpp: gitDescribe(),
 			runtimes: [for (rt in runtimes) {name: rt.name, label: rt.label, commit: rt.commit, env: rt.env, cppiaEnv: rt.cppiaEnv}],
+			hashlink: hl == null ? null : {name: hl.name, label: hl.label, exe: hlExe},
 			skipped: skipped,
 			settings: {runs: runs, samples: samples, warmup: warmup},
 			startup: [for (rt in runtimes) {name: rt.name, seconds: startup[rt.name]}],
@@ -261,6 +279,10 @@ class Run {
 					build = false;
 				case "--out":
 					outFile = FileSystem.absolutePath(value());
+				case "--hl":
+					hlExe = FileSystem.absolutePath(value());
+					if (!FileSystem.exists(hlExe))
+						fail('--hl: $hlExe does not exist');
 				case "--readme":
 					writeReadme = true;
 				default:
@@ -374,6 +396,24 @@ class Run {
 		return true;
 	}
 
+	/** Builds the CPPIA workloads for HashLink with bench/hl's harness. **/
+	static function buildHl() {
+		FileSystem.createDirectory(hl.dir);
+		Sys.println('Building ${hl.label} (log: ${hl.dir}/build.log)');
+		var command = 'haxe -cp "${benchDir}/hl" -cp "${benchDir}/cppia" -cp "${benchDir}/cppia/shared" -main HlMain -hl bench.hl';
+		if (inDir(hl.dir, () -> Sys.command('$command > build.log 2>&1')) != 0) {
+			var log = File.getContent(hl.dir + "/build.log").split("\n");
+			Sys.println(log.slice(log.length > 40 ? log.length - 40 : 0).join("\n"));
+			fail('${hl.label}: build failed');
+		}
+	}
+
+	/** "HashLink 1.16.0", from the executable's own --version. **/
+	static function hlLabel():String {
+		var version = commandOutput(hlExe, ["--version"]);
+		return version == "" ? "HashLink" : 'HashLink $version';
+	}
+
 	static function needsCppia():Bool {
 		if (!cppia)
 			return false;
@@ -428,6 +468,8 @@ class Run {
 	}
 
 	static function runBenchmark(name:String, runtimes:Array<Runtime>):BenchResult {
+		if (hl != null && name.startsWith("cppia_jit_"))
+			runtimes = runtimes.concat([hl]);
 		var result = new BenchResult(name);
 		var raw = [for (rt in runtimes) rt.name => new Array<Dynamic>()];
 		var checksum:Null<Int> = null;
@@ -543,6 +585,10 @@ class Run {
 				if (compare)
 					all.push('${modes[mode]} vs stock');
 			}
+			if (hl != null && lib != null) {
+				all.push('HL/JIT, ${hl.label}');
+				all.push('JIT vs HL');
+			}
 			b.add("| " + all.join(" | ") + " |\n");
 			b.add("|" + [for (i in 0...all.length) i < first.length ? " --- " : " ---: "].join("|") + "|\n");
 			for (workload in cppia) {
@@ -558,6 +604,15 @@ class Run {
 					if (compare)
 						row += " | " + ratio(r.byRuntime.get(lib.name).rate, r.byRuntime.get(stock.name).rate,
 							Math.max(r.byRuntime.get(lib.name).spread, r.byRuntime.get(stock.name).spread), LAYOUT_BAND);
+				}
+				if (hl != null && lib != null) {
+					var r = byName['cppia_jit_$workload'];
+					var h = r == null ? null : r.byRuntime.get(hl.name);
+					if (h == null || r.error != null)
+						row += " | failed | ";
+					else
+						row += " | " + formatRate(h.rate, null) + " ±" + percent(h.spread) + " | "
+							+ ratio(r.byRuntime.get(lib.name).rate, h.rate, Math.max(r.byRuntime.get(lib.name).spread, h.spread), LAYOUT_BAND);
 				}
 				b.add(row + " |\n");
 			}
@@ -736,8 +791,10 @@ class Run {
 
 	/** Runs the benchmark executable and returns its stdout; throws if it fails. **/
 	static function benchProcess(rt:Runtime, args:Array<String>, cppia = false):String {
-		var exe = cppia || args[0].startsWith("cppia_") ? rt.cppiaExe : rt.exe;
-		var p = new Process(exe, args);
+		var p = if (rt.name == "hl")
+			new Process(hlExe, [rt.dir + "/bench.hl"].concat(args));
+		else
+			new Process(cppia || args[0].startsWith("cppia_") ? rt.cppiaExe : rt.exe, args);
 		var out = p.stdout.readAll().toString();
 		var err = p.stderr.readAll().toString();
 		var code = p.exitCode();

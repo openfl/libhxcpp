@@ -234,6 +234,10 @@ void CppiaModule::compile()
 
    if (main)
       main->compile();
+
+   // Those compiled above are skipped
+   for(size_t i=0;i<functions.size();i++)
+      functions[i]->compile();
 }
 
 void CppiaModule::markLazy()
@@ -243,6 +247,9 @@ void CppiaModule::markLazy()
 
    if (main)
       main->lazy = true;
+
+   for(size_t i=0;i<functions.size();i++)
+      functions[i]->lazy = true;
 }
 #endif
 

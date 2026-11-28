@@ -1,0 +1,93 @@
+-- compiled
+Int result as Int 5, Float 5, String 5, Dynamic 5
+Int result as Dynamic 300 Int
+Float result as Int 4, Float 4.5, String 4.5, Dynamic 4.5
+whole Float result as Dynamic 4 Int
+negative zero result -Infinity Float
+String result hey! null! !
+String result as Dynamic x! String
+Bool result as Dynamic true Bool
+Bool result from Int true Bool
+Bool result as Bool false, String true
+Void result 9
+Int to Dynamic 7 Int
+big Int to Dynamic 100000 Int
+Bool to Dynamic true Bool
+Float to Dynamic 2.5 Float
+whole Float to Dynamic 3 Int
+String to Dynamic s String
+Float to Dynamic and back 4 Int
+Int to Float 3.5 Float
+Array argument 304 304
+six arguments 91
+argument changed in the callee 6 5
+nested 15
+bound 30 13 40 d10.5 [70,17,6]
+host functions 3.5 12
+null function throws
+throws 204
+returns from an argument 30 -1
+recursive 610
+no arguments 4 4
+-- script, JIT off
+Int result as Int 5, Float 5, String 5, Dynamic 5
+Int result as Dynamic 300 Int
+Float result as Int 4, Float 4.5, String 4.5, Dynamic 4.5
+whole Float result as Dynamic 4 Int
+negative zero result -Infinity Float
+String result hey! null! !
+String result as Dynamic x! String
+Bool result as Dynamic true Bool
+Bool result from Int true Bool
+Bool result as Bool false, String true
+Void result 9
+Int to Dynamic 7 Int
+big Int to Dynamic 100000 Int
+Bool to Dynamic true Bool
+Float to Dynamic 2.5 Float
+whole Float to Dynamic 3 Int
+String to Dynamic s String
+Float to Dynamic and back 4 Int
+Int to Float 3.5 Float
+Array argument 304 304
+six arguments 91
+argument changed in the callee 6 5
+nested 15
+bound 30 13 40 d10.5 [70,17,6]
+host functions 3.5 12
+null function throws
+throws 204
+returns from an argument 30 -1
+recursive 610
+no arguments 4 4
+-- script, JIT on
+Int result as Int 5, Float 5, String 5, Dynamic 5
+Int result as Dynamic 300 Int
+Float result as Int 4, Float 4.5, String 4.5, Dynamic 4.5
+whole Float result as Dynamic 4 Int
+negative zero result -Infinity Float
+String result hey! null! !
+String result as Dynamic x! String
+Bool result as Dynamic true Bool
+Bool result from Int true Bool
+Bool result as Bool false, String true
+Void result 9
+Int to Dynamic 7 Int
+big Int to Dynamic 100000 Int
+Bool to Dynamic true Bool
+Float to Dynamic 2.5 Float
+whole Float to Dynamic 3 Int
+String to Dynamic s String
+Float to Dynamic and back 4 Int
+Int to Float 3.5 Float
+Array argument 304 304
+six arguments 91
+argument changed in the callee 6 5
+nested 15
+bound 30 13 40 d10.5 [70,17,6]
+host functions 3.5 12
+null function throws
+throws 204
+returns from an argument 30 -1
+recursive 610
+no arguments 4 4

@@ -1596,7 +1596,10 @@ struct ArrayBuiltin : public ArrayBuiltinBase
                thisExpr->genCode(compiler, thisVal, etObject);
                genNullReferenceExceptionCheck(compiler, thisVal);
 
-               if (destType==etObject)
+               // An Int, Float, Bool or String element is boxed as __GetItem boxes it.
+               //  An object array's element already is the object, so it is read in
+               //  place below, as __GetItem reads it
+               if (destType==etObject && (ExprType)ExprTypeOf<ELEM>::value!=etObject)
                {
                   args[0]->genCode(compiler, sJitArg1, etInt);
                   compiler->callNative((void *)objGetIndex, thisVal, sJitArg1.as(jtInt));

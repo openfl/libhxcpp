@@ -136,6 +136,8 @@ driver also checks that the interpreter and JIT return the same checksum.
 | `closure_call` | Script calls to a closure that updates a captured variable |
 | `native_call` | Script-to-native calls with an Int argument and result |
 | `native_callback` | A native loop calling a script closure that updates a captured variable |
+| `bunny_update` | The update loop of OpenFL's BunnyMark over 2,000 script objects that extend a host class, moved through its Float properties, in a listener the host calls once a frame |
+| `openfl_frame` | An OpenFL application's frame: 1,000 script objects extending a host display object, moved by an ENTER_FRAME listener the host calls, one in ten with a closure listener of its own, a small object made each update, dead ones replaced, and a host render reading every transform |
 
 The native timing harness loads one script module per process. Loading, linking,
 booting and JIT compilation happen in `setup()`, outside the timed samples.
@@ -151,6 +153,18 @@ so those flags do not change the native benchmarks. Peak memory for these cases
 includes the host, loaded module and any JIT code. The `noop` startup row still
 measures the native executable.
 
+### HashLink as a reference
+
+`--hl <path to hl>` also runs the CPPIA workloads on HashLink's JIT. `bench/hl`
+builds `Script.hx` and `bench/cppia/shared` straight to HashLink with the same
+harness, workload table and timing, so there the host's side of each workload
+is HashLink JIT code too, where under cppia it is native C++. Its processes take
+turns with the others on the `cppia_jit_` benchmarks and must give the same
+checksums, and the CPPIA table gains an HL/JIT column and the JIT's ratio to it.
+A host with its framework compiled in should not run a script slower than
+HashLink runs the whole application, so a ratio below 1 there is a target.
+
+
 ## Running it yourself
 
 You need Haxe 4.3, the C++ compiler hxcpp uses on your platform, and curl.
@@ -160,6 +174,7 @@ cd bench
 haxe --run Run                       # every benchmark, both runtimes
 haxe --run Run --only map_int,sort_int
 haxe --run Run --only cppia_interp_native_call,cppia_jit_native_call
+haxe --run Run --only cppia_jit_closure_call --hl path/to/hl   # with HashLink beside it
 haxe --run Run --no-build            # reuse the last builds
 haxe --run Run --only gc_object_ids --define HXCPP_GC_GENERATIONAL
 haxe --run Run --readme              # publish: this page and the README summary
