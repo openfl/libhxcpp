@@ -1450,7 +1450,10 @@ struct CastExpr : public CppiaDynamicExpr
          return;
       }
 
-      if (destType==etNull || destType==etVoid)
+      // An unused cast that cannot fail is only its value. A cast to a class or
+      //  interface still checks, and an array conversion still runs, as the
+      //  interpreter's do
+      if ((destType==etNull || destType==etVoid) && op!=castInstance && op!=castDataArray && op!=castDynArray)
       {
          value->genCode(compiler);
          return;
