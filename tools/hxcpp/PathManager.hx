@@ -252,7 +252,17 @@ class PathManager
                if (!FileSystem.exists(total))
                {
                   Log.info("", " - \x1b[1mCreating directory:\x1b[0m " + total);
-                  FileSystem.createDirectory(total);
+                  // Another build can make it at the same time, as builds
+                  //  sharing a compile cache make its directories
+                  try
+                  {
+                     FileSystem.createDirectory(total);
+                  }
+                  catch(e:Dynamic)
+                  {
+                     if (!FileSystem.exists(total))
+                        throw e;
+                  }
                }
             }
          }

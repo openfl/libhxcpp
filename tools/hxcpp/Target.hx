@@ -8,6 +8,10 @@ class Target
    private var mExt:String;
    public var mFullOutputName:String;
    public var mFullUnstrippedName:String;
+   // A library in the compile cache, which other builds link at the same
+   //  time: Linker.link names it by what it is linked from and puts it in
+   //  place whole
+   public var mInCache:Bool;
 
    // These attributes are merged by the "merge" command
    public var mFiles:Array<File>;
@@ -36,6 +40,7 @@ class Target
       mFlags = [];
       mExt = null;
       mFullOutputName = null;
+      mInCache = false;
       mSubTargets = [];
       mFileGroups = [];
       mFlags = [];

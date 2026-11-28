@@ -365,6 +365,35 @@ class Compiler
       catch(e:Dynamic) { }
    }
 
+   // Whether the object in the cache at inName will do for inFile: not
+   //  older than the precompiled header compiled with it, nor than the source
+   //  in a group that respects timestamps
+   function cachedObjUsable(inName:String, inFile:File, pchTimeStamp:Null<Float>)
+   {
+      if (pchTimeStamp==null && !inFile.mGroup.mRespectTimestamp)
+         return true;
+      var time = FileSystem.stat(inName).mtime.getTime();
+      if (pchTimeStamp!=null && time<pchTimeStamp)
+         return false;
+      if (inFile.mGroup.mRespectTimestamp && time<FileSystem.stat(inFile.mDir + "/" + inFile.mName).mtime.getTime())
+         return false;
+      return true;
+   }
+
+   // Moves an object compiled for the cache under a name of this build's own
+   //  to its name. One there that will do was compiled from the same source
+   //  and flags by another build, and is kept
+   function putObjInPlace(inMade:String, inName:String, inFile:File, pchTimeStamp:Null<Float>)
+   {
+      if (inMade==inName)
+         return;
+      if (!CompileCache.putInPlace(inMade, inName, function() return cachedObjUsable(inName, inFile, pchTimeStamp), 30))
+      {
+         CompileCache.removeEntry(inMade);
+         Log.error("Could not replace \"" + inName + "\", which another build has open");
+      }
+   }
+
    public function compile(inFile:File,inTid:Int,headerFunc:Void->Void,pchTimeStamp:Null<Float>,inProgress:Progress)
    {
       var obj_name = getObjName(inFile);
@@ -388,25 +417,12 @@ class Compiler
             obj_name = cacheName;
          }
 
-         if (FileSystem.exists(cacheName))
+         if (FileSystem.exists(cacheName) && cachedObjUsable(cacheName, inFile, pchTimeStamp))
          {
-            var newer = true;
-            if (pchTimeStamp!=null || inFile.mGroup.mRespectTimestamp)
-            {
-               var time = FileSystem.stat(cacheName).mtime.getTime();
-
-               if (pchTimeStamp!=null)
-                  newer = time>=pchTimeStamp;
-               if (inFile.mGroup.mRespectTimestamp)
-                  newer = newer && time>= FileSystem.stat(inFile.mDir + "/" + inFile.mName).mtime.getTime();
-            }
-            if (newer)
-            {
-               //Log.info(""," copy cache for " + obj_name );
-               if (!useCacheInPlace)
-                  sys.io.File.copy(cacheName, obj_name);
-               found = true;
-            }
+            //Log.info(""," copy cache for " + obj_name );
+            if (!useCacheInPlace)
+               sys.io.File.copy(cacheName, obj_name);
+            found = true;
          }
       }
 
@@ -441,7 +457,11 @@ class Compiler
             out = "";
          }
 
-         args.push(out + obj_name);
+         // An object in the cache is compiled under a name of this build's
+         //  own and then moved to its name, as another build can compile the
+         //  same one at the same time, or link it while this one writes it
+         var made = cacheName!=null && useCacheInPlace ? CompileCache.getTempName(obj_name) : obj_name;
+         args.push(out + made);
 
          if (delayedFilename!=null)
            args.push(delayedFilename);
@@ -479,13 +499,16 @@ class Compiler
                   BuildTool.setThreadError(err);
                   try
                   {
-                     if (FileSystem.exists(obj_name))
-                        FileSystem.deleteFile(obj_name);
+                     if (FileSystem.exists(made))
+                        FileSystem.deleteFile(made);
                   }
                   catch(e:Dynamic) { }
                }
                else
+               {
+                  putObjInPlace(made, obj_name, inFile, pchTimeStamp);
                   inProgress.fileDone();
+               }
             }
          }
          else
@@ -498,11 +521,12 @@ class Compiler
             cleanTmp(tmpFile);
             if (result!=0)
             {
-               if (FileSystem.exists(obj_name))
-                  FileSystem.deleteFile(obj_name);
+               if (FileSystem.exists(made))
+                  FileSystem.deleteFile(made);
                Tools.exit (result);
                //throw "Error : " + result + " - build cancelled";
             }
+            putObjInPlace(made, obj_name, inFile, pchTimeStamp);
             inProgress.fileDone();
          }
 
@@ -645,45 +669,47 @@ class Compiler
 
       // Like objs/hxcpp.pch or objs/wx.gch
       var pch_name = dir + "/" + file + mPCHExt;
+      // No obj needed for gcc
+      var obj = mPCH=="msvc" ? PathManager.combine(dir, file + mExt) : null;
+      var complete = function() return FileSystem.exists(pch_name) && (obj==null || FileSystem.exists(obj));
       mPCHRebuilt = false;
-      if (inGroup.isCached() || inReuseIfPossible)
-      {
-          // No obj needed for gcc
-          var obj = mPCH=="msvc" ? PathManager.combine(dir, file + mExt) : null;
-          if (FileSystem.exists(pch_name) && (obj==null || FileSystem.exists(obj)) )
-             return obj;
-      }
+      if ((inGroup.isCached() || inReuseIfPossible) && complete())
+         return obj;
       mPCHRebuilt = true;
 
       args = args.concat( mPCHFlags );
 
-      //Log.info("", "Make pch dir " + dir );
-      PathManager.mkdir(dir);
+      // One in the cache is made in a directory of this build's own and moved
+      //  to its own whole: another build can make the same one at the same
+      //  time, and one compiled with it must find its object beside it
+      var made = inGroup.isCached() ? CompileCache.getTempName(dir) : dir;
+      var made_pch = made + "/" + file + mPCHExt;
+      //Log.info("", "Make pch dir " + made );
+      PathManager.mkdir(made);
 
       if (mPCH == "msvc")
       {
          args.push( mPCHCreate + header + ".h" );
          if (!BuildTool.isMsvcLlvm()) {
-            var symbol = "link" + Md5.encode( PathManager.combine(dir, file + mExt) );
+            var symbol = "link" + Md5.encode( obj );
             args.push( "-Yl" + symbol  );
          }
 
          // Create a temp file for including ...
-         var tmp_cpp = dir + "/" + file + ".cpp";
+         var tmp_cpp = made + "/" + file + ".cpp";
          var outFile = sys.io.File.write(tmp_cpp,false);
          outFile.writeString("#include <" + header + ".h>\n");
          outFile.close();
 
          args.push( tmp_cpp );
-         args.push(mPCHFilename + pch_name);
-         args.push(mOutFlag + PathManager.combine(dir, file + mExt));
+         args.push(mPCHFilename + made_pch);
+         args.push(mOutFlag + PathManager.combine(made, file + mExt));
       }
       else
       {
          Log.info("", 'Creating PCH directory "$dir"');
-         PathManager.mkdir(dir);
          args.push( "-o" );
-         args.push(pch_name);
+         args.push(made_pch);
          args.push( inGroup.mPrecompiledHeaderDir + "/" + inGroup.mPrecompiledHeader + ".h" );
       }
 
@@ -691,11 +717,13 @@ class Compiler
       var result = ProcessManager.runCommand("", mExe, args);
       if (result!=0)
       {
+         if (made!=dir)
+            CompileCache.removeEntry(made);
          var goes = 10;
          for(attempt in 0...goes)
          {
             try {
-               if (FileSystem.exists(pch_name))
+               if (made==dir && FileSystem.exists(pch_name))
                   FileSystem.deleteFile(pch_name);
                break;
             }
@@ -708,6 +736,14 @@ class Compiler
          }
          Log.error("Could not create PCH");
          //throw "Error creating pch: " + result + " - build cancelled";
+      }
+
+      // A complete one there was made from the same header and flags by
+      //  another build, and is kept
+      if (made!=dir && !CompileCache.putInPlace(made, dir, complete, 30))
+      {
+         CompileCache.removeEntry(made);
+         Log.error('Could not replace the precompiled header in "$dir", which another build has open');
       }
 
       if (mPCH == "msvc")

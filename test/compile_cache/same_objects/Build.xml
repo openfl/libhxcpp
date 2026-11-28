@@ -1,0 +1,24 @@
+<xml>
+	<!-- A cached group with a precompiled header, its sources in a folder
+	     every build shares, as the runtime's are in HXCPP: builds in folders
+	     of their own compile the same objects into the cache, and make the
+	     same precompiled header there -->
+	<files id="cached" dir="${SHARED}">
+		<compilerflag value="-I${SHARED}" />
+		<precompiledheader name="pre" dir="${SHARED}" />
+		<cache value="1" project="same_objects_test" />
+		<file name="main.cpp" />
+		<file name="part0.cpp" />
+		<file name="part1.cpp" />
+		<file name="part2.cpp" />
+		<file name="part3.cpp" />
+		<file name="part4.cpp" />
+		<file name="part5.cpp" />
+		<file name="part6.cpp" />
+		<file name="part7.cpp" />
+	</files>
+
+	<target id="default" tool="linker" toolid="exe" output="prog">
+		<files id="cached" />
+	</target>
+</xml>

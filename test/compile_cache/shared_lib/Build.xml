@@ -1,0 +1,20 @@
+<xml>
+	<!-- A cached group linked as a library, as the runtime is, whose object
+	     changes with VALUE, as the runtime's do with HXCPP_DEBUGGER. It comes
+	     first, so each build compiles main.cpp between linking the library and
+	     linking the program -->
+	<files id="lib">
+		<cache value="1" project="shared_lib_test" asLibrary="true" />
+		<compilerflag value="-DVALUE=${VALUE}" />
+		<file name="lib.cpp" />
+	</files>
+
+	<files id="main">
+		<file name="main.cpp" />
+	</files>
+
+	<target id="default" tool="linker" toolid="exe" output="prog">
+		<files id="lib" />
+		<files id="main" />
+	</target>
+</xml>

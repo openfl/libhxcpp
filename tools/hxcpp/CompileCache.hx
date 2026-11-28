@@ -1,9 +1,90 @@
 import sys.FileSystem;
+import haxe.io.Path;
 
 class CompileCache
 {
    public static var hasCache = false;
    public static var compileCache:String;
+
+   // Builds that share the cache can make the same entry at the same time,
+   //  or read one while another build writes it. So an entry is made under a
+   //  name of the build's own and moved to its name in one step
+   static var tempTag:String = null;
+   static var tempCount = 0;
+
+   // A name of this build's own beside inName, keeping inName's extension
+   public static function getTempName(inName:String, inKind:String = "tmp")
+   {
+      if (tempTag==null)
+         tempTag = haxe.crypto.Md5.encode(Sys.getCwd() + " " + Sys.time() + " " + Math.random() + " " + Sys.args().join(" ")).substr(0,8);
+      var ext = Path.extension(inName);
+      var dotExt = ext=="" ? "" : "." + ext;
+      return inName.substr(0, inName.length - dotExt.length) + "." + inKind + "-" + tempTag + "-" + (tempCount++) + dotExt;
+   }
+
+   public static function tryRename(inFrom:String, inTo:String)
+   {
+      try
+      {
+         FileSystem.rename(inFrom, inTo);
+         return true;
+      }
+      catch(e:Dynamic) { }
+      return false;
+   }
+
+   // Removes a file, or a directory and what is in it, as far as it can
+   public static function removeEntry(inPath:String)
+   {
+      try
+      {
+         if (FileSystem.isDirectory(inPath))
+         {
+            for(item in FileSystem.readDirectory(inPath))
+               removeEntry(inPath + "/" + item);
+            FileSystem.deleteDirectory(inPath);
+         }
+         else
+            FileSystem.deleteFile(inPath);
+      }
+      catch(e:Dynamic) { }
+   }
+
+   // Moves inMade, a file or directory this build made beside inName, to
+   //  inName in one step. Windows renames onto nothing that is there, and
+   //  POSIX onto no directory with files in it. So when inName is there and
+   //  inUsable says it will do, another build made the same entry first, and
+   //  this one is dropped. An older one is moved aside and removed, trying
+   //  for inSeconds while another build has it open, as Windows renames no
+   //  file that is open. Returns false when the older one stays
+   public static function putInPlace(inMade:String, inName:String, inUsable:Void->Bool, inSeconds:Float):Bool
+   {
+      var giveUp = Sys.time() + inSeconds;
+      while(true)
+      {
+         if (tryRename(inMade, inName))
+            return true;
+         if (FileSystem.exists(inName) && inUsable())
+         {
+            removeEntry(inMade);
+            return true;
+         }
+         var old = getTempName(inName, "old");
+         if (tryRename(inName, old))
+         {
+            if (tryRename(inMade, inName))
+            {
+               removeEntry(old);
+               return true;
+            }
+            removeEntry(old);
+            continue;
+         }
+         if (Sys.time() >= giveUp)
+            return false;
+         Sys.sleep(0.1);
+      }
+   }
 
 
    public static function init(inDefines:Map<String, String>) : Bool
@@ -71,15 +152,11 @@ class CompileCache
    }
 */
 
+   // The directory is made by Compiler.precompile, under a name of its own
+   //  and then moved here whole
    public static function getPchDir(inProject:String,hash:String)
    {
-      var dir = compileCache + "/" + inProject + "/pch" + hash.substr(0,8);
-      try
-      {
-         if (!FileSystem.exists(dir))
-            PathManager.mkdir(dir);
-      } catch(e:Dynamic) { }
-      return dir;
+      return compileCache + "/" + inProject + "/pch" + hash.substr(0,8);
    }
 
    public static function getCacheName(inProject:String,hash:String,inExt:String)
