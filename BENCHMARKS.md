@@ -152,6 +152,18 @@ so those flags do not change the native benchmarks. Peak memory for these cases
 includes the host, loaded module and any JIT code. The `noop` startup row still
 measures the native executable.
 
+### HashLink as a reference
+
+`--hl <path to hl>` also runs the CPPIA workloads on HashLink's JIT. `bench/hl`
+builds `Script.hx` and `bench/cppia/shared` straight to HashLink with the same
+harness, workload table and timing, so there the host's side of each workload
+is HashLink JIT code too, where under cppia it is native C++. Its processes take
+turns with the others on the `cppia_jit_` benchmarks and must give the same
+checksums, and the CPPIA table gains an HL/JIT column and the JIT's ratio to it.
+A host with its framework compiled in should not run a script slower than
+HashLink runs the whole application, so a ratio below 1 there is a target.
+
+
 ## Running it yourself
 
 You need Haxe 4.3, the C++ compiler hxcpp uses on your platform, and curl.
@@ -161,6 +173,7 @@ cd bench
 haxe --run Run                       # every benchmark, both runtimes
 haxe --run Run --only map_int,sort_int
 haxe --run Run --only cppia_interp_native_call,cppia_jit_native_call
+haxe --run Run --only cppia_jit_closure_call --hl path/to/hl   # with HashLink beside it
 haxe --run Run --no-build            # reuse the last builds
 haxe --run Run --only gc_object_ids --define HXCPP_GC_GENERATIONAL
 haxe --run Run --readme              # publish: this page and the README summary

@@ -15,16 +15,9 @@ class CppiaBenchmarks extends Benchmark {
 
 	public static function all():Array<Benchmark> {
 		var result:Array<Benchmark> = [];
-		for (jit in [false, true]) {
-			result.push(new CppiaBenchmarks("int_loop", "iterations", 500000, 20, jit));
-			result.push(new CppiaBenchmarks("float_array", "elements", 200000, 10, jit));
-			result.push(new CppiaBenchmarks("alloc_objects", "objects", 125000, 4, jit));
-			result.push(new CppiaBenchmarks("virtual_call", "calls", 200000, 10, jit));
-			result.push(new CppiaBenchmarks("closure_call", "calls", 200000, 10, jit));
-			result.push(new CppiaBenchmarks("native_call", "calls", 200000, 50, jit));
-			result.push(new CppiaBenchmarks("native_callback", "callbacks", 200000, 10, jit));
-			result.push(new CppiaBenchmarks("bunny_update", "bunny updates", 20000, 10, jit));
-		}
+		for (jit in [false, true])
+			for (w in CppiaWorkloads.all)
+				result.push(new CppiaBenchmarks(w.name, w.unit, w.ops, w.reps, jit));
 		return result;
 	}
 
